@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(14);
+select plan(18);
 
 select has_table('public', 'studio_settings', 'singleton studio settings exists');
 select has_table('public', 'staff_profiles', 'staff profiles replace memberships');
@@ -11,6 +11,10 @@ select has_function('public', 'create_public_booking', array['uuid','timestamp w
 select has_function('public', 'current_staff_role', array[]::text[], 'role helper exists');
 select policies_are('public', 'sales', array['management_manage_sales'], 'sales are management-only under RLS');
 select policies_are('public', 'bookings', array['management_manage_bookings','permitted_booking_read','piercer_update_own_bookings'], 'booking policies cover management and assigned piercers');
+select results_eq($$select count(*) from public.services where category in ('Ear Piercings', 'Face & Body Piercings', 'Other Services')$$, array[32::bigint], 'the Piercing Corner service catalog is seeded');
+select results_eq($$select count(*) from public.services where price_cents is null and min_price_cents is not null and max_price_cents is not null$$, array[5::bigint], 'range prices are stored as ranges');
+select throws_ok($$insert into public.services (name, duration_minutes, price_cents, min_price_cents, max_price_cents) values ('Invalid mixed price', 30, 10000, 10000, 20000)$$, '23514', null, 'a service cannot store a fixed price and a range');
+select results_eq($$select price_unit from public.services where name = 'Ultrasonic Jewelry Cleaning'$$, array['per process'::text], 'optional price units are stored');
 
 insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at)
 values ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'test-owner@example.com', '', now(), now(), now()),

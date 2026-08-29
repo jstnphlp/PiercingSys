@@ -18,7 +18,12 @@ import {
 } from "lucide-react";
 import { signOut } from "@/app/login/actions";
 import { getStaffSession } from "@/lib/auth";
-import { calculateBalance, formatPhp, manilaDate } from "@/lib/domain";
+import {
+  calculateBalance,
+  formatPhp,
+  formatServicePrice,
+  manilaDate,
+} from "@/lib/domain";
 import { getStaffData, type BookingRecord } from "@/lib/data/staff";
 import {
   AvailabilityForm,
@@ -27,6 +32,7 @@ import {
   InviteForm,
   SaleAdjustment,
   SaleForm,
+  ServiceAssignmentForm,
   ServiceForm,
   SettingsForm,
   StaffActions,
@@ -235,11 +241,18 @@ function Overview({
             />
             <Readiness
               label="Active services"
-              done={data.services.some((item) => item.active)}
+              done={data.services.some((item) => item.isActive)}
             />
             <Readiness
               label="Qualified staff"
-              done={data.staff.some((item) => item.active)}
+              done={data.serviceAssignments.some((assignment) =>
+                data.staff.some(
+                  (person) =>
+                    person.id === assignment.staffId &&
+                    person.active &&
+                    person.role === "piercer",
+                ),
+              )}
             />
             {role !== "piercer" && (
               <Readiness
@@ -589,17 +602,22 @@ function StudioSettings({
             detail="Only active, assigned services appear on public booking."
           />
           <ServiceForm staff={data.staff} />
+          <ServiceAssignmentForm
+            services={data.services}
+            staff={data.staff}
+            assignments={data.serviceAssignments}
+          />
           <div className="simple-list">
             {data.services.map((service) => (
               <div key={service.id}>
                 <span>
                   <strong>{service.name}</strong>
                   <small>
-                    {service.durationMinutes} minutes ·{" "}
-                    {service.active ? "Active" : "Inactive"}
+                    {service.category} · {service.durationMinutes} minutes ·{" "}
+                    {service.isActive ? "Active" : "Inactive"}
                   </small>
                 </span>
-                <b>{formatPhp(service.priceCents)}</b>
+                <b>{formatServicePrice(service)}</b>
               </div>
             ))}
             {!data.services.length && (

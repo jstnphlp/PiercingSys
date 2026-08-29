@@ -709,9 +709,13 @@ model services {
   name             String
   description      String?
   body_area        String?
+  category         String          @default("Other Services")
   duration_minutes Int
-  price_cents      Int
-  active           Boolean         @default(true)
+  price_cents      Int?
+  min_price_cents  Int?
+  max_price_cents  Int?
+  price_unit       String?
+  is_active        Boolean         @default(true)
   sort_order       Int             @default(0)
   created_at       DateTime        @default(now()) @db.Timestamptz(6)
   updated_at       DateTime        @default(now()) @db.Timestamptz(6)

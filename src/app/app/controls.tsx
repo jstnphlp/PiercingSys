@@ -2,11 +2,13 @@
 
 import { Check, LoaderCircle, Plus, UserPlus } from "lucide-react";
 import { useState } from "react";
-import type {
-  BookingStatus,
-  Service,
-  StaffRole,
-  StudioSettings,
+import {
+  formatServicePrice,
+  servicePriceBounds,
+  type BookingStatus,
+  type Service,
+  type StaffRole,
+  type StudioSettings,
 } from "@/lib/domain";
 import type { CustomerRecord, StaffRecord } from "@/lib/data/staff";
 
@@ -334,15 +336,23 @@ export function ServiceForm({ staff }: { staff: StaffRecord[] }) {
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
+    const cents = (name: string) => {
+      const raw = String(form.get(name) ?? "").trim();
+      return raw ? Math.round(Number(raw) * 100) : null;
+    };
     const ok = await mutation.run("/api/services", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         name: String(form.get("name")),
         description: String(form.get("description")) || null,
+        category: String(form.get("category")),
         durationMinutes: Number(form.get("durationMinutes")),
-        priceCents: Math.round(Number(form.get("price")) * 100),
-        active: true,
+        priceCents: cents("price"),
+        minPriceCents: cents("minPrice"),
+        maxPriceCents: cents("maxPrice"),
+        priceUnit: String(form.get("priceUnit")) || null,
+        isActive: true,
         staffIds: form.getAll("staffIds").map(String),
       }),
     });
@@ -368,17 +378,37 @@ export function ServiceForm({ staff }: { staff: StaffRecord[] }) {
         <input name="description" />
       </label>
       <label className="field">
+        Category
+        <select name="category" defaultValue="Ear Piercings">
+          <option>Ear Piercings</option>
+          <option>Face &amp; Body Piercings</option>
+          <option>Other Services</option>
+        </select>
+      </label>
+      <label className="field">
         Duration (minutes)
         <input name="durationMinutes" type="number" min="5" required />
       </label>
       <label className="field">
-        Price (PHP)
-        <input name="price" type="number" min="0" step="0.01" required />
+        Fixed price (PHP)
+        <input name="price" type="number" min="0" step="0.01" />
+      </label>
+      <label className="field">
+        Minimum price (PHP)
+        <input name="minPrice" type="number" min="0" step="0.01" />
+      </label>
+      <label className="field">
+        Maximum price (PHP)
+        <input name="maxPrice" type="number" min="0" step="0.01" />
+      </label>
+      <label className="field">
+        Price unit (optional)
+        <input name="priceUnit" placeholder="per process" />
       </label>
       <fieldset className="staff-checks">
         <legend>Qualified staff</legend>
         {staff
-          .filter((item) => item.active)
+          .filter((item) => item.active && item.role === "piercer")
           .map((item) => (
             <label key={item.id}>
               <input name="staffIds" type="checkbox" value={item.id} />{" "}
@@ -397,6 +427,91 @@ export function ServiceForm({ staff }: { staff: StaffRecord[] }) {
         </button>
         <button className="btn btn-primary" disabled={mutation.busy}>
           Add service
+        </button>
+      </div>
+    </form>
+  );
+}
+
+export function ServiceAssignmentForm({
+  services,
+  staff,
+  assignments,
+}: {
+  services: Service[];
+  staff: StaffRecord[];
+  assignments: Array<{ serviceId: string; staffId: string }>;
+}) {
+  const mutation = useMutation();
+  const [open, setOpen] = useState(false);
+  const [serviceId, setServiceId] = useState(services[0]?.id ?? "");
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const ok = await mutation.run(`/api/services/${serviceId}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ staffIds: form.getAll("staffIds").map(String) }),
+    });
+    if (ok) window.location.reload();
+  }
+  if (!open) {
+    return (
+      <button
+        className="btn btn-secondary setting-add"
+        disabled={!services.length || !staff.length}
+        onClick={() => setOpen(true)}
+      >
+        Manage service assignments
+      </button>
+    );
+  }
+  return (
+    <form className="inline-form" onSubmit={submit}>
+      <label className="field">
+        Service
+        <select
+          name="serviceId"
+          value={serviceId}
+          onChange={(event) => setServiceId(event.target.value)}
+        >
+          {services.map((service) => (
+            <option key={service.id} value={service.id}>
+              {service.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <fieldset className="staff-checks" key={serviceId}>
+        <legend>Qualified staff</legend>
+        {staff
+          .filter((person) => person.active && person.role === "piercer")
+          .map((person) => (
+            <label key={person.id}>
+              <input
+                name="staffIds"
+                type="checkbox"
+                value={person.id}
+                defaultChecked={assignments.some(
+                  (item) =>
+                    item.serviceId === serviceId && item.staffId === person.id,
+                )}
+              />{" "}
+              {person.displayName}
+            </label>
+          ))}
+      </fieldset>
+      {mutation.error && <p className="form-error">{mutation.error}</p>}
+      <div>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={() => setOpen(false)}
+        >
+          Cancel
+        </button>
+        <button className="btn btn-primary" disabled={mutation.busy}>
+          Save assignments
         </button>
       </div>
     </form>
@@ -647,11 +762,18 @@ export function SaleForm({
 }) {
   const mutation = useMutation();
   const [open, setOpen] = useState(false);
+  const activeServices = services.filter((item) => item.isActive);
+  const [serviceId, setServiceId] = useState(activeServices[0]?.id ?? "");
+  const selectedService = activeServices.find((item) => item.id === serviceId);
+  const priceBounds = selectedService
+    ? servicePriceBounds(selectedService)
+    : null;
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const service = services.find((item) => item.id === form.get("serviceId"));
     if (!service) return;
+    const unitPriceCents = Math.round(Number(form.get("salePrice")) * 100);
     const amount = Math.round(Number(form.get("amount")) * 100);
     const ok = await mutation.run("/api/sales", {
       method: "POST",
@@ -664,7 +786,7 @@ export function SaleForm({
             sourceId: service.id,
             description: service.name,
             quantity: 1,
-            unitPriceCents: service.priceCents,
+            unitPriceCents,
             discountCents: 0,
           },
         ],
@@ -673,7 +795,7 @@ export function SaleForm({
           amount > 0
             ? [{ method: form.get("method"), amountCents: amount }]
             : [],
-        complete: amount >= service.priceCents,
+        complete: amount >= unitPriceCents,
       }),
     });
     if (ok) window.location.reload();
@@ -682,7 +804,7 @@ export function SaleForm({
     return (
       <button
         className="btn btn-primary page-add"
-        disabled={!services.length}
+        disabled={!activeServices.length}
         onClick={() => setOpen(true)}
       >
         <Plus size={16} /> Record sale
@@ -703,15 +825,32 @@ export function SaleForm({
       </label>
       <label className="field">
         Service
-        <select name="serviceId" required>
-          {services
-            .filter((item) => item.active)
-            .map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
+        <select
+          name="serviceId"
+          required
+          value={serviceId}
+          onChange={(event) => setServiceId(event.target.value)}
+        >
+          {activeServices.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.name} · {formatServicePrice(item)}
+            </option>
+          ))}
         </select>
+      </label>
+      <label className="field">
+        Sale price (PHP)
+        <input
+          key={serviceId}
+          name="salePrice"
+          type="number"
+          min={priceBounds ? priceBounds.min / 100 : 0}
+          max={priceBounds ? priceBounds.max / 100 : undefined}
+          step="0.01"
+          defaultValue={priceBounds ? priceBounds.min / 100 : undefined}
+          required
+        />
+        {selectedService && <small>{formatServicePrice(selectedService)}</small>}
       </label>
       <label className="field">
         Payment received (PHP)

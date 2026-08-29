@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import { connection } from "next/server";
 import { AtSign, Clock3, MapPin, MoonStar, Sparkles } from "lucide-react";
-import { Brand } from "@/components/brand";
 import { getPublicCatalog } from "@/lib/data/public";
 import { manilaDate } from "@/lib/domain";
 import { BookingForm } from "./booking-form";
@@ -16,17 +15,6 @@ export default async function BookingPage() {
   const catalog = await getPublicCatalog();
   return (
     <div className="booking-page">
-      <header className="booking-header">
-        <Brand />
-        <a
-          className="instagram-link"
-          href={instagramUrl}
-          target="_blank"
-          rel="noreferrer"
-        >
-          <AtSign size={16} /> @piercing.corner
-        </a>
-      </header>
       <main className="booking-layout">
         <section className="booking-story">
           <div className="motif motif-one">
@@ -75,14 +63,18 @@ export default async function BookingPage() {
           ) : (
             <SetupState instagramUrl={instagramUrl} />
           )}
+          <a
+            className="instagram-link instagram-inline"
+            href={instagramUrl}
+            target="_blank"
+            rel="noreferrer"
+            aria-label="Open Piercing Corner on Instagram"
+            title="@piercing.corner"
+          >
+            <AtSign size={15} />
+          </a>
         </section>
       </main>
-      <footer className="booking-footer">
-        <span>© {new Date().getFullYear()} Piercing Corner</span>
-        <span>
-          Made for Piercing Corner in Parañaque <Sparkles size={13} />
-        </span>
-      </footer>
     </div>
   );
 }

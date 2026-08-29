@@ -2,6 +2,10 @@ export type StaffRole = "owner" | "manager" | "piercer";
 export type BookingStatus = "requested" | "confirmed" | "completed" | "rejected" | "cancelled" | "no_show";
 export type PaymentMethod = "cash" | "gcash" | "maya" | "bank_transfer" | "card" | "other";
 export type SaleStatus = "draft" | "completed" | "voided";
+export type ServiceCategory =
+  | "Ear Piercings"
+  | "Face & Body Piercings"
+  | "Other Services";
 
 export type DayHours = { open: string; close: string; closed?: boolean };
 
@@ -28,9 +32,13 @@ export type Service = {
   name: string;
   description: string | null;
   bodyArea: string | null;
+  category: ServiceCategory;
   durationMinutes: number;
-  priceCents: number;
-  active: boolean;
+  priceCents: number | null;
+  minPriceCents: number | null;
+  maxPriceCents: number | null;
+  priceUnit: string | null;
+  isActive: boolean;
 };
 
 export type AvailableSlot = { startsAt: string; endsAt: string; piercerIds: string[] };
@@ -81,6 +89,31 @@ export function hasScheduleConflict(
 
 export const php = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", minimumFractionDigits: 0 });
 export function formatPhp(cents: number) { return php.format(cents / 100); }
+
+export function formatServicePrice(service: Pick<Service, "priceCents" | "minPriceCents" | "maxPriceCents" | "priceUnit">) {
+  const amount = service.priceCents !== null
+    ? formatPhp(service.priceCents)
+    : service.minPriceCents !== null && service.maxPriceCents !== null
+      ? `${formatPhp(service.minPriceCents)}–${formatPhp(service.maxPriceCents)}`
+      : "Price unavailable";
+  return service.priceUnit ? `${amount} ${service.priceUnit}` : amount;
+}
+
+export function servicePriceBounds(service: Pick<Service, "priceCents" | "minPriceCents" | "maxPriceCents">) {
+  if (service.priceCents !== null) return { min: service.priceCents, max: service.priceCents };
+  if (service.minPriceCents !== null && service.maxPriceCents !== null) {
+    return { min: service.minPriceCents, max: service.maxPriceCents };
+  }
+  return null;
+}
+
+export function isValidServiceSalePrice(
+  service: Pick<Service, "priceCents" | "minPriceCents" | "maxPriceCents">,
+  priceCents: number,
+) {
+  const bounds = servicePriceBounds(service);
+  return Boolean(bounds && priceCents >= bounds.min && priceCents <= bounds.max);
+}
 
 export function manilaDate(date: Date | string) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" })

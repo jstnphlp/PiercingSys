@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import {
-  formatPhp,
+  formatServicePrice,
   type AvailableSlot,
   type PublicBookingResult,
   type Service,
@@ -44,9 +44,13 @@ export function BookingForm({
             name: "Your piercing service",
             description: "Preview card · add real services in Settings",
             bodyArea: null,
+            category: "Ear Piercings",
             durationMinutes: 0,
             priceCents: 0,
-            active: true,
+            minPriceCents: null,
+            maxPriceCents: null,
+            priceUnit: null,
+            isActive: true,
             },
           ],
     [preview, services],
@@ -212,32 +216,53 @@ export function BookingForm({
             {preview ? "This placeholder shows how your configured services will look." : "Prices are in Philippine pesos and reflect the configured studio rate."}
           </p>
           <div className="service-list" role="radiogroup" aria-label="Services">
-            {displayServices.map((service) => (
-              <button
-                type="button"
-                role="radio"
-                aria-checked={service.id === serviceId}
-                key={service.id}
-                className={service.id === serviceId ? "selected" : ""}
-                onClick={() => setServiceId(service.id)}
-              >
-                <span className="service-radio">
-                  {service.id === serviceId && <i />}
-                </span>
-                <span>
-                  <strong>{service.name}</strong>
-                  <small>
-                    {service.description ||
-                      service.bodyArea ||
-                      "Piercing service"}
-                  </small>
-                </span>
-                <span>
-                  <strong>{preview ? "Price TBD" : formatPhp(service.priceCents)}</strong>
-                  <small>{preview ? "Duration TBD" : `${service.durationMinutes} min`}</small>
-                </span>
-              </button>
-            ))}
+            {[
+              "Ear Piercings",
+              "Face & Body Piercings",
+              "Other Services",
+            ].map((category) => {
+              const categoryServices = displayServices.filter(
+                (service) => service.category === category,
+              );
+              if (!categoryServices.length) return null;
+              return (
+                <section className="service-category" key={category}>
+                  <h3>{category}</h3>
+                  {categoryServices.map((service) => (
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={service.id === serviceId}
+                      key={service.id}
+                      className={service.id === serviceId ? "selected" : ""}
+                      onClick={() => setServiceId(service.id)}
+                    >
+                      <span className="service-radio">
+                        {service.id === serviceId && <i />}
+                      </span>
+                      <span>
+                        <strong>{service.name}</strong>
+                        <small>
+                          {service.description ||
+                            service.bodyArea ||
+                            "Piercing service"}
+                        </small>
+                      </span>
+                      <span>
+                        <strong>
+                          {preview ? "Price TBD" : formatServicePrice(service)}
+                        </strong>
+                        <small>
+                          {preview
+                            ? "Duration TBD"
+                            : `${service.durationMinutes} min`}
+                        </small>
+                      </span>
+                    </button>
+                  ))}
+                </section>
+              );
+            })}
           </div>
           <button
             className="btn btn-primary next-button"

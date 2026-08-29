@@ -20,7 +20,7 @@ export type BookingRecord = {
   service: {
     id: string;
     name: string;
-    priceCents: number;
+    priceCents: number | null;
     durationMinutes: number;
   };
   piercer: { id: string; name: string; color: string } | null;
@@ -81,6 +81,7 @@ export async function getStaffData() {
       customers: [] as CustomerRecord[],
       sales: [] as SaleRecord[],
       staff: [] as StaffRecord[],
+      serviceAssignments: [] as Array<{ serviceId: string; staffId: string }>,
       deliveries: [] as DeliveryRecord[],
       stations: [] as Array<{ id: string; name: string }>,
       closures: [] as ClosureRecord[],
@@ -93,6 +94,7 @@ export async function getStaffData() {
     customersResult,
     salesResult,
     staffResult,
+    assignmentResult,
     deliveryResult,
     stationResult,
     closureResult,
@@ -122,6 +124,7 @@ export async function getStaffData() {
       .from("staff_profiles")
       .select("user_id,display_name,role,active,color")
       .order("created_at"),
+    supabase.from("service_staff").select("service_id,staff_id"),
     supabase
       .from("notification_deliveries")
       .select("id,kind,recipient,status,last_error,created_at")
@@ -163,9 +166,13 @@ export async function getStaffData() {
     name: row.name,
     description: row.description,
     bodyArea: row.body_area,
+    category: row.category as Service["category"],
     durationMinutes: row.duration_minutes,
     priceCents: row.price_cents,
-    active: row.active,
+    minPriceCents: row.min_price_cents,
+    maxPriceCents: row.max_price_cents,
+    priceUnit: row.price_unit,
+    isActive: row.is_active,
   }));
   const bookings: BookingRecord[] = (bookingsResult.data ?? []).map((row) => {
     const customer = one(row.customers as Relation);
@@ -188,7 +195,10 @@ export async function getStaffData() {
       service: {
         id: String(service?.id ?? ""),
         name: String(service?.name ?? "Service"),
-        priceCents: Number(service?.price_cents ?? 0),
+        priceCents:
+          service?.price_cents === null || service?.price_cents === undefined
+            ? null
+            : Number(service.price_cents),
         durationMinutes: Number(service?.duration_minutes ?? 0),
       },
       piercer: piercer
@@ -266,6 +276,7 @@ export async function getStaffData() {
     customersResult.error,
     salesResult.error,
     staffResult.error,
+    assignmentResult.error,
     deliveryResult.error,
     stationResult.error,
     closureResult.error,
@@ -277,6 +288,10 @@ export async function getStaffData() {
     customers,
     sales,
     staff,
+    serviceAssignments: (assignmentResult.data ?? []).map((row) => ({
+      serviceId: row.service_id,
+      staffId: row.staff_id,
+    })),
     deliveries,
     stations: stationResult.data ?? [],
     closures,

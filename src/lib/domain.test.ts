@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { calculateBalance, canTransition, generateAvailableSlots, hasScheduleConflict, manilaDate } from "./domain";
+import {
+  calculateBalance,
+  canTransition,
+  formatServicePrice,
+  generateAvailableSlots,
+  hasScheduleConflict,
+  isValidServiceSalePrice,
+  manilaDate,
+} from "./domain";
 
 describe("booking state machine", () => {
   it("allows approval but prevents reopening completed work", () => {
@@ -17,6 +25,44 @@ describe("money", () => {
   });
   it("adds immutable refund adjustments back to the balance", () => {
     expect(calculateBalance(100_000, [100_000], [25_000])).toBe(25_000);
+  });
+});
+
+describe("service pricing", () => {
+  it("formats fixed and range prices without collapsing a range", () => {
+    expect(
+      formatServicePrice({
+        priceCents: 50000,
+        minPriceCents: null,
+        maxPriceCents: null,
+        priceUnit: null,
+      }),
+    ).toBe("₱500");
+    expect(
+      formatServicePrice({
+        priceCents: null,
+        minPriceCents: 20000,
+        maxPriceCents: 35000,
+        priceUnit: "per process",
+      }),
+    ).toBe("₱200–₱350 per process");
+  });
+
+  it("accepts actual range sale prices and preserves fixed prices", () => {
+    const range = {
+      priceCents: null,
+      minPriceCents: 10000,
+      maxPriceCents: 50000,
+    };
+    expect(isValidServiceSalePrice(range, 10000)).toBe(true);
+    expect(isValidServiceSalePrice(range, 35000)).toBe(true);
+    expect(isValidServiceSalePrice(range, 50001)).toBe(false);
+    expect(
+      isValidServiceSalePrice(
+        { priceCents: 50000, minPriceCents: null, maxPriceCents: null },
+        49999,
+      ),
+    ).toBe(false);
   });
 });
 

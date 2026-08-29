@@ -54,9 +54,15 @@ function mapService(row: Record<string, unknown>): Service {
     name: String(row.name),
     description: row.description ? String(row.description) : null,
     bodyArea: row.body_area ? String(row.body_area) : null,
+    category: String(row.category) as Service["category"],
     durationMinutes: Number(row.duration_minutes),
-    priceCents: Number(row.price_cents),
-    active: Boolean(row.active),
+    priceCents: row.price_cents === null ? null : Number(row.price_cents),
+    minPriceCents:
+      row.min_price_cents === null ? null : Number(row.min_price_cents),
+    maxPriceCents:
+      row.max_price_cents === null ? null : Number(row.max_price_cents),
+    priceUnit: row.price_unit ? String(row.price_unit) : null,
+    isActive: Boolean(row.is_active),
   };
 }
 
@@ -73,11 +79,16 @@ export async function getPublicCatalog() {
   const [settingsResult, servicesResult, staffResult, assignmentsResult] =
     await Promise.all([
       admin.from("studio_settings").select("*").eq("id", 1).single(),
-      admin.from("services").select("*").eq("active", true).order("sort_order"),
+      admin
+        .from("services")
+        .select("*")
+        .eq("is_active", true)
+        .order("sort_order"),
       admin
         .from("staff_profiles")
-        .select("user_id,display_name")
-        .eq("active", true),
+        .select("user_id,display_name,role")
+        .eq("active", true)
+        .eq("role", "piercer"),
       admin.from("service_staff").select("staff_id,service_id"),
     ]);
   if (settingsResult.error)
@@ -93,7 +104,9 @@ export async function getPublicCatalog() {
     mapService(row as Record<string, unknown>),
   );
   const assigned = new Set(
-    (assignmentsResult.data ?? []).map((row) => row.staff_id),
+    (assignmentsResult.data ?? [])
+      .filter((row) => services.some((service) => service.id === row.service_id))
+      .map((row) => row.staff_id),
   );
   const piercers = (staffResult.data ?? [])
     .filter((row) => assigned.has(row.user_id))
@@ -134,10 +147,14 @@ export async function getAvailableSlots(
       .from("services")
       .select("*")
       .eq("id", serviceId)
-      .eq("active", true)
+      .eq("is_active", true)
       .single(),
     admin.from("service_staff").select("staff_id").eq("service_id", serviceId),
-    admin.from("staff_profiles").select("user_id,active").eq("active", true),
+    admin
+      .from("staff_profiles")
+      .select("user_id,active,role")
+      .eq("active", true)
+      .eq("role", "piercer"),
     admin
       .from("staff_availability")
       .select("staff_id,weekday,starts_at,ends_at"),
