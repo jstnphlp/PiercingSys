@@ -41,6 +41,22 @@ The schema stores PHP amounts as integer centavos and evaluates business dates i
 
 Prisma 7 is initialized against the same Postgres database. Supabase migrations remain the source of truth for schema changes; Prisma is used for typed database access, introspection, Studio, and the local owner seed. Do not use `prisma migrate` or `prisma db push` against this project.
 
+If `prisma db push` reports `must be owner of index idx_users_created_at_desc` (or another index in the `auth` schema), stop the command. Prisma is attempting to reconcile Supabase-managed Auth metadata, not an application migration; accepting the data-loss prompt cannot grant ownership. Apply application schema changes through the checked-in Supabase migrations instead:
+
+```bash
+npx supabase link --project-ref YOUR_PROJECT_REF
+npx supabase db push
+```
+
+Then refresh Prisma's read-only view of the database and regenerate the client:
+
+```bash
+npm run prisma:pull
+npm run prisma:generate
+```
+
+Never paste a database URL containing a password into source control, logs, or support requests. Rotate the database password if one has been exposed.
+
 After starting or resetting local Supabase, refresh the Prisma schema and client when the Supabase migration changes:
 
 ```bash

@@ -139,7 +139,10 @@ export async function getStaffData(scope: StaffDataScope = "all") {
     includes("overview", "calendar", "sales", "settings")
       ? supabase.from("services").select("*").order("sort_order")
       : emptyMany,
-    includes("overview", "calendar", "clients")
+    // The calendar loads its visible date range from /api/appointments. Avoid
+    // fetching the complete booking history during every calendar navigation.
+    // Overview and client records still need the full permitted history here.
+    includes("overview", "clients")
       ? supabase
           .from("bookings")
           .select(
