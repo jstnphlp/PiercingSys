@@ -1,0 +1,881 @@
+"use client";
+
+import { Check, LoaderCircle, Plus, UserPlus } from "lucide-react";
+import { useState } from "react";
+import type {
+  BookingStatus,
+  Service,
+  StaffRole,
+  StudioSettings,
+} from "@/lib/domain";
+import type { CustomerRecord, StaffRecord } from "@/lib/data/staff";
+
+function useMutation() {
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  async function run(url: string, options: RequestInit) {
+    setBusy(true);
+    setError("");
+    setMessage("");
+    const response = await fetch(url, options);
+    const body = await response.json();
+    setBusy(false);
+    if (!response.ok) {
+      setError(body.error?.message ?? "The change could not be saved.");
+      return false;
+    }
+    setMessage("Saved.");
+    return true;
+  }
+  return { busy, message, error, run };
+}
+
+export function BookingActions({
+  id,
+  status,
+  canManage,
+}: {
+  id: string;
+  status: BookingStatus;
+  canManage: boolean;
+}) {
+  const mutation = useMutation();
+  const [rescheduling, setRescheduling] = useState(false);
+  async function change(next: BookingStatus) {
+    if (
+      await mutation.run(`/api/appointments/${id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ status: next }),
+      })
+    )
+      window.location.reload();
+  }
+  async function reschedule(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const startsAt = `${form.get("date")}T${form.get("time")}:00+08:00`;
+    if (
+      await mutation.run(`/api/appointments/${id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ startsAt }),
+      })
+    )
+      window.location.reload();
+  }
+  return (
+    <div className="booking-actions">
+      {status === "requested" && canManage && (
+        <>
+          <button disabled={mutation.busy} onClick={() => change("confirmed")}>
+            Confirm
+          </button>
+          <button disabled={mutation.busy} onClick={() => change("rejected")}>
+            Reject
+          </button>
+          <button
+            className="danger"
+            disabled={mutation.busy}
+            onClick={() => change("cancelled")}
+          >
+            Cancel
+          </button>
+        </>
+      )}
+      {status === "confirmed" && (
+        <>
+          <button disabled={mutation.busy} onClick={() => change("completed")}>
+            Complete
+          </button>
+          <button disabled={mutation.busy} onClick={() => change("no_show")}>
+            No-show
+          </button>
+          <button
+            disabled={mutation.busy}
+            onClick={() => setRescheduling(true)}
+          >
+            Reschedule
+          </button>
+          <button
+            className="danger"
+            disabled={mutation.busy}
+            onClick={() => change("cancelled")}
+          >
+            Cancel
+          </button>
+        </>
+      )}
+      {rescheduling && (
+        <form className="reschedule-popover" onSubmit={reschedule}>
+          <strong>New Manila time</strong>
+          <input name="date" type="date" required />
+          <input name="time" type="time" required />
+          <button>Save</button>
+          <button type="button" onClick={() => setRescheduling(false)}>
+            Close
+          </button>
+        </form>
+      )}
+      {mutation.error && <small role="alert">{mutation.error}</small>}
+    </div>
+  );
+}
+
+export function SettingsForm({ studio }: { studio: StudioSettings }) {
+  const mutation = useMutation();
+  const [hoursEnabled, setHoursEnabled] = useState<Record<string, boolean>>(
+    () =>
+      Object.fromEntries(
+        Array.from({ length: 7 }, (_, day) => [
+          String(day),
+          Boolean(
+            studio.businessHours[String(day)] &&
+              !studio.businessHours[String(day)].closed,
+          ),
+        ]),
+      ),
+  );
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const businessHours: StudioSettings["businessHours"] = {};
+    for (let day = 0; day < 7; day++) {
+      const key = String(day);
+      if (hoursEnabled[key])
+        businessHours[key] = {
+          open: String(form.get(`open-${day}`)),
+          close: String(form.get(`close-${day}`)),
+        };
+    }
+    const payload = {
+      name: "Piercing Corner",
+      location: String(form.get("location")),
+      address: String(form.get("address")) || null,
+      email: String(form.get("email")) || null,
+      phone: String(form.get("phone")) || null,
+      instagramUrl: String(form.get("instagramUrl")),
+      minimumLeadHours: Number(form.get("minimumLeadHours")),
+      bookingHorizonDays: Number(form.get("bookingHorizonDays")),
+      bookingIntervalMinutes: Number(form.get("bookingIntervalMinutes")),
+      minimumAge: Number(form.get("minimumAge")),
+      cancellationPolicy: String(form.get("cancellationPolicy")) || null,
+      businessHours,
+    };
+    if (
+      await mutation.run("/api/settings", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+    )
+      window.location.reload();
+  }
+  const days = [
+    "Sunday",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+  ];
+  return (
+    <form className="panel setting-section settings-form" onSubmit={submit}>
+      <div className="panel-head">
+        <div>
+          <h3>Studio profile & booking policy</h3>
+          <p>Only configured facts are shown publicly.</p>
+        </div>
+        <button className="btn btn-primary" disabled={mutation.busy}>
+          {mutation.busy ? <LoaderCircle className="spin" /> : <Check />} Save
+          settings
+        </button>
+      </div>
+      <div className="settings-body">
+        <div className="form-grid">
+          <label className="field">
+            Studio name
+            <input value="Piercing Corner" readOnly />
+          </label>
+          <label className="field">
+            Location
+            <input name="location" defaultValue={studio.location} required />
+          </label>
+          <label className="field wide">
+            Exact address
+            <input
+              name="address"
+              defaultValue={studio.address ?? ""}
+              placeholder="Not configured"
+            />
+          </label>
+          <label className="field">
+            Studio email
+            <input
+              name="email"
+              type="email"
+              defaultValue={studio.email ?? ""}
+            />
+          </label>
+          <label className="field">
+            Phone
+            <input name="phone" defaultValue={studio.phone ?? ""} />
+          </label>
+          <label className="field wide">
+            Instagram URL
+            <input
+              name="instagramUrl"
+              type="url"
+              defaultValue={studio.instagramUrl}
+              required
+            />
+          </label>
+          <label className="field">
+            Lead time (hours)
+            <input
+              name="minimumLeadHours"
+              type="number"
+              min="0"
+              defaultValue={studio.minimumLeadHours}
+            />
+          </label>
+          <label className="field">
+            Booking horizon (days)
+            <input
+              name="bookingHorizonDays"
+              type="number"
+              min="1"
+              max="365"
+              defaultValue={studio.bookingHorizonDays}
+            />
+          </label>
+          <label className="field">
+            Slot interval (minutes)
+            <input
+              name="bookingIntervalMinutes"
+              type="number"
+              min="5"
+              defaultValue={studio.bookingIntervalMinutes}
+            />
+          </label>
+          <label className="field">
+            Minimum booking age
+            <input
+              name="minimumAge"
+              type="number"
+              min="0"
+              defaultValue={studio.minimumAge}
+            />
+          </label>
+          <label className="field wide">
+            Cancellation policy
+            <textarea
+              name="cancellationPolicy"
+              defaultValue={studio.cancellationPolicy ?? ""}
+            />
+          </label>
+        </div>
+        <h4>Business hours</h4>
+        <div className="hours-grid">
+          {days.map((label, day) => {
+            const existing = studio.businessHours[String(day)];
+            return (
+              <div key={label}>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={hoursEnabled[String(day)]}
+                    onChange={(event) =>
+                      setHoursEnabled((current) => ({
+                        ...current,
+                        [String(day)]: event.target.checked,
+                      }))
+                    }
+                  />{" "}
+                  {label}
+                </label>
+                <input
+                  name={`open-${day}`}
+                  type="time"
+                  defaultValue={existing?.open ?? "10:00"}
+                  disabled={!hoursEnabled[String(day)]}
+                />
+                <span>to</span>
+                <input
+                  name={`close-${day}`}
+                  type="time"
+                  defaultValue={existing?.close ?? "18:00"}
+                  disabled={!hoursEnabled[String(day)]}
+                />
+              </div>
+            );
+          })}
+        </div>
+        {mutation.error && (
+          <p className="form-error" role="alert">
+            {mutation.error}
+          </p>
+        )}
+        {mutation.message && (
+          <p className="save-message" role="status">
+            {mutation.message}
+          </p>
+        )}
+      </div>
+    </form>
+  );
+}
+
+export function ServiceForm({ staff }: { staff: StaffRecord[] }) {
+  const mutation = useMutation();
+  const [open, setOpen] = useState(false);
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const ok = await mutation.run("/api/services", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: String(form.get("name")),
+        description: String(form.get("description")) || null,
+        durationMinutes: Number(form.get("durationMinutes")),
+        priceCents: Math.round(Number(form.get("price")) * 100),
+        active: true,
+        staffIds: form.getAll("staffIds").map(String),
+      }),
+    });
+    if (ok) window.location.reload();
+  }
+  if (!open)
+    return (
+      <button
+        className="btn btn-secondary setting-add"
+        onClick={() => setOpen(true)}
+      >
+        <Plus size={15} /> Add service
+      </button>
+    );
+  return (
+    <form className="inline-form" onSubmit={submit}>
+      <label className="field">
+        Service name
+        <input name="name" required />
+      </label>
+      <label className="field">
+        Description
+        <input name="description" />
+      </label>
+      <label className="field">
+        Duration (minutes)
+        <input name="durationMinutes" type="number" min="5" required />
+      </label>
+      <label className="field">
+        Price (PHP)
+        <input name="price" type="number" min="0" step="0.01" required />
+      </label>
+      <fieldset className="staff-checks">
+        <legend>Qualified staff</legend>
+        {staff
+          .filter((item) => item.active)
+          .map((item) => (
+            <label key={item.id}>
+              <input name="staffIds" type="checkbox" value={item.id} />{" "}
+              {item.displayName}
+            </label>
+          ))}
+      </fieldset>
+      {mutation.error && <p className="form-error">{mutation.error}</p>}
+      <div>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={() => setOpen(false)}
+        >
+          Cancel
+        </button>
+        <button className="btn btn-primary" disabled={mutation.busy}>
+          Add service
+        </button>
+      </div>
+    </form>
+  );
+}
+
+export function AvailabilityForm({ staff }: { staff: StaffRecord[] }) {
+  const mutation = useMutation();
+  const [open, setOpen] = useState(false);
+  const days = [
+    "Sunday",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+  ];
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const ok = await mutation.run("/api/availability", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        staffId: String(form.get("staffId")),
+        weekday: Number(form.get("weekday")),
+        startsAt: String(form.get("startsAt")),
+        endsAt: String(form.get("endsAt")),
+      }),
+    });
+    if (ok) window.location.reload();
+  }
+  if (!open)
+    return (
+      <button
+        className="btn btn-secondary setting-add"
+        onClick={() => setOpen(true)}
+      >
+        <Plus size={15} /> Add availability
+      </button>
+    );
+  return (
+    <form className="inline-form" onSubmit={submit}>
+      <label className="field">
+        Staff
+        <select name="staffId">
+          {staff
+            .filter((item) => item.active)
+            .map((item) => (
+              <option value={item.id} key={item.id}>
+                {item.displayName}
+              </option>
+            ))}
+        </select>
+      </label>
+      <label className="field">
+        Day
+        <select name="weekday">
+          {days.map((day, index) => (
+            <option value={index} key={day}>
+              {day}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="field">
+        Starts
+        <input name="startsAt" type="time" defaultValue="10:00" />
+      </label>
+      <label className="field">
+        Ends
+        <input name="endsAt" type="time" defaultValue="18:00" />
+      </label>
+      {mutation.error && <p className="form-error">{mutation.error}</p>}
+      <div>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={() => setOpen(false)}
+        >
+          Cancel
+        </button>
+        <button className="btn btn-primary" disabled={mutation.busy}>
+          Add hours
+        </button>
+      </div>
+    </form>
+  );
+}
+
+export function StationForm() {
+  const mutation = useMutation();
+  const [open, setOpen] = useState(false);
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    if (
+      await mutation.run("/api/stations", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: String(form.get("name")) }),
+      })
+    )
+      window.location.reload();
+  }
+  if (!open)
+    return (
+      <button
+        className="btn btn-secondary setting-add"
+        onClick={() => setOpen(true)}
+      >
+        <Plus size={15} /> Add station
+      </button>
+    );
+  return (
+    <form className="inline-form" onSubmit={submit}>
+      <label className="field">
+        Station name
+        <input name="name" required />
+      </label>
+      {mutation.error && <p className="form-error">{mutation.error}</p>}
+      <div>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={() => setOpen(false)}
+        >
+          Cancel
+        </button>
+        <button className="btn btn-primary" disabled={mutation.busy}>
+          Add station
+        </button>
+      </div>
+    </form>
+  );
+}
+
+export function InviteForm() {
+  const mutation = useMutation();
+  const [open, setOpen] = useState(false);
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const ok = await mutation.run("/api/staff/invitations", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        email: String(form.get("email")),
+        displayName: String(form.get("displayName")),
+        role: String(form.get("role")),
+      }),
+    });
+    if (ok) window.location.reload();
+  }
+  if (!open)
+    return (
+      <button
+        className="btn btn-secondary setting-add"
+        onClick={() => setOpen(true)}
+      >
+        <UserPlus size={15} /> Invite staff
+      </button>
+    );
+  return (
+    <form className="inline-form" onSubmit={submit}>
+      <label className="field">
+        Display name
+        <input name="displayName" required />
+      </label>
+      <label className="field">
+        Email
+        <input name="email" type="email" required />
+      </label>
+      <label className="field">
+        Role
+        <select name="role">
+          <option value="piercer">Piercer</option>
+          <option value="manager">Manager</option>
+        </select>
+      </label>
+      {mutation.error && <p className="form-error">{mutation.error}</p>}
+      <div>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={() => setOpen(false)}
+        >
+          Cancel
+        </button>
+        <button className="btn btn-primary" disabled={mutation.busy}>
+          Send invitation
+        </button>
+      </div>
+    </form>
+  );
+}
+
+export function StaffActions({
+  person,
+  currentRole,
+}: {
+  person: StaffRecord;
+  currentRole: StaffRole;
+}) {
+  const mutation = useMutation();
+  async function update(payload: Record<string, unknown>) {
+    if (
+      await mutation.run(`/api/staff/${person.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+    )
+      window.location.reload();
+  }
+  if (currentRole !== "owner" || person.role === "owner") return null;
+  return (
+    <span className="staff-actions">
+      <select
+        aria-label={`Role for ${person.displayName}`}
+        defaultValue={person.role}
+        onChange={(event) => void update({ role: event.target.value })}
+        disabled={mutation.busy}
+      >
+        <option value="manager">Manager</option>
+        <option value="piercer">Piercer</option>
+        <option value="owner">Transfer ownership</option>
+      </select>
+      <button
+        type="button"
+        onClick={() => void update({ active: !person.active })}
+        disabled={mutation.busy}
+      >
+        {person.active ? "Deactivate" : "Activate"}
+      </button>
+      {mutation.error && <small>{mutation.error}</small>}
+    </span>
+  );
+}
+
+export function SaleForm({
+  customers,
+  services,
+}: {
+  customers: CustomerRecord[];
+  services: Service[];
+}) {
+  const mutation = useMutation();
+  const [open, setOpen] = useState(false);
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const service = services.find((item) => item.id === form.get("serviceId"));
+    if (!service) return;
+    const amount = Math.round(Number(form.get("amount")) * 100);
+    const ok = await mutation.run("/api/sales", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        customerId: form.get("customerId") || null,
+        items: [
+          {
+            type: "service",
+            sourceId: service.id,
+            description: service.name,
+            quantity: 1,
+            unitPriceCents: service.priceCents,
+            discountCents: 0,
+          },
+        ],
+        discountCents: 0,
+        payments:
+          amount > 0
+            ? [{ method: form.get("method"), amountCents: amount }]
+            : [],
+        complete: amount >= service.priceCents,
+      }),
+    });
+    if (ok) window.location.reload();
+  }
+  if (!open)
+    return (
+      <button
+        className="btn btn-primary page-add"
+        disabled={!services.length}
+        onClick={() => setOpen(true)}
+      >
+        <Plus size={16} /> Record sale
+      </button>
+    );
+  return (
+    <form className="panel inline-form sale-form" onSubmit={submit}>
+      <label className="field">
+        Client
+        <select name="customerId">
+          <option value="">Walk-in</option>
+          {customers.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="field">
+        Service
+        <select name="serviceId" required>
+          {services
+            .filter((item) => item.active)
+            .map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
+              </option>
+            ))}
+        </select>
+      </label>
+      <label className="field">
+        Payment received (PHP)
+        <input
+          name="amount"
+          type="number"
+          min="0"
+          step="0.01"
+          defaultValue="0"
+        />
+      </label>
+      <label className="field">
+        Method
+        <select name="method">
+          <option value="cash">Cash</option>
+          <option value="gcash">GCash</option>
+          <option value="maya">Maya</option>
+          <option value="card">Card</option>
+          <option value="bank_transfer">Bank transfer</option>
+          <option value="other">Other</option>
+        </select>
+      </label>
+      {mutation.error && <p className="form-error">{mutation.error}</p>}
+      <div>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={() => setOpen(false)}
+        >
+          Cancel
+        </button>
+        <button className="btn btn-primary" disabled={mutation.busy}>
+          Save sale
+        </button>
+      </div>
+    </form>
+  );
+}
+
+export function SaleAdjustment({
+  id,
+  remainingCents,
+}: {
+  id: string;
+  remainingCents: number;
+}) {
+  const mutation = useMutation();
+  const [open, setOpen] = useState(false);
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    if (
+      await mutation.run(`/api/sales/${id}/adjustments`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          kind: String(form.get("kind")),
+          amountCents: Math.round(Number(form.get("amount")) * 100),
+          reason: String(form.get("reason")),
+        }),
+      })
+    )
+      window.location.reload();
+  }
+  if (!open)
+    return (
+      <button
+        className="table-action"
+        disabled={remainingCents <= 0}
+        onClick={() => setOpen(true)}
+      >
+        Adjust
+      </button>
+    );
+  return (
+    <form className="adjustment-form" onSubmit={submit}>
+      <select name="kind">
+        <option value="refund">Refund</option>
+        <option value="void">Void</option>
+      </select>
+      <input
+        name="amount"
+        aria-label="Adjustment amount in PHP"
+        type="number"
+        min="0.01"
+        max={(remainingCents / 100).toFixed(2)}
+        step="0.01"
+        required
+      />
+      <input
+        name="reason"
+        aria-label="Adjustment reason"
+        placeholder="Reason"
+        required
+      />
+      <button disabled={mutation.busy}>Save</button>
+      <button type="button" onClick={() => setOpen(false)}>
+        Close
+      </button>
+      {mutation.error && <small>{mutation.error}</small>}
+    </form>
+  );
+}
+
+export function ClosureForm() {
+  const mutation = useMutation();
+  const [open, setOpen] = useState(false);
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const date = String(form.get("date"));
+    if (
+      await mutation.run("/api/closures", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          startsAt: `${date}T${form.get("startsAt")}:00+08:00`,
+          endsAt: `${date}T${form.get("endsAt")}:00+08:00`,
+          reason: String(form.get("reason")) || null,
+        }),
+      })
+    )
+      window.location.reload();
+  }
+  if (!open)
+    return (
+      <button
+        className="btn btn-secondary setting-add"
+        onClick={() => setOpen(true)}
+      >
+        <Plus size={15} /> Add closure
+      </button>
+    );
+  return (
+    <form className="inline-form" onSubmit={submit}>
+      <label className="field">
+        Date
+        <input name="date" type="date" required />
+      </label>
+      <label className="field">
+        Starts
+        <input name="startsAt" type="time" defaultValue="10:00" required />
+      </label>
+      <label className="field">
+        Ends
+        <input name="endsAt" type="time" defaultValue="18:00" required />
+      </label>
+      <label className="field">
+        Reason
+        <input name="reason" />
+      </label>
+      {mutation.error && <p className="form-error">{mutation.error}</p>}
+      <div>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={() => setOpen(false)}
+        >
+          Cancel
+        </button>
+        <button className="btn btn-primary" disabled={mutation.busy}>
+          Add closure
+        </button>
+      </div>
+    </form>
+  );
+}

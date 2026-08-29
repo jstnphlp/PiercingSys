@@ -1,19 +1,18 @@
 import type { Metadata } from "next";
-import { DM_Sans, Manrope } from "next/font/google";
+import { DM_Sans, Fraunces } from "next/font/google";
 import "./globals.css";
 
 const dmSans = DM_Sans({ subsets: ["latin"], variable: "--font-body" });
-const manrope = Manrope({ subsets: ["latin"], variable: "--font-display" });
+const fraunces = Fraunces({ subsets: ["latin"], variable: "--font-display" });
 
 export const metadata: Metadata = {
-  title: "Lobe | Piercing studio management",
-  description: "Bookings, client records, sales, and studio operations in one calm workspace.",
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"),
+  title: { default: "Piercing Corner", template: "%s · Piercing Corner" },
+  description: "Book and manage appointments with Piercing Corner in Parañaque.",
+  icons: { icon: "/logo.png", apple: "/logo.png" },
+  openGraph: { title: "Piercing Corner", description: "Piercing appointments in Parañaque.", images: ["/logo.png"] },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
-  return (
-    <html lang="en">
-      <body className={`${dmSans.variable} ${manrope.variable}`}>{children}</body>
-    </html>
-  );
+  return <html lang="en"><body className={`${dmSans.variable} ${fraunces.variable}`}>{children}</body></html>;
 }

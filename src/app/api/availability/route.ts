@@ -1,0 +1,7 @@
+import { z } from "zod";
+import { getStaffSession, hasRole } from "@/lib/auth";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { validationError } from "@/lib/validation";
+
+const schema = z.object({ staffId: z.string().uuid(), weekday: z.number().int().min(0).max(6), startsAt: z.string().regex(/^\d{2}:\d{2}$/), endsAt: z.string().regex(/^\d{2}:\d{2}$/) }).refine((value) => value.endsAt > value.startsAt, { message: "End time must be after start time.", path: ["endsAt"] });
+export async function POST(request: Request) { const session = await getStaffSession(); if (!session) return Response.json({ error: { code: "UNAUTHORIZED", message: "Sign in is required." } }, { status: 401 }); if (!hasRole(session.role, ["owner", "manager"])) return Response.json({ error: { code: "FORBIDDEN", message: "Schedule changes require management access." } }, { status: 403 }); const parsed = schema.safeParse(await request.json().catch(() => null)); if (!parsed.success) return Response.json(validationError(parsed.error), { status: 422 }); const supabase = await createSupabaseServerClient(); const { data, error } = await supabase!.from("staff_availability").insert({ staff_id: parsed.data.staffId, weekday: parsed.data.weekday, starts_at: parsed.data.startsAt, ends_at: parsed.data.endsAt }).select("id").single(); if (error) return Response.json({ error: { code: "CREATE_FAILED", message: error.message } }, { status: 400 }); return Response.json({ data }, { status: 201 }); }
