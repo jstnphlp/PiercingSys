@@ -50,7 +50,7 @@ export async function GET(request: Request) {
   const { data, error } = await supabase!
     .from("sales")
     .select(
-      "reference,status,total_cents,created_at,customers(first_name,last_name),payments(method,amount_cents),sale_adjustments(kind,amount_cents)",
+      "reference,status,total_cents,created_at,customers(first_name,last_name),bookings(booking_services(position,name)),payments(method,amount_cents),sale_adjustments(kind,amount_cents)",
     )
     .gte("created_at", start)
     .lt("created_at", end)
@@ -61,13 +61,17 @@ export async function GET(request: Request) {
       { status: 400 },
     );
   const rows = [
-    "Business date,Sale reference,Customer,Status,Gross PHP,Adjustments PHP,Net PHP,Paid PHP,Payment methods",
+    "Business date,Sale reference,Customer,Services,Status,Gross PHP,Adjustments PHP,Net PHP,Paid PHP,Payment methods",
     ...(data ?? []).map((sale) => {
       const customer = Array.isArray(sale.customers)
         ? sale.customers[0]
         : sale.customers;
       const payments = sale.payments ?? [];
       const adjustments = sale.sale_adjustments ?? [];
+      const booking = Array.isArray(sale.bookings) ? sale.bookings[0] : sale.bookings;
+      const services = (booking?.booking_services ?? [])
+        .sort((a, b) => a.position - b.position)
+        .map((item) => item.name).join(" + ");
       const adjustedCents = adjustments.reduce(
         (sum, item) => sum + item.amount_cents,
         0,
@@ -78,6 +82,7 @@ export async function GET(request: Request) {
         ),
         sale.reference,
         customer ? `${customer.first_name} ${customer.last_name}` : "Walk-in",
+        services,
         sale.status,
         (sale.total_cents / 100).toFixed(2),
         (adjustedCents / 100).toFixed(2),

@@ -6,6 +6,12 @@ describe("public booking validation", () => {
   it("normalizes an empty optional piercer and age checkbox", () => {
     const result = publicBookingSchema.parse(valid);
     expect(result.preferredPiercerId).toBeNull(); expect(result.ageConfirmed).toBe(true);
+    expect(result.serviceIds).toEqual([valid.serviceId]);
+  });
+  it("accepts distinct multi-service selections and rejects duplicates", () => {
+    const services = [valid.serviceId, "20000000-0000-4000-8000-000000000002"];
+    expect(publicBookingSchema.safeParse({ ...valid, serviceId: undefined, serviceIds: services }).success).toBe(true);
+    expect(publicBookingSchema.safeParse({ ...valid, serviceId: undefined, serviceIds: [services[0], services[0]] }).success).toBe(false);
   });
   it("returns field validation for malformed public data", () => {
     expect(publicBookingSchema.safeParse({ ...valid, email: "not-an-email" }).success).toBe(false);

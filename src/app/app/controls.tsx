@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, LoaderCircle, Plus, UserPlus } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   formatServicePrice,
   servicePriceBounds,
@@ -10,7 +10,7 @@ import {
   type StaffRole,
   type StudioSettings,
 } from "@/lib/domain";
-import type { CustomerRecord, StaffRecord } from "@/lib/data/staff";
+import type { CustomerRecord, SaleRecord, StaffRecord } from "@/lib/data/staff";
 
 function useMutation() {
   const [busy, setBusy] = useState(false);
@@ -37,13 +37,20 @@ export function BookingActions({
   id,
   status,
   canManage,
+  startsAt,
 }: {
   id: string;
   status: BookingStatus;
   canManage: boolean;
+  startsAt: string;
 }) {
   const mutation = useMutation();
   const [rescheduling, setRescheduling] = useState(false);
+  useEffect(() => {
+    if (!rescheduling) return;
+    function close(event: KeyboardEvent) { if (event.key === "Escape") setRescheduling(false); }
+    document.addEventListener("keydown", close); return () => document.removeEventListener("keydown", close);
+  }, [rescheduling]);
   async function change(next: BookingStatus) {
     if (
       await mutation.run(`/api/appointments/${id}`, {
@@ -110,47 +117,34 @@ export function BookingActions({
         </>
       )}
       {rescheduling && (
-        <form className="reschedule-popover" onSubmit={reschedule}>
+        <div className="reschedule-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setRescheduling(false); }}>
+        <form className="reschedule-popover" role="dialog" aria-modal="true" aria-label="Reschedule appointment" onSubmit={reschedule}>
           <strong>New Manila time</strong>
-          <input name="date" type="date" required />
-          <input name="time" type="time" required />
+          <input name="date" aria-label="New date" type="date" defaultValue={manilaDateValue(startsAt)} required />
+          <input name="time" aria-label="New time" type="time" defaultValue={manilaTimeValue(startsAt)} required />
           <button>Save</button>
           <button type="button" onClick={() => setRescheduling(false)}>
             Close
           </button>
-        </form>
+        </form></div>
       )}
       {mutation.error && <small role="alert">{mutation.error}</small>}
     </div>
   );
 }
 
+function manilaDateValue(value: string) {
+  return new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", day: "2-digit", timeZone: "Asia/Manila" }).format(new Date(value));
+}
+function manilaTimeValue(value: string) {
+  return new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Asia/Manila" }).format(new Date(value));
+}
+
 export function SettingsForm({ studio }: { studio: StudioSettings }) {
   const mutation = useMutation();
-  const [hoursEnabled, setHoursEnabled] = useState<Record<string, boolean>>(
-    () =>
-      Object.fromEntries(
-        Array.from({ length: 7 }, (_, day) => [
-          String(day),
-          Boolean(
-            studio.businessHours[String(day)] &&
-              !studio.businessHours[String(day)].closed,
-          ),
-        ]),
-      ),
-  );
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    const businessHours: StudioSettings["businessHours"] = {};
-    for (let day = 0; day < 7; day++) {
-      const key = String(day);
-      if (hoursEnabled[key])
-        businessHours[key] = {
-          open: String(form.get(`open-${day}`)),
-          close: String(form.get(`close-${day}`)),
-        };
-    }
     const payload = {
       name: "Piercing Corner",
       location: String(form.get("location")),
@@ -163,7 +157,6 @@ export function SettingsForm({ studio }: { studio: StudioSettings }) {
       bookingIntervalMinutes: Number(form.get("bookingIntervalMinutes")),
       minimumAge: Number(form.get("minimumAge")),
       cancellationPolicy: String(form.get("cancellationPolicy")) || null,
-      businessHours,
     };
     if (
       await mutation.run("/api/settings", {
@@ -174,15 +167,6 @@ export function SettingsForm({ studio }: { studio: StudioSettings }) {
     )
       window.location.reload();
   }
-  const days = [
-    "Sunday",
-    "Monday",
-    "Tuesday",
-    "Wednesday",
-    "Thursday",
-    "Friday",
-    "Saturday",
-  ];
   return (
     <form className="panel setting-section settings-form" onSubmit={submit}>
       <div className="panel-head">
@@ -278,42 +262,6 @@ export function SettingsForm({ studio }: { studio: StudioSettings }) {
               defaultValue={studio.cancellationPolicy ?? ""}
             />
           </label>
-        </div>
-        <h4>Business hours</h4>
-        <div className="hours-grid">
-          {days.map((label, day) => {
-            const existing = studio.businessHours[String(day)];
-            return (
-              <div key={label}>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={hoursEnabled[String(day)]}
-                    onChange={(event) =>
-                      setHoursEnabled((current) => ({
-                        ...current,
-                        [String(day)]: event.target.checked,
-                      }))
-                    }
-                  />{" "}
-                  {label}
-                </label>
-                <input
-                  name={`open-${day}`}
-                  type="time"
-                  defaultValue={existing?.open ?? "10:00"}
-                  disabled={!hoursEnabled[String(day)]}
-                />
-                <span>to</span>
-                <input
-                  name={`close-${day}`}
-                  type="time"
-                  defaultValue={existing?.close ?? "18:00"}
-                  disabled={!hoursEnabled[String(day)]}
-                />
-              </div>
-            );
-          })}
         </div>
         {mutation.error && (
           <p className="form-error" role="alert">
@@ -953,6 +901,32 @@ export function SaleAdjustment({
       {mutation.error && <small>{mutation.error}</small>}
     </form>
   );
+}
+
+export function DraftSaleActions({ sale }: { sale: SaleRecord }) {
+  const mutation = useMutation();
+  const [paymentOpen, setPaymentOpen] = useState(false);
+  const unresolved = sale.items.filter((item) => item.unitPriceCents === null);
+  async function resolve(event: React.FormEvent<HTMLFormElement>, itemId: string) {
+    event.preventDefault(); const form = new FormData(event.currentTarget);
+    if (await mutation.run(`/api/sales/${sale.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "resolve_price", itemId, unitPriceCents: Math.round(Number(form.get("price")) * 100) }) })) window.location.reload();
+  }
+  async function payment(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault(); const form = new FormData(event.currentTarget);
+    if (await mutation.run(`/api/sales/${sale.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "add_payment", method: form.get("method"), amountCents: Math.round(Number(form.get("amount")) * 100), reference: form.get("reference") || null }) })) window.location.reload();
+  }
+  async function complete() {
+    if (await mutation.run(`/api/sales/${sale.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "complete" }) })) window.location.reload();
+  }
+  return <div className="draft-sale-actions">
+    {unresolved.map((item) => <form key={item.id} onSubmit={(event) => void resolve(event, item.id)}>
+      <strong>{item.description}</strong><small>Pricing required · {formatServicePrice({ priceCents: null, minPriceCents: item.minPriceCents, maxPriceCents: item.maxPriceCents, priceUnit: null })}</small>
+      <input name="price" aria-label={`Price for ${item.description} in PHP`} type="number" min={(item.minPriceCents ?? 0) / 100} max={(item.maxPriceCents ?? 0) / 100} step="0.01" required/><button disabled={mutation.busy}>Set price</button>
+    </form>)}
+    {!unresolved.length && <div className="draft-controls"><button className="table-action" onClick={() => setPaymentOpen((current) => !current)}>Add payment</button><button className="table-action" disabled={sale.paidCents < sale.totalCents || mutation.busy} onClick={() => void complete()}>Complete sale</button></div>}
+    {paymentOpen && <form onSubmit={payment}><input name="amount" aria-label="Payment amount in PHP" type="number" min="0.01" max={((sale.totalCents - sale.paidCents) / 100).toFixed(2)} step="0.01" required/><select name="method"><option value="cash">Cash</option><option value="gcash">GCash</option><option value="maya">Maya</option><option value="card">Card</option><option value="bank_transfer">Bank transfer</option><option value="other">Other</option></select><input name="reference" aria-label="Payment reference" placeholder="Reference (optional)"/><button disabled={mutation.busy}>Save payment</button></form>}
+    {mutation.error && <small className="form-error" role="alert">{mutation.error}</small>}
+  </div>;
 }
 
 export function ClosureForm() {

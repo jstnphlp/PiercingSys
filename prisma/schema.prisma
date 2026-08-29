@@ -533,7 +533,6 @@ model bookings {
   id                      String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   reference               String                    @unique @default(dbgenerated("('PC-'::text || upper(substr(replace((gen_random_uuid())::text, '-'::text, ''::text), 1, 8)))"))
   customer_id             String                    @db.Uuid
-  service_id              String                    @db.Uuid
   assigned_piercer_id     String?                   @db.Uuid
   station_id              String?                   @db.Uuid
   status                  booking_status            @default(confirmed)
@@ -543,13 +542,13 @@ model bookings {
   created_at              DateTime                  @default(now()) @db.Timestamptz(6)
   updated_at              DateTime                  @default(now()) @db.Timestamptz(6)
   booking_photos          booking_photos[]
+  booking_services        booking_services[]
   staff_profiles          staff_profiles?           @relation(fields: [assigned_piercer_id], references: [user_id], onDelete: NoAction, onUpdate: NoAction)
   customers               customers                 @relation(fields: [customer_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  services                services                  @relation(fields: [service_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   stations                stations?                 @relation(fields: [station_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   consent_forms           consent_forms?
   notification_deliveries notification_deliveries[]
-  sales                   sales[]
+  sales                   sales?
 
   @@schema("public")
 }
@@ -652,17 +651,22 @@ model sale_adjustments {
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model sale_items {
-  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  sale_id          String   @db.Uuid
-  item_type        String
-  source_id        String?  @db.Uuid
-  description      String
-  quantity         Int
-  unit_price_cents Int
-  discount_cents   Int      @default(0)
-  created_at       DateTime @default(now()) @db.Timestamptz(6)
-  sales            sales    @relation(fields: [sale_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  id                 String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sale_id            String            @db.Uuid
+  item_type          String
+  source_id          String?           @db.Uuid
+  description        String
+  quantity           Int
+  unit_price_cents   Int?
+  discount_cents     Int               @default(0)
+  created_at         DateTime          @default(now()) @db.Timestamptz(6)
+  booking_service_id String?           @db.Uuid
+  min_price_cents    Int?
+  max_price_cents    Int?
+  booking_services   booking_services? @relation(fields: [booking_service_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sales              sales             @relation(fields: [sale_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  @@unique([sale_id, booking_service_id], map: "sale_items_booking_service_unique", where: raw("(booking_service_id IS NOT NULL)"))
   @@schema("public")
 }
 
@@ -671,7 +675,7 @@ model sale_items {
 model sales {
   id               String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   reference        String             @unique @default(dbgenerated("('SALE-'::text || upper(substr(replace((gen_random_uuid())::text, '-'::text, ''::text), 1, 8)))"))
-  booking_id       String?            @db.Uuid
+  booking_id       String?            @unique(map: "sales_booking_unique") @db.Uuid
   customer_id      String?            @db.Uuid
   status           sale_status        @default(draft)
   subtotal_cents   Int                @default(0)
@@ -704,22 +708,23 @@ model service_staff {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
 model services {
-  id               String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id               String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name             String
   description      String?
   body_area        String?
-  category         String          @default("Other Services")
   duration_minutes Int
   price_cents      Int?
+  is_active        Boolean            @default(true)
+  sort_order       Int                @default(0)
+  created_at       DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime           @default(now()) @db.Timestamptz(6)
   min_price_cents  Int?
   max_price_cents  Int?
   price_unit       String?
-  is_active        Boolean         @default(true)
-  sort_order       Int             @default(0)
-  created_at       DateTime        @default(now()) @db.Timestamptz(6)
-  updated_at       DateTime        @default(now()) @db.Timestamptz(6)
-  bookings         bookings[]
+  category         String             @default("Other Services")
+  booking_services booking_services[]
   service_staff    service_staff[]
 
   @@schema("public")
@@ -787,6 +792,29 @@ model studio_settings {
   cancellation_policy      String?
   updated_at               DateTime @default(now()) @db.Timestamptz(6)
 
+  @@schema("public")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model booking_services {
+  id               String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  booking_id       String       @db.Uuid
+  service_id       String       @db.Uuid
+  position         Int          @db.SmallInt
+  name             String
+  duration_minutes Int
+  price_cents      Int?
+  min_price_cents  Int?
+  max_price_cents  Int?
+  price_unit       String?
+  created_at       DateTime     @default(now()) @db.Timestamptz(6)
+  bookings         bookings     @relation(fields: [booking_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  services         services     @relation(fields: [service_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sale_items       sale_items[]
+
+  @@unique([booking_id, position])
+  @@unique([booking_id, service_id])
   @@schema("public")
 }
 

@@ -30,11 +30,10 @@ import {
   type StaffDataScope,
 } from "@/lib/data/staff";
 import {
-  AvailabilityForm,
   BookingActions,
-  ClosureForm,
   InviteForm,
   SaleAdjustment,
+  DraftSaleActions,
   SaleForm,
   ServiceAssignmentForm,
   ServiceForm,
@@ -42,6 +41,9 @@ import {
   StaffActions,
   StationForm,
 } from "./controls";
+import { CalendarWorkspace } from "./calendar-workspace";
+import { ClientRecords } from "./client-records";
+import { ScheduleSettings } from "./schedule-settings";
 import "./dashboard.css";
 import "./dashboard-maximalist.css";
 
@@ -139,7 +141,7 @@ export default async function AppPage({
             {data.error ? (
               <StateCard title="Data could not be loaded" detail={data.error} />
             ) : (
-              viewContent(view, data, session.role)
+              viewContent(view, data, session)
             )}
           </div>
         </div>
@@ -151,11 +153,12 @@ export default async function AppPage({
 function viewContent(
   view: View,
   data: Awaited<ReturnType<typeof getStaffData>>,
-  role: string,
+  session: { role: string; userId: string },
 ) {
+  const role = session.role;
   if (view === "overview") return <Overview data={data} role={role} />;
   if (view === "calendar")
-    return <Calendar bookings={data.bookings} role={role} />;
+    return <CalendarWorkspace role={role} userId={session.userId} services={data.services} staff={data.staff} assignments={data.serviceAssignments} stations={data.stations} customers={data.customers} />;
   if (view === "clients") return <Clients data={data} />;
   if (view === "sales") return <Sales data={data} />;
   if (view === "reports") return <Reports data={data} />;
@@ -282,65 +285,6 @@ function Overview({
   );
 }
 
-function Calendar({
-  bookings,
-  role,
-}: {
-  bookings: BookingRecord[];
-  role: string;
-}) {
-  const upcoming = bookings
-    .filter((item) => new Date(item.endsAt) >= new Date())
-    .slice(0, 100);
-  const groups = upcoming.reduce((map, item) => {
-    const key = manilaDate(item.startsAt);
-    map.set(key, [...(map.get(key) ?? []), item]);
-    return map;
-  }, new Map<string, BookingRecord[]>());
-  return (
-    <div className="feature-view">
-      <PageIntro
-        title="Studio calendar"
-        detail="Confirmed appointments use Asia/Manila time. Piercer and station overlaps are blocked by the database."
-      />
-      {upcoming.length ? (
-        <div className="calendar-days">
-          {[...groups].map(([date, items]) => (
-            <section className="panel calendar-day" key={date}>
-              <div className="date-block">
-                <small>
-                  {new Intl.DateTimeFormat("en-PH", {
-                    weekday: "short",
-                    timeZone: "Asia/Manila",
-                  }).format(new Date(items[0].startsAt))}
-                </small>
-                <strong>
-                  {new Intl.DateTimeFormat("en-PH", {
-                    day: "2-digit",
-                    timeZone: "Asia/Manila",
-                  }).format(new Date(items[0].startsAt))}
-                </strong>
-                <span>
-                  {new Intl.DateTimeFormat("en-PH", {
-                    month: "short",
-                    timeZone: "Asia/Manila",
-                  }).format(new Date(items[0].startsAt))}
-                </span>
-              </div>
-              <AppointmentList bookings={items} role={role} />
-            </section>
-          ))}
-        </div>
-      ) : (
-        <StateCard
-          title="The calendar is clear"
-          detail="New confirmed public bookings will appear here immediately."
-        />
-      )}
-    </div>
-  );
-}
-
 function Clients({ data }: { data: Awaited<ReturnType<typeof getStaffData>> }) {
   return (
     <div className="feature-view">
@@ -348,49 +292,7 @@ function Clients({ data }: { data: Awaited<ReturnType<typeof getStaffData>> }) {
         title="Client records"
         detail="Contact details and appointment history visible under your role permissions."
       />
-      {data.customers.length ? (
-        <section className="panel table-panel">
-          <table>
-            <thead>
-              <tr>
-                <th>Client</th>
-                <th>Contact</th>
-                <th>Appointments</th>
-                <th>Last activity</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.customers.map((customer) => {
-                const bookings = data.bookings.filter(
-                  (item) => item.customer.id === customer.id,
-                );
-                return (
-                  <tr key={customer.id}>
-                    <td>
-                      <strong>{customer.name}</strong>
-                    </td>
-                    <td>
-                      <span>{customer.email}</span>
-                      <small>{customer.phone}</small>
-                    </td>
-                    <td>{bookings.length}</td>
-                    <td>
-                      {bookings[0]
-                        ? formatDate(bookings[0].startsAt)
-                        : formatDate(customer.createdAt)}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </section>
-      ) : (
-        <StateCard
-          title="No clients yet"
-          detail="A client record is created automatically with their first confirmed booking."
-        />
-      )}
+      <ClientRecords customers={data.customers} bookings={data.bookings} />
     </div>
   );
 }
@@ -443,6 +345,7 @@ function Sales({ data }: { data: Awaited<ReturnType<typeof getStaffData>> }) {
                 <th>Paid</th>
                 <th>Method</th>
                 <th>Status</th>
+                <th>Items</th>
                 <th>Adjustments</th>
               </tr>
             </thead>
@@ -460,6 +363,7 @@ function Sales({ data }: { data: Awaited<ReturnType<typeof getStaffData>> }) {
                   <td>
                     <Status value={sale.status} />
                   </td>
+                  <td>{sale.items.map((item) => <small key={item.id}>{item.description} · {item.unitPriceCents === null ? "Pricing required" : formatPhp(item.unitPriceCents)}</small>)}</td>
                   <td>
                     {sale.adjustmentCents > 0 && (
                       <small>{formatPhp(sale.adjustmentCents)} adjusted</small>
@@ -470,6 +374,7 @@ function Sales({ data }: { data: Awaited<ReturnType<typeof getStaffData>> }) {
                         remainingCents={sale.totalCents - sale.adjustmentCents}
                       />
                     )}
+                    {sale.status === "draft" && <DraftSaleActions sale={sale} />}
                   </td>
                 </tr>
               ))}
@@ -606,6 +511,7 @@ function StudioSettings({
       />
       <div className="settings-stack">
         <SettingsForm studio={data.studio} />
+        <ScheduleSettings studio={data.studio} staff={data.staff} availability={data.availability} closures={data.closures} />
         <section className="panel setting-section">
           <PanelHead
             title="Services & pricing"
@@ -641,8 +547,6 @@ function StudioSettings({
             detail="Owners manage invitations; managers configure operational availability."
           />
           {role === "owner" && <InviteForm />}
-          <AvailabilityForm staff={data.staff} />
-          <ClosureForm />
           <StationForm />
           <div className="simple-list">
             {data.staff.map((person) => (
@@ -665,17 +569,6 @@ function StudioSettings({
                 <span>
                   <strong>{station.name}</strong>
                   <small>Active station</small>
-                </span>
-              </div>
-            ))}
-            {data.closures.map((closure) => (
-              <div key={closure.id}>
-                <span>
-                  <strong>Closure · {formatDate(closure.startsAt)}</strong>
-                  <small>
-                    {formatTime(closure.startsAt)}–{formatTime(closure.endsAt)}{" "}
-                    · {closure.reason || "No reason supplied"}
-                  </small>
                 </span>
               </div>
             ))}
@@ -738,7 +631,7 @@ function AppointmentList({
           <div className="appointment-client">
             <strong>{item.customer.name}</strong>
             <small>
-              {item.service.name} · {item.reference}
+              {item.services.map((service) => service.name).join(" + ")} · {item.reference}
             </small>
           </div>
           <div className="appointment-piercer">
@@ -754,6 +647,7 @@ function AppointmentList({
               id={item.id}
               status={item.status}
               canManage={role !== "piercer"}
+              startsAt={item.startsAt}
             />
           )}
         </article>

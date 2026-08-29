@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   calculateBalance,
   canTransition,
+  combinedServiceDuration,
+  combinedServicePriceBounds,
+  commonQualifiedPiercerIds,
+  distinctServiceIds,
   formatServicePrice,
   generateAvailableSlots,
   hasScheduleConflict,
@@ -29,6 +33,15 @@ describe("money", () => {
 });
 
 describe("service pricing", () => {
+  it("combines durations and price ranges without inventing a range price", () => {
+    const services = [
+      { durationMinutes: 45, priceCents: 50000, minPriceCents: null, maxPriceCents: null },
+      { durationMinutes: 30, priceCents: null, minPriceCents: 10000, maxPriceCents: 35000 },
+    ];
+    expect(combinedServiceDuration(services)).toBe(75);
+    expect(combinedServicePriceBounds(services)).toEqual({ min: 60000, max: 85000 });
+  });
+
   it("formats fixed and range prices without collapsing a range", () => {
     expect(
       formatServicePrice({
@@ -103,6 +116,20 @@ describe("available slots", () => {
   it("enforces lead time and booking horizon", () => {
     expect(generateAvailableSlots({ ...base, now: new Date("2026-09-01T01:30:00.000Z") })).toEqual([]);
     expect(generateAvailableSlots({ ...base, bookingHorizonDays: 1 })).toEqual([]);
+  });
+  it("can validate staff scheduling without public lead-time or horizon rules", () => {
+    expect(generateAvailableSlots({ ...base, bookingHorizonDays: 1, enforceBookingWindow: false })).not.toEqual([]);
+  });
+});
+
+describe("multi-service qualification", () => {
+  it("rejects duplicates and returns only piercers qualified for every service", () => {
+    expect(distinctServiceIds(["s1", "s2"])).toBe(true);
+    expect(distinctServiceIds(["s1", "s1"])).toBe(false);
+    expect(commonQualifiedPiercerIds(["s1", "s2"], [
+      { serviceId: "s1", staffId: "p1" }, { serviceId: "s2", staffId: "p1" },
+      { serviceId: "s1", staffId: "p2" },
+    ])).toEqual(["p1"]);
   });
 });
 

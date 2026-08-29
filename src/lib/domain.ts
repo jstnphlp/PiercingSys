@@ -44,7 +44,7 @@ export type Service = {
 export type AvailableSlot = { startsAt: string; endsAt: string; piercerIds: string[] };
 
 export type PublicBookingInput = {
-  serviceId: string;
+  serviceIds: string[];
   startsAt: string;
   preferredPiercerId?: string | null;
   firstName: string;
@@ -115,6 +115,46 @@ export function isValidServiceSalePrice(
   return Boolean(bounds && priceCents >= bounds.min && priceCents <= bounds.max);
 }
 
+export function distinctServiceIds(serviceIds: string[]) {
+  return serviceIds.length > 0 && new Set(serviceIds).size === serviceIds.length;
+}
+
+export function combinedServiceDuration(
+  services: Array<Pick<Service, "durationMinutes">>,
+) {
+  return services.reduce((total, service) => total + service.durationMinutes, 0);
+}
+
+export function combinedServicePriceBounds(
+  services: Array<Pick<Service, "priceCents" | "minPriceCents" | "maxPriceCents">>,
+) {
+  return services.reduce(
+    (total, service) => {
+      const bounds = servicePriceBounds(service);
+      return bounds
+        ? { min: total.min + bounds.min, max: total.max + bounds.max }
+        : total;
+    },
+    { min: 0, max: 0 },
+  );
+}
+
+export function commonQualifiedPiercerIds(
+  serviceIds: string[],
+  assignments: Array<{ serviceId: string; staffId: string }>,
+) {
+  if (!distinctServiceIds(serviceIds)) return [];
+  const qualified = new Map<string, Set<string>>();
+  for (const assignment of assignments) {
+    const set = qualified.get(assignment.staffId) ?? new Set<string>();
+    set.add(assignment.serviceId);
+    qualified.set(assignment.staffId, set);
+  }
+  return [...qualified]
+    .filter(([, assigned]) => serviceIds.every((id) => assigned.has(id)))
+    .map(([staffId]) => staffId);
+}
+
 export function manilaDate(date: Date | string) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" })
     .format(typeof date === "string" ? new Date(date) : date);
@@ -142,12 +182,14 @@ export function generateAvailableSlots(input: {
   bookings: Occupied[];
   closures: Closure[];
   preferredPiercerId?: string | null;
+  enforceBookingWindow?: boolean;
   now?: Date;
 }): AvailableSlot[] {
   const now = input.now ?? new Date();
   const dayStart = manilaDateTime(input.date, "00:00");
   const horizon = new Date(now.getTime() + input.bookingHorizonDays * 86_400_000);
-  if (dayStart < new Date(`${manilaDate(now)}T00:00:00+08:00`) || dayStart > horizon) return [];
+  if ((input.enforceBookingWindow ?? true) &&
+      (dayStart < new Date(`${manilaDate(now)}T00:00:00+08:00`) || dayStart > horizon)) return [];
   const weekday = new Date(`${input.date}T12:00:00Z`).getUTCDay();
   const studioHours = input.businessHours[String(weekday)];
   if (!studioHours || studioHours.closed) return [];
@@ -164,7 +206,7 @@ export function generateAvailableSlots(input: {
       const durationMs = input.serviceDurationMinutes * 60_000;
       for (let start = opens; start + durationMs <= closes; start += intervalMs) {
         const end = start + durationMs;
-        if (start < leadCutoff.getTime()) continue;
+        if ((input.enforceBookingWindow ?? true) && start < leadCutoff.getTime()) continue;
         const overlapsClosure = input.closures.some((item) => start < new Date(item.endsAt).getTime() && end > new Date(item.startsAt).getTime());
         const overlapsBooking = input.bookings.some((item) => item.piercerId === staffId && item.status !== "cancelled" && item.status !== "rejected" && start < new Date(item.endsAt).getTime() && end > new Date(item.startsAt).getTime());
         if (overlapsClosure || overlapsBooking) continue;

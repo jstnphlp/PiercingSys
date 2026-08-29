@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import {
+  combinedServiceDuration,
   formatServicePrice,
   type AvailableSlot,
   type PublicBookingResult,
@@ -21,6 +22,7 @@ import {
 type Props = {
   services: Service[];
   piercers: Array<{ id: string; name: string }>;
+  assignments: Array<{ serviceId: string; staffId: string }>;
   minimumAge: number;
   minDate: string;
   preview?: boolean;
@@ -30,6 +32,7 @@ type ApiError = { error?: { message?: string } };
 export function BookingForm({
   services,
   piercers,
+  assignments,
   minimumAge,
   minDate,
   preview = false,
@@ -56,7 +59,7 @@ export function BookingForm({
     [preview, services],
   );
   const [step, setStep] = useState(1);
-  const [serviceId, setServiceId] = useState("");
+  const [serviceIds, setServiceIds] = useState<string[]>([]);
   const [piercerId, setPiercerId] = useState("");
   const [date, setDate] = useState(minDate);
   const [slots, setSlots] = useState<AvailableSlot[]>([]);
@@ -65,17 +68,26 @@ export function BookingForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<PublicBookingResult | null>(null);
-  const selectedService = useMemo(
-    () => displayServices.find((item) => item.id === serviceId),
-    [serviceId, displayServices],
+  const selectedServices = useMemo(
+    () => serviceIds
+      .map((id) => displayServices.find((item) => item.id === id))
+      .filter((item): item is Service => Boolean(item)),
+    [serviceIds, displayServices],
+  );
+  const durationMinutes = combinedServiceDuration(selectedServices);
+  const eligiblePiercers = useMemo(
+    () => piercers.filter((person) => serviceIds.every((serviceId) =>
+      assignments.some((item) => item.serviceId === serviceId && item.staffId === person.id),
+    )),
+    [assignments, piercers, serviceIds],
   );
 
   async function loadSlots(
-    nextServiceId = serviceId,
+    nextServiceIds = serviceIds,
     nextDate = date,
     nextPiercerId = piercerId,
   ) {
-    if (!nextServiceId || !nextDate) return;
+    if (!nextServiceIds.length || !nextDate) return;
     setLoadingSlots(true);
     setSlot(null);
     setError("");
@@ -94,10 +106,8 @@ export function BookingForm({
       setLoadingSlots(false);
       return;
     }
-    const query = new URLSearchParams({
-      serviceId: nextServiceId,
-      date: nextDate,
-    });
+    const query = new URLSearchParams({ date: nextDate });
+    nextServiceIds.forEach((id) => query.append("serviceIds", id));
     if (nextPiercerId) query.set("piercerId", nextPiercerId);
     try {
       const response = await fetch(`/api/public/availability?${query}`);
@@ -131,7 +141,7 @@ export function BookingForm({
     setBusy(true);
     setError("");
     const form = new FormData(event.currentTarget);
-    form.set("serviceId", serviceId);
+    serviceIds.forEach((id) => form.append("serviceIds", id));
     form.set("startsAt", slot.startsAt);
     form.set("preferredPiercerId", piercerId);
     const response = await fetch("/api/public/bookings", {
@@ -215,7 +225,7 @@ export function BookingForm({
           <p>
             {preview ? "This placeholder shows how your configured services will look." : "Prices are in Philippine pesos and reflect the configured studio rate."}
           </p>
-          <div className="service-list" role="radiogroup" aria-label="Services">
+          <div className="service-list" role="group" aria-label="Services">
             {[
               "Ear Piercings",
               "Face & Body Piercings",
@@ -231,14 +241,19 @@ export function BookingForm({
                   {categoryServices.map((service) => (
                     <button
                       type="button"
-                      role="radio"
-                      aria-checked={service.id === serviceId}
+                      role="checkbox"
+                      aria-checked={serviceIds.includes(service.id)}
                       key={service.id}
-                      className={service.id === serviceId ? "selected" : ""}
-                      onClick={() => setServiceId(service.id)}
+                      className={serviceIds.includes(service.id) ? "selected" : ""}
+                      onClick={() => {
+                        setServiceIds((current) => current.includes(service.id)
+                          ? current.filter((id) => id !== service.id)
+                          : [...current, service.id]);
+                        setSlot(null);
+                      }}
                     >
                       <span className="service-radio">
-                        {service.id === serviceId && <i />}
+                        {serviceIds.includes(service.id) && <i />}
                       </span>
                       <span>
                         <strong>{service.name}</strong>
@@ -266,7 +281,7 @@ export function BookingForm({
           </div>
           <button
             className="btn btn-primary next-button"
-            disabled={!serviceId}
+            disabled={!serviceIds.length}
             onClick={() => {
               setStep(2);
               void loadSlots();
@@ -281,7 +296,7 @@ export function BookingForm({
           <p className="eyebrow">STEP 2 OF 3</p>
           <h2>Pick your moment.</h2>
           <p>
-            {selectedService?.name} {preview ? "· preview openings" : `· ${selectedService?.durationMinutes} minutes`}
+            {selectedServices.map((service) => service.name).join(" + ")} {preview ? "· preview openings" : `· ${durationMinutes} minutes total`}
           </p>
           <div className="schedule-fields">
             <label className="field">
@@ -295,7 +310,7 @@ export function BookingForm({
                   onChange={(event) => {
                     const value = event.target.value;
                     setDate(value);
-                    void loadSlots(serviceId, value, piercerId);
+                    void loadSlots(serviceIds, value, piercerId);
                   }}
                 />
               </span>
@@ -307,11 +322,11 @@ export function BookingForm({
                 onChange={(event) => {
                   const value = event.target.value;
                   setPiercerId(value);
-                  void loadSlots(serviceId, date, value);
+                  void loadSlots(serviceIds, date, value);
                 }}
               >
                 <option value="">Any qualified piercer</option>
-                {piercers.map((person) => (
+                {eligiblePiercers.map((person) => (
                   <option value={person.id} key={person.id}>
                     {person.name}
                   </option>
@@ -448,7 +463,7 @@ export function BookingForm({
           <div className="selection-summary">
             <ShieldCheck size={16} />
             <span>
-              <strong>{selectedService?.name}</strong>
+              <strong>{selectedServices.map((service) => service.name).join(" + ")}</strong>
               <small>
                 {slot &&
                   new Intl.DateTimeFormat("en-PH", {

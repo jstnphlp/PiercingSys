@@ -17,14 +17,18 @@ export type BookingRecord = {
   endsAt: string;
   notes: string | null;
   customer: { id: string; name: string; email: string; phone: string };
-  service: {
+  services: Array<{
     id: string;
     name: string;
     priceCents: number | null;
+    minPriceCents: number | null;
+    maxPriceCents: number | null;
+    priceUnit: string | null;
     durationMinutes: number;
-  };
+  }>;
   piercer: { id: string; name: string; color: string } | null;
   station: string | null;
+  saleState: string | null;
 };
 export type CustomerRecord = {
   id: string;
@@ -43,6 +47,14 @@ export type SaleRecord = {
   methods: PaymentMethod[];
   paidCents: number;
   adjustmentCents: number;
+  bookingId: string | null;
+  items: Array<{
+    id: string;
+    description: string;
+    unitPriceCents: number | null;
+    minPriceCents: number | null;
+    maxPriceCents: number | null;
+  }>;
 };
 export type StaffRecord = {
   id: string;
@@ -64,6 +76,13 @@ export type ClosureRecord = {
   startsAt: string;
   endsAt: string;
   reason: string | null;
+};
+export type AvailabilityRecord = {
+  id: string;
+  staffId: string;
+  weekday: number;
+  startsAt: string;
+  endsAt: string;
 };
 
 type Relation = Record<string, unknown> | Array<Record<string, unknown>> | null;
@@ -94,6 +113,7 @@ export async function getStaffData(scope: StaffDataScope = "all") {
       deliveries: [] as DeliveryRecord[],
       stations: [] as Array<{ id: string; name: string }>,
       closures: [] as ClosureRecord[],
+      availability: [] as AvailabilityRecord[],
       error: "Supabase is not configured. Add the required environment values and restart the application.",
     };
   const includes = (...scopes: StaffDataScope[]) =>
@@ -110,46 +130,45 @@ export async function getStaffData(scope: StaffDataScope = "all") {
     assignmentResult,
     deliveryResult,
     stationResult,
+    availabilityResult,
     closureResult,
   ] = await Promise.all([
     includes("overview", "settings")
       ? supabase.from("studio_settings").select("*").eq("id", 1).single()
       : emptySingle,
-    includes("overview", "sales", "settings")
+    includes("overview", "calendar", "sales", "settings")
       ? supabase.from("services").select("*").order("sort_order")
       : emptyMany,
     includes("overview", "calendar", "clients")
       ? supabase
           .from("bookings")
           .select(
-            "id,reference,status,starts_at,ends_at,notes,customers(id,first_name,last_name,email,phone),services(id,name,price_cents,duration_minutes),staff_profiles!bookings_assigned_piercer_id_fkey(user_id,display_name,color),stations(name)",
+            "id,reference,status,starts_at,ends_at,notes,customers(id,first_name,last_name,email,phone),booking_services(id,service_id,position,name,price_cents,min_price_cents,max_price_cents,price_unit,duration_minutes),staff_profiles!bookings_assigned_piercer_id_fkey(user_id,display_name,color),stations(name),sales(id,status)",
           )
           .order("starts_at")
-          .limit(300)
       : emptyMany,
-    includes("clients", "sales")
+    includes("calendar", "clients", "sales")
       ? supabase
           .from("customers")
           .select("id,first_name,last_name,email,phone,created_at")
           .order("created_at", { ascending: false })
-          .limit(300)
       : emptyMany,
     includes("overview", "sales", "reports")
       ? supabase
           .from("sales")
           .select(
-            "id,reference,status,total_cents,created_at,customers(first_name,last_name),payments(method,amount_cents),sale_adjustments(kind,amount_cents)",
+            "id,reference,status,total_cents,created_at,booking_id,customers(first_name,last_name),payments(method,amount_cents),sale_adjustments(kind,amount_cents),sale_items(id,description,unit_price_cents,min_price_cents,max_price_cents)",
           )
           .order("created_at", { ascending: false })
           .limit(300)
       : emptyMany,
-    includes("overview", "settings")
+    includes("overview", "calendar", "settings")
       ? supabase
           .from("staff_profiles")
           .select("user_id,display_name,role,active,color")
           .order("created_at")
       : emptyMany,
-    includes("overview", "settings")
+    includes("overview", "calendar", "settings")
       ? supabase.from("service_staff").select("service_id,staff_id")
       : emptyMany,
     includes("overview", "settings")
@@ -159,12 +178,15 @@ export async function getStaffData(scope: StaffDataScope = "all") {
           .order("created_at", { ascending: false })
           .limit(25)
       : emptyMany,
-    includes("settings")
+    includes("calendar", "settings")
       ? supabase
           .from("stations")
           .select("id,name")
           .eq("active", true)
           .order("name")
+      : emptyMany,
+    includes("settings")
+      ? supabase.from("staff_availability").select("id,staff_id,weekday,starts_at,ends_at").order("weekday").order("starts_at")
       : emptyMany,
     includes("settings")
       ? supabase
@@ -209,9 +231,11 @@ export async function getStaffData(scope: StaffDataScope = "all") {
   }));
   const bookings: BookingRecord[] = (bookingsResult.data ?? []).map((row) => {
     const customer = one(row.customers as Relation);
-    const service = one(row.services as Relation);
+    const services = ((row.booking_services ?? []) as Array<Record<string, unknown>>)
+      .sort((a, b) => Number(a.position) - Number(b.position));
     const piercer = one(row.staff_profiles as Relation);
     const station = one(row.stations as Relation);
+    const sale = one(row.sales as Relation);
     return {
       id: row.id,
       reference: row.reference,
@@ -225,15 +249,15 @@ export async function getStaffData(scope: StaffDataScope = "all") {
         email: String(customer?.email ?? ""),
         phone: String(customer?.phone ?? ""),
       },
-      service: {
-        id: String(service?.id ?? ""),
-        name: String(service?.name ?? "Service"),
-        priceCents:
-          service?.price_cents === null || service?.price_cents === undefined
-            ? null
-            : Number(service.price_cents),
-        durationMinutes: Number(service?.duration_minutes ?? 0),
-      },
+      services: services.map((service) => ({
+        id: String(service.service_id ?? ""),
+        name: String(service.name ?? "Service"),
+        priceCents: service.price_cents == null ? null : Number(service.price_cents),
+        minPriceCents: service.min_price_cents == null ? null : Number(service.min_price_cents),
+        maxPriceCents: service.max_price_cents == null ? null : Number(service.max_price_cents),
+        priceUnit: service.price_unit ? String(service.price_unit) : null,
+        durationMinutes: Number(service.duration_minutes ?? 0),
+      })),
       piercer: piercer
         ? {
             id: String(piercer.user_id),
@@ -242,6 +266,7 @@ export async function getStaffData(scope: StaffDataScope = "all") {
           }
         : null,
       station: station ? String(station.name) : null,
+      saleState: sale ? String(sale.status) : null,
     };
   });
   const customers: CustomerRecord[] = (customersResult.data ?? []).map(
@@ -277,6 +302,14 @@ export async function getStaffData(scope: StaffDataScope = "all") {
         (sum, item) => sum + item.amount_cents,
         0,
       ),
+      bookingId: row.booking_id,
+      items: (row.sale_items ?? []).map((item) => ({
+        id: item.id,
+        description: item.description,
+        unitPriceCents: item.unit_price_cents,
+        minPriceCents: item.min_price_cents,
+        maxPriceCents: item.max_price_cents,
+      })),
     };
   });
   const staff: StaffRecord[] = (staffResult.data ?? []).map((row) => ({
@@ -302,6 +335,13 @@ export async function getStaffData(scope: StaffDataScope = "all") {
     endsAt: row.ends_at,
     reason: row.reason,
   }));
+  const availability: AvailabilityRecord[] = (availabilityResult.data ?? []).map((row) => ({
+    id: row.id,
+    staffId: row.staff_id,
+    weekday: row.weekday,
+    startsAt: row.starts_at,
+    endsAt: row.ends_at,
+  }));
   const queryErrors = [
     settingsResult.error,
     servicesResult.error,
@@ -313,6 +353,7 @@ export async function getStaffData(scope: StaffDataScope = "all") {
     deliveryResult.error,
     stationResult.error,
     closureResult.error,
+    availabilityResult.error,
   ].filter((error): error is NonNullable<typeof error> => Boolean(error));
   return {
     studio,
@@ -328,6 +369,7 @@ export async function getStaffData(scope: StaffDataScope = "all") {
     deliveries,
     stations: stationResult.data ?? [],
     closures,
+    availability,
     error: queryErrors.length
       ? queryErrors.map((error) => error.message).join(" ")
       : null,

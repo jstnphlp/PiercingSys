@@ -1,6 +1,8 @@
 import "server-only";
 import { unstable_cache } from "next/cache";
 import {
+  combinedServiceDuration,
+  commonQualifiedPiercerIds,
   generateAvailableSlots,
   type AvailableSlot,
   type Service,
@@ -74,6 +76,7 @@ async function loadPublicCatalog() {
       studio: seededStudio,
       services: [] as Service[],
       piercers: [] as Array<{ id: string; name: string }>,
+      assignments: [] as Array<{ serviceId: string; staffId: string }>,
       ready: false,
       reason: "connection" as const,
     };
@@ -97,6 +100,7 @@ async function loadPublicCatalog() {
       studio: seededStudio,
       services: [] as Service[],
       piercers: [],
+      assignments: [] as Array<{ serviceId: string; staffId: string }>,
       ready: false,
       reason: "database" as const,
     };
@@ -120,6 +124,10 @@ async function loadPublicCatalog() {
     studio,
     services,
     piercers,
+    assignments: (assignmentsResult.data ?? []).map((row) => ({
+      serviceId: row.service_id,
+      staffId: row.staff_id,
+    })),
     ready,
     reason: ready ? null : ("setup" as const),
   };
@@ -132,7 +140,7 @@ export const getPublicCatalog = unstable_cache(
 );
 
 export async function getAvailableSlots(
-  serviceId: string,
+  serviceIds: string[],
   date: string,
   piercerId?: string,
 ): Promise<AvailableSlot[]> {
@@ -142,7 +150,7 @@ export async function getAvailableSlots(
   const dayEnd = new Date(dayStart.getTime() + 86_400_000);
   const [
     settingsResult,
-    serviceResult,
+    servicesResult,
     assignmentsResult,
     staffResult,
     availabilityResult,
@@ -150,13 +158,8 @@ export async function getAvailableSlots(
     closuresResult,
   ] = await Promise.all([
     admin.from("studio_settings").select("*").eq("id", 1).single(),
-    admin
-      .from("services")
-      .select("*")
-      .eq("id", serviceId)
-      .eq("is_active", true)
-      .single(),
-    admin.from("service_staff").select("staff_id").eq("service_id", serviceId),
+    admin.from("services").select("*").in("id", serviceIds).eq("is_active", true),
+    admin.from("service_staff").select("staff_id,service_id").in("service_id", serviceIds),
     admin
       .from("staff_profiles")
       .select("user_id,active,role")
@@ -176,12 +179,19 @@ export async function getAvailableSlots(
       .lt("starts_at", dayEnd.toISOString())
       .gt("ends_at", dayStart.toISOString()),
   ]);
-  if (settingsResult.error || serviceResult.error) return [];
+  if (settingsResult.error || servicesResult.error ||
+      (servicesResult.data ?? []).length !== serviceIds.length) return [];
   const settings = mapSettings(settingsResult.data as Record<string, unknown>);
-  const service = mapService(serviceResult.data as Record<string, unknown>);
+  const services = (servicesResult.data ?? []).map((row) =>
+    mapService(row as Record<string, unknown>),
+  );
+  const assignments = (assignmentsResult.data ?? []).map((row) => ({
+    staffId: row.staff_id,
+    serviceId: row.service_id,
+  }));
   return generateAvailableSlots({
     date,
-    serviceDurationMinutes: service.durationMinutes,
+    serviceDurationMinutes: combinedServiceDuration(services),
     bookingIntervalMinutes: settings.bookingIntervalMinutes,
     minimumLeadHours: settings.minimumLeadHours,
     bookingHorizonDays: settings.bookingHorizonDays,
@@ -190,9 +200,7 @@ export async function getAvailableSlots(
       id: row.user_id,
       active: row.active,
     })),
-    qualifiedStaffIds: (assignmentsResult.data ?? []).map(
-      (row) => row.staff_id,
-    ),
+    qualifiedStaffIds: commonQualifiedPiercerIds(serviceIds, assignments),
     availability: (availabilityResult.data ?? []).map((row) => ({
       staffId: row.staff_id,
       weekday: row.weekday,

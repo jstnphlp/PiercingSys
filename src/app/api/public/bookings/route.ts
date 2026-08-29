@@ -14,11 +14,18 @@ export async function POST(request: Request) {
   if (photoError) {
     return Response.json({ error: { code: "INVALID_PHOTO", message: photoError, fields: { photo: [photoError] } } }, { status: 422 });
   }
-  const parsed = publicBookingSchema.safeParse(Object.fromEntries([...form.entries()].filter(([key]) => key !== "photo")));
+  const legacyServiceId = form.get("serviceId");
+  const selectedServiceIds = form.getAll("serviceIds").map(String).filter(Boolean);
+  const parsed = publicBookingSchema.safeParse({
+    ...Object.fromEntries([...form.entries()].filter(([key]) => key !== "photo" && key !== "serviceIds")),
+    serviceIds: selectedServiceIds.length
+      ? selectedServiceIds
+      : legacyServiceId ? [String(legacyServiceId)] : [],
+  });
   if (!parsed.success) return Response.json(validationError(parsed.error), { status: 422 });
   const input = parsed.data;
   const { data, error } = await admin.rpc("create_public_booking", {
-    p_service_id: input.serviceId, p_starts_at: input.startsAt, p_preferred_piercer_id: input.preferredPiercerId ?? null,
+    p_service_ids: input.serviceIds, p_starts_at: input.startsAt, p_preferred_piercer_id: input.preferredPiercerId ?? null,
     p_first_name: input.firstName, p_last_name: input.lastName, p_email: input.email, p_phone: input.phone, p_notes: input.notes ?? "",
   });
   if (error) {

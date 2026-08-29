@@ -56,6 +56,7 @@ export default async function BookingPage() {
             <BookingForm
               services={catalog.services}
               piercers={catalog.piercers}
+              assignments={catalog.assignments}
               minimumAge={catalog.studio.minimumAge}
               minDate={manilaDate(new Date())}
               preview={catalog.reason === "connection"}
