@@ -5,7 +5,10 @@ import {
   ArrowRight,
   CalendarDays,
   Check,
+  ChevronLeft,
+  ChevronRight,
   Clock3,
+  Search,
   ShieldCheck,
   Sparkles,
   Upload,
@@ -60,6 +63,8 @@ export function BookingForm({
   );
   const [step, setStep] = useState(1);
   const [serviceIds, setServiceIds] = useState<string[]>([]);
+  const [serviceCategory, setServiceCategory] = useState<Service["category"]>("Ear Piercings");
+  const [serviceSearch, setServiceSearch] = useState("");
   const [piercerId, setPiercerId] = useState("");
   const [date, setDate] = useState(minDate);
   const [slots, setSlots] = useState<AvailableSlot[]>([]);
@@ -81,6 +86,11 @@ export function BookingForm({
     )),
     [assignments, piercers, serviceIds],
   );
+  const filteredServices = useMemo(() => displayServices.filter((service) =>
+    service.category === serviceCategory &&
+    `${service.name} ${service.description ?? ""} ${service.bodyArea ?? ""}`.toLowerCase().includes(serviceSearch.trim().toLowerCase()),
+  ), [displayServices, serviceCategory, serviceSearch]);
+  const visibleDates = useMemo(() => weekDates(date), [date]);
 
   async function loadSlots(
     nextServiceIds = serviceIds,
@@ -88,32 +98,36 @@ export function BookingForm({
     nextPiercerId = piercerId,
   ) {
     if (!nextServiceIds.length || !nextDate) return;
+    const dates = weekDates(nextDate);
     setLoadingSlots(true);
     setSlot(null);
     setError("");
     if (preview) {
       const starts = ["10:00", "11:30", "13:00", "14:30", "16:00"];
       setSlots(
-        starts.map((time) => {
-          const start = new Date(`${nextDate}T${time}:00+08:00`);
+        dates.flatMap((previewDate, dayIndex) => dayIndex === 0 ? [] : starts.slice(0, 3 + dayIndex % 3).map((time) => {
+          const start = new Date(`${previewDate}T${time}:00+08:00`);
           return {
             startsAt: start.toISOString(),
-            endsAt: new Date(start.getTime() + 45 * 60_000).toISOString(),
+            endsAt: new Date(start.getTime() + Math.max(45, durationMinutes) * 60_000).toISOString(),
             piercerIds: [],
           };
-        }),
+        })),
       );
       setLoadingSlots(false);
       return;
     }
-    const query = new URLSearchParams({ date: nextDate });
-    nextServiceIds.forEach((id) => query.append("serviceIds", id));
-    if (nextPiercerId) query.set("piercerId", nextPiercerId);
     try {
-      const response = await fetch(`/api/public/availability?${query}`);
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error?.message);
-      setSlots(body.data as AvailableSlot[]);
+      const results = await Promise.all(dates.map(async (calendarDate) => {
+        const query = new URLSearchParams({ date: calendarDate });
+        nextServiceIds.forEach((id) => query.append("serviceIds", id));
+        if (nextPiercerId) query.set("piercerId", nextPiercerId);
+        const response = await fetch(`/api/public/availability?${query}`);
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error?.message);
+        return body.data as AvailableSlot[];
+      }));
+      setSlots(results.flat());
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -225,59 +239,29 @@ export function BookingForm({
           <p>
             {preview ? "This placeholder shows how your configured services will look." : "Prices are in Philippine pesos and reflect the configured studio rate."}
           </p>
-          <div className="service-list" role="group" aria-label="Services">
-            {[
-              "Ear Piercings",
-              "Face & Body Piercings",
-              "Other Services",
-            ].map((category) => {
-              const categoryServices = displayServices.filter(
-                (service) => service.category === category,
-              );
-              if (!categoryServices.length) return null;
-              return (
-                <section className="service-category" key={category}>
-                  <h3>{category}</h3>
-                  {categoryServices.map((service) => (
-                    <button
-                      type="button"
-                      role="checkbox"
-                      aria-checked={serviceIds.includes(service.id)}
-                      key={service.id}
-                      className={serviceIds.includes(service.id) ? "selected" : ""}
-                      onClick={() => {
-                        setServiceIds((current) => current.includes(service.id)
-                          ? current.filter((id) => id !== service.id)
-                          : [...current, service.id]);
-                        setSlot(null);
-                      }}
-                    >
-                      <span className="service-radio">
-                        {serviceIds.includes(service.id) && <i />}
-                      </span>
-                      <span>
-                        <strong>{service.name}</strong>
-                        <small>
-                          {service.description ||
-                            service.bodyArea ||
-                            "Piercing service"}
-                        </small>
-                      </span>
-                      <span>
-                        <strong>
-                          {preview ? "Price TBD" : formatServicePrice(service)}
-                        </strong>
-                        <small>
-                          {preview
-                            ? "Duration TBD"
-                            : `${service.durationMinutes} min`}
-                        </small>
-                      </span>
-                    </button>
-                  ))}
-                </section>
-              );
-            })}
+          <div className="service-browser">
+            <div className="service-tools">
+              <label><Search size={15}/><input value={serviceSearch} onChange={(event) => setServiceSearch(event.target.value)} placeholder="Search services" aria-label="Search services"/></label>
+              <div className="service-tabs" aria-label="Service category">
+                {(["Ear Piercings", "Face & Body Piercings", "Other Services"] as Service["category"][]).map((category) => <button type="button" key={category} className={serviceCategory === category ? "active" : ""} aria-pressed={serviceCategory === category} onClick={() => setServiceCategory(category)}>{category.replace(" Piercings", "")}</button>)}
+              </div>
+            </div>
+            {selectedServices.length > 0 && <div className="selected-services" aria-live="polite"><span><strong>{selectedServices.length} selected</strong><small>{durationMinutes} minutes total</small></span>{selectedServices.map((service) => <button type="button" key={service.id} onClick={() => { setServiceIds(serviceIds.filter((id) => id !== service.id)); setSlot(null); }} aria-label={`Remove ${service.name}`}>{service.name} <b>×</b></button>)}</div>}
+            <div className="service-list compact" role="group" aria-label={`${serviceCategory} services`}>
+              {filteredServices.map((service) => <button
+                type="button" role="checkbox" aria-checked={serviceIds.includes(service.id)} key={service.id}
+                className={serviceIds.includes(service.id) ? "selected" : ""}
+                onClick={() => {
+                  const next = serviceIds.includes(service.id) ? serviceIds.filter((id) => id !== service.id) : [...serviceIds, service.id];
+                  setServiceIds(next); setSlot(null);
+                  if (piercerId && !next.every((serviceId) => assignments.some((item) => item.serviceId === serviceId && item.staffId === piercerId))) setPiercerId("");
+                }}>
+                <span className="service-radio">{serviceIds.includes(service.id) && <i />}</span>
+                <span><strong>{service.name}</strong><small>{service.bodyArea || service.description || "Piercing service"}</small></span>
+                <span><strong>{preview ? "Price TBD" : formatServicePrice(service)}</strong><small>{preview ? "Duration TBD" : `${service.durationMinutes} min`}</small></span>
+              </button>)}
+              {!filteredServices.length && <p className="service-empty">No services match that search.</p>}
+            </div>
           </div>
           <button
             className="btn btn-primary next-button"
@@ -298,72 +282,24 @@ export function BookingForm({
           <p>
             {selectedServices.map((service) => service.name).join(" + ")} {preview ? "· preview openings" : `· ${durationMinutes} minutes total`}
           </p>
-          <div className="schedule-fields">
-            <label className="field">
-              Date
-              <span className="icon-field">
-                <CalendarDays size={16} />
-                <input
-                  type="date"
-                  value={date}
-                  min={minDate}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    setDate(value);
-                    void loadSlots(serviceIds, value, piercerId);
-                  }}
-                />
-              </span>
-            </label>
-            <label className="field">
-              Piercer preference
-              <select
-                value={piercerId}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  setPiercerId(value);
-                  void loadSlots(serviceIds, date, value);
-                }}
-              >
-                <option value="">Any qualified piercer</option>
-                {eligiblePiercers.map((person) => (
-                  <option value={person.id} key={person.id}>
-                    {person.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+          <div className="public-calendar-toolbar">
+            <button type="button" aria-label="Previous week" disabled={shiftDate(visibleDates.at(-1)!, -7) < minDate} onClick={() => { const next = shiftDate(date, -7); setDate(next); void loadSlots(serviceIds, next, piercerId); }}><ChevronLeft/></button>
+            <button type="button" onClick={() => { setDate(minDate); void loadSlots(serviceIds, minDate, piercerId); }}>Today</button>
+            <button type="button" aria-label="Next week" onClick={() => { const next = shiftDate(date, 7); setDate(next); void loadSlots(serviceIds, next, piercerId); }}><ChevronRight/></button>
+            <strong>{formatWeekRange(visibleDates)}</strong>
+            <label><span>Piercer</span><select value={piercerId} onChange={(event) => { const value = event.target.value; setPiercerId(value); void loadSlots(serviceIds, date, value); }}><option value="">Any qualified piercer</option>{eligiblePiercers.map((person) => <option value={person.id} key={person.id}>{person.name}</option>)}</select></label>
           </div>
-          <div className="slot-region" aria-live="polite">
-            {loadingSlots ? (
-              <div className="slot-message">
-                <Sparkles className="spin" /> Calculating openings…
-              </div>
-            ) : slots.length ? (
-              <div className="slot-grid">
-                {slots.map((item) => (
-                  <button
-                    type="button"
-                    key={item.startsAt}
-                    className={
-                      slot?.startsAt === item.startsAt ? "selected" : ""
-                    }
-                    onClick={() => setSlot(item)}
-                  >
-                    <Clock3 size={14} />
-                    {new Intl.DateTimeFormat("en-PH", {
-                      hour: "numeric",
-                      minute: "2-digit",
-                      timeZone: "Asia/Manila",
-                    }).format(new Date(item.startsAt))}
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div className="slot-message">
-                {preview ? "Choose a service to see preview openings." : "No openings on this date. Try another day or piercer."}
-              </div>
-            )}
+          <div className="public-calendar-shell" aria-live="polite" aria-busy={loadingSlots}>
+            <div className="public-calendar-scroll"><div className="public-calendar-grid">
+              <div className="public-calendar-corner"><CalendarDays/></div>
+              {visibleDates.map((calendarDate) => <div key={calendarDate} className={`public-calendar-date ${calendarDate === minDate ? "today" : ""} ${calendarDate < minDate ? "past" : ""}`}><span>{formatWeekday(calendarDate)}</span><strong>{calendarDate.slice(8)}</strong><small>{formatMonth(calendarDate)}</small></div>)}
+              <div className="public-calendar-times">{Array.from({ length: publicCalendarEndHour - publicCalendarStartHour + 1 }, (_, index) => <span key={index} style={{ top: index * publicCalendarHourHeight }}>{formatHour(publicCalendarStartHour + index)}</span>)}</div>
+              {visibleDates.map((calendarDate) => <div className={`public-calendar-column ${calendarDate < minDate ? "past" : ""}`} key={calendarDate}>
+                {slots.filter((item) => manilaSlotDate(item.startsAt) === calendarDate).map((item) => <button type="button" key={item.startsAt} className={`public-slot ${slot?.startsAt === item.startsAt ? "selected" : ""}`} style={{ top: slotTop(item.startsAt) }} onClick={() => { setSlot(item); setDate(calendarDate); }}><Clock3/><strong>{formatSlotTime(item.startsAt)}</strong><small>Available</small></button>)}
+              </div>)}
+            </div></div>
+            {loadingSlots && <div className="public-calendar-loading"><Sparkles className="spin"/> Calculating the week’s openings…</div>}
+            {!loadingSlots && !slots.length && <div className="public-calendar-empty">No openings this week. Try the next week or another piercer.</div>}
           </div>
           {error && (
             <p className="form-error" role="alert">
@@ -491,4 +427,32 @@ export function BookingForm({
       )}
     </div>
   );
+}
+
+const publicCalendarStartHour = 8;
+const publicCalendarEndHour = 21;
+const publicCalendarHourHeight = 56;
+
+function shiftDate(date: string, days: number) {
+  const value = new Date(`${date}T12:00:00Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
+function weekday(date: string) { return new Date(`${date}T12:00:00Z`).getUTCDay(); }
+function weekDates(anchor: string) {
+  const sunday = shiftDate(anchor, -weekday(anchor));
+  return Array.from({ length: 7 }, (_, index) => shiftDate(sunday, index));
+}
+function formatWeekRange(dates: string[]) {
+  const format = (date: string) => new Intl.DateTimeFormat("en-PH", { month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(`${date}T12:00:00Z`));
+  return `${format(dates[0])}–${format(dates.at(-1)!)} `;
+}
+function formatWeekday(date: string) { return new Intl.DateTimeFormat("en-PH", { weekday: "short", timeZone: "UTC" }).format(new Date(`${date}T12:00:00Z`)).toUpperCase(); }
+function formatMonth(date: string) { return new Intl.DateTimeFormat("en-PH", { month: "short", timeZone: "UTC" }).format(new Date(`${date}T12:00:00Z`)); }
+function formatHour(hour: number) { return new Intl.DateTimeFormat("en-PH", { hour: "numeric", timeZone: "UTC" }).format(new Date(Date.UTC(2020, 0, 1, hour))); }
+function formatSlotTime(value: string) { return new Intl.DateTimeFormat("en-PH", { hour: "numeric", minute: "2-digit", timeZone: "Asia/Manila" }).format(new Date(value)); }
+function manilaSlotDate(value: string) { return new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", day: "2-digit", timeZone: "Asia/Manila" }).format(new Date(value)); }
+function slotTop(value: string) {
+  const parts = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Asia/Manila" }).format(new Date(value)).split(":").map(Number);
+  return Math.max(0, (parts[0] * 60 + parts[1] - publicCalendarStartHour * 60) * publicCalendarHourHeight / 60);
 }
