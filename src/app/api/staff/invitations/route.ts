@@ -28,7 +28,10 @@ export async function POST(request: Request) {
       }
     }
     if (!invitedUser) {
-      return Response.json({ error: { code: "INVITE_FAILED", message: error.message || "Supabase could not send the invitation. Check Authentication → SMTP settings and try again." } }, { status: 503 });
+      const rateLimited = /rate limit|too many requests|email.+limit/i.test(error.message);
+      return Response.json({ error: { code: rateLimited ? "INVITE_RATE_LIMITED" : "INVITE_FAILED", message: rateLimited
+        ? "Supabase email rate limit exceeded. Wait for the quota to reset or configure a custom SMTP provider in Authentication → SMTP."
+        : error.message || "Supabase could not send the invitation. Check Authentication → SMTP settings and try again." } }, { status: rateLimited ? 429 : 503 });
     }
   }
   if (!invitedUser) return Response.json({ error: { code: "INVITE_FAILED", message: "Supabase could not create the invited user." } }, { status: 503 });
