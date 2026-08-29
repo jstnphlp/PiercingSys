@@ -6,7 +6,12 @@ const dmSans = DM_Sans({ subsets: ["latin"], variable: "--font-body" });
 const fraunces = Fraunces({ subsets: ["latin"], variable: "--font-display" });
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"),
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_APP_URL ||
+    (process.env.VERCEL_PROJECT_PRODUCTION_URL
+      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+      : "http://localhost:3000"),
+  ),
   title: { default: "Piercing Corner", template: "%s · Piercing Corner" },
   description: "Book and manage appointments with Piercing Corner in Parañaque.",
   icons: { icon: "/logo.png", apple: "/logo.png" },
