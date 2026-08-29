@@ -14,10 +14,27 @@ export async function POST(request: Request) {
   const admin = createSupabaseAdminClient();
   if (!admin) return Response.json({ error: { code: "NOT_CONFIGURED", message: "Server credentials are missing." } }, { status: 503 });
   const { data, error } = await admin.auth.admin.inviteUserByEmail(parsed.data.email);
-  if (error || !data.user) return Response.json({ error: { code: "INVITE_FAILED", message: error?.message ?? "Invitation failed." } }, { status: 400 });
-  const profile = await admin.from("staff_profiles").upsert({ user_id: data.user.id, display_name: parsed.data.displayName, role: parsed.data.role, active: true });
+  let invitedUser = data.user;
+  if (!invitedUser && error) {
+    // Supabase rejects invitations for an email that already has an Auth
+    // account. Reuse that account so the owner can still add it to the team.
+    const alreadyRegistered = /already registered|already exists|user.+exist/i.test(error.message);
+    if (alreadyRegistered) {
+      for (let page = 1; !invitedUser; page += 1) {
+        const users = await admin.auth.admin.listUsers({ page, perPage: 100 });
+        if (users.error) break;
+        invitedUser = users.data.users.find((user) => user.email?.toLowerCase() === parsed.data.email.toLowerCase()) ?? null;
+        if (users.data.users.length < 100) break;
+      }
+    }
+    if (!invitedUser) {
+      return Response.json({ error: { code: "INVITE_FAILED", message: error.message || "Supabase could not send the invitation. Check Authentication → SMTP settings and try again." } }, { status: 503 });
+    }
+  }
+  if (!invitedUser) return Response.json({ error: { code: "INVITE_FAILED", message: "Supabase could not create the invited user." } }, { status: 503 });
+  const profile = await admin.from("staff_profiles").upsert({ user_id: invitedUser.id, display_name: parsed.data.displayName, role: parsed.data.role, active: true });
   if (profile.error) return Response.json({ error: { code: "PROFILE_FAILED", message: profile.error.message } }, { status: 400 });
-  await admin.from("audit_events").insert({ actor_id: session.userId, event_type: "staff.invited", entity_type: "staff_profile", entity_id: data.user.id, metadata: { role: parsed.data.role } });
+  await admin.from("audit_events").insert({ actor_id: session.userId, event_type: "staff.invited", entity_type: "staff_profile", entity_id: invitedUser.id, metadata: { role: parsed.data.role } });
   revalidateTag("public-catalog", { expire: 0 });
-  return Response.json({ data: { userId: data.user.id, invited: true } }, { status: 201 });
+  return Response.json({ data: { userId: invitedUser.id, invited: Boolean(data.user) } }, { status: 201 });
 }
