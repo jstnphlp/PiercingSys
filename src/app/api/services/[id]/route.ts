@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { revalidateTag } from "next/cache";
 import { getStaffSession, hasRole } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { validationError } from "@/lib/validation";
@@ -75,5 +76,6 @@ export async function PATCH(
       );
     }
   }
+  revalidateTag("public-catalog", { expire: 0 });
   return Response.json({ data: { id, staffIds: parsed.data.staffIds } });
 }

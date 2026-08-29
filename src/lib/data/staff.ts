@@ -71,7 +71,16 @@ function one(value: Relation) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-export async function getStaffData() {
+export type StaffDataScope =
+  | "overview"
+  | "calendar"
+  | "clients"
+  | "sales"
+  | "reports"
+  | "settings"
+  | "all";
+
+export async function getStaffData(scope: StaffDataScope = "all") {
   const supabase = await createSupabaseServerClient();
   if (!supabase)
     return {
@@ -87,6 +96,10 @@ export async function getStaffData() {
       closures: [] as ClosureRecord[],
       error: "Supabase is not configured. Add the required environment values and restart the application.",
     };
+  const includes = (...scopes: StaffDataScope[]) =>
+    scope === "all" || scopes.includes(scope);
+  const emptyMany = Promise.resolve({ data: [], error: null });
+  const emptySingle = Promise.resolve({ data: null, error: null });
   const [
     settingsResult,
     servicesResult,
@@ -99,47 +112,67 @@ export async function getStaffData() {
     stationResult,
     closureResult,
   ] = await Promise.all([
-    supabase.from("studio_settings").select("*").eq("id", 1).single(),
-    supabase.from("services").select("*").order("sort_order"),
-    supabase
-      .from("bookings")
-      .select(
-        "id,reference,status,starts_at,ends_at,notes,customers(id,first_name,last_name,email,phone),services(id,name,price_cents,duration_minutes),staff_profiles!bookings_assigned_piercer_id_fkey(user_id,display_name,color),stations(name)",
-      )
-      .order("starts_at")
-      .limit(300),
-    supabase
-      .from("customers")
-      .select("id,first_name,last_name,email,phone,created_at")
-      .order("created_at", { ascending: false })
-      .limit(300),
-    supabase
-      .from("sales")
-      .select(
-        "id,reference,status,total_cents,created_at,customers(first_name,last_name),payments(method,amount_cents),sale_adjustments(kind,amount_cents)",
-      )
-      .order("created_at", { ascending: false })
-      .limit(300),
-    supabase
-      .from("staff_profiles")
-      .select("user_id,display_name,role,active,color")
-      .order("created_at"),
-    supabase.from("service_staff").select("service_id,staff_id"),
-    supabase
-      .from("notification_deliveries")
-      .select("id,kind,recipient,status,last_error,created_at")
-      .order("created_at", { ascending: false })
-      .limit(25),
-    supabase
-      .from("stations")
-      .select("id,name")
-      .eq("active", true)
-      .order("name"),
-    supabase
-      .from("closures")
-      .select("id,starts_at,ends_at,reason")
-      .order("starts_at", { ascending: false })
-      .limit(100),
+    includes("overview", "settings")
+      ? supabase.from("studio_settings").select("*").eq("id", 1).single()
+      : emptySingle,
+    includes("overview", "sales", "settings")
+      ? supabase.from("services").select("*").order("sort_order")
+      : emptyMany,
+    includes("overview", "calendar", "clients")
+      ? supabase
+          .from("bookings")
+          .select(
+            "id,reference,status,starts_at,ends_at,notes,customers(id,first_name,last_name,email,phone),services(id,name,price_cents,duration_minutes),staff_profiles!bookings_assigned_piercer_id_fkey(user_id,display_name,color),stations(name)",
+          )
+          .order("starts_at")
+          .limit(300)
+      : emptyMany,
+    includes("clients", "sales")
+      ? supabase
+          .from("customers")
+          .select("id,first_name,last_name,email,phone,created_at")
+          .order("created_at", { ascending: false })
+          .limit(300)
+      : emptyMany,
+    includes("overview", "sales", "reports")
+      ? supabase
+          .from("sales")
+          .select(
+            "id,reference,status,total_cents,created_at,customers(first_name,last_name),payments(method,amount_cents),sale_adjustments(kind,amount_cents)",
+          )
+          .order("created_at", { ascending: false })
+          .limit(300)
+      : emptyMany,
+    includes("overview", "settings")
+      ? supabase
+          .from("staff_profiles")
+          .select("user_id,display_name,role,active,color")
+          .order("created_at")
+      : emptyMany,
+    includes("overview", "settings")
+      ? supabase.from("service_staff").select("service_id,staff_id")
+      : emptyMany,
+    includes("overview", "settings")
+      ? supabase
+          .from("notification_deliveries")
+          .select("id,kind,recipient,status,last_error,created_at")
+          .order("created_at", { ascending: false })
+          .limit(25)
+      : emptyMany,
+    includes("settings")
+      ? supabase
+          .from("stations")
+          .select("id,name")
+          .eq("active", true)
+          .order("name")
+      : emptyMany,
+    includes("settings")
+      ? supabase
+          .from("closures")
+          .select("id,starts_at,ends_at,reason")
+          .order("starts_at", { ascending: false })
+          .limit(100)
+      : emptyMany,
   ]);
   const settingsRow = settingsResult.data;
   const studio: StudioSettings = settingsRow

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { revalidateTag } from "next/cache";
 import { getStaffSession } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import { validationError } from "@/lib/validation";
@@ -17,5 +18,6 @@ export async function POST(request: Request) {
   const profile = await admin.from("staff_profiles").upsert({ user_id: data.user.id, display_name: parsed.data.displayName, role: parsed.data.role, active: true });
   if (profile.error) return Response.json({ error: { code: "PROFILE_FAILED", message: profile.error.message } }, { status: 400 });
   await admin.from("audit_events").insert({ actor_id: session.userId, event_type: "staff.invited", entity_type: "staff_profile", entity_id: data.user.id, metadata: { role: parsed.data.role } });
+  revalidateTag("public-catalog", { expire: 0 });
   return Response.json({ data: { userId: data.user.id, invited: true } }, { status: 201 });
 }

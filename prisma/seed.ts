@@ -20,7 +20,7 @@ function isLocalUrl(value: string) {
 }
 
 async function main() {
-  const databaseUrl = required("DATABASE_URL");
+  const databaseUrl = process.env.DIRECT_URL?.trim() || required("DATABASE_URL");
   const supabaseUrl = required("NEXT_PUBLIC_SUPABASE_URL");
   const serviceRoleKey = required("SUPABASE_SERVICE_ROLE_KEY");
   const email = required("PRISMA_SEED_EMAIL").toLowerCase();

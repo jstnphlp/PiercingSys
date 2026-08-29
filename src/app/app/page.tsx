@@ -24,7 +24,11 @@ import {
   formatServicePrice,
   manilaDate,
 } from "@/lib/domain";
-import { getStaffData, type BookingRecord } from "@/lib/data/staff";
+import {
+  getStaffData,
+  type BookingRecord,
+  type StaffDataScope,
+} from "@/lib/data/staff";
 import {
   AvailabilityForm,
   BookingActions,
@@ -65,13 +69,19 @@ export default async function AppPage({
   searchParams: Promise<{ view?: string }>;
 }) {
   await connection();
-  const session = await getStaffSession();
+  const params = await searchParams;
+  const requested = params.view as View | undefined;
+  const requestedScope: StaffDataScope =
+    requested && managementViews.includes(requested) ? requested : "overview";
+  const [session, scopedData] = await Promise.all([
+    getStaffSession(),
+    getStaffData(requestedScope),
+  ]);
   if (!session) redirect("/login");
   const allowed = session.role === "piercer" ? piercerViews : managementViews;
-  const requested = (await searchParams).view as View | undefined;
   const view =
     requested && allowed.includes(requested) ? requested : "overview";
-  const data = await getStaffData();
+  const data = view === requestedScope ? scopedData : await getStaffData(view);
   return (
     <div className="staff-shell">
       <aside className="staff-sidebar">

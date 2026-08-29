@@ -1,4 +1,5 @@
 import "server-only";
+import { unstable_cache } from "next/cache";
 import {
   generateAvailableSlots,
   type AvailableSlot,
@@ -66,7 +67,7 @@ function mapService(row: Record<string, unknown>): Service {
   };
 }
 
-export async function getPublicCatalog() {
+async function loadPublicCatalog() {
   const admin = createSupabaseAdminClient();
   if (!admin)
     return {
@@ -123,6 +124,12 @@ export async function getPublicCatalog() {
     reason: ready ? null : ("setup" as const),
   };
 }
+
+export const getPublicCatalog = unstable_cache(
+  loadPublicCatalog,
+  ["piercing-corner-public-catalog-v1"],
+  { revalidate: 60, tags: ["public-catalog"] },
+);
 
 export async function getAvailableSlots(
   serviceId: string,
