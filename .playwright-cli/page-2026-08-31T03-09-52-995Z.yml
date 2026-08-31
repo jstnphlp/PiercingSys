@@ -1,0 +1,147 @@
+- generic [active] [ref=e1]:
+  - main [ref=e3]:
+    - generic [ref=e4]:
+      - paragraph [ref=e16]: PIERCING CORNER · PARAÑAQUE
+      - heading [level=1] [ref=e17]:
+        - text: A little cornerfor your
+        - emphasis [ref=e18]: spark.
+      - paragraph [ref=e19]: Choose your piercing, find a real opening, and leave with an appointment already confirmed.
+      - generic [ref=e20]:
+        - generic [ref=e21]: Parañaque
+        - generic [ref=e25]: Asia/Manila appointments
+      - img "Piercing Corner ear illustration" [ref=e29]
+    - generic [ref=e30]:
+      - text: ✦
+      - generic [ref=e31]:
+        - list "Booking progress" [ref=e32]:
+          - listitem [ref=e33]:
+            - generic [ref=e34]: "1"
+            - generic [ref=e35]: Service
+          - listitem [ref=e36]:
+            - generic [ref=e37]: "2"
+            - generic [ref=e38]: Schedule
+          - listitem [ref=e39]:
+            - generic [ref=e40]: "3"
+            - generic [ref=e41]: Details
+        - generic [ref=e42]:
+          - paragraph [ref=e43]: STEP 1 OF 3
+          - heading "What are we piercing?" [level=2] [ref=e44]
+          - paragraph [ref=e45]: Prices are in Philippine pesos and reflect the configured studio rate.
+          - generic [ref=e46]:
+            - generic [ref=e47]:
+              - textbox "Search services" [ref=e52]
+              - generic "Service category" [ref=e53]:
+                - button "Ear" [pressed] [ref=e54]
+                - button "Face & Body" [ref=e55]
+                - button "Other Services" [ref=e56]
+            - group "Ear Piercings services" [ref=e57]:
+              - checkbox "Lobe Ear ₱500 60 min" [ref=e58] [cursor=pointer]:
+                - generic [ref=e60]:
+                  - strong [ref=e61]: Lobe
+                  - generic [ref=e62]: Ear
+                - generic [ref=e63]:
+                  - strong [ref=e64]: ₱500
+                  - generic [ref=e65]: 60 min
+              - checkbox "Double Lobe Ear ₱950 60 min" [ref=e66] [cursor=pointer]:
+                - generic [ref=e68]:
+                  - strong [ref=e69]: Double Lobe
+                  - generic [ref=e70]: Ear
+                - generic [ref=e71]:
+                  - strong [ref=e72]: ₱950
+                  - generic [ref=e73]: 60 min
+              - checkbox "Triple Lobe Ear ₱1,400 60 min" [ref=e74] [cursor=pointer]:
+                - generic [ref=e76]:
+                  - strong [ref=e77]: Triple Lobe
+                  - generic [ref=e78]: Ear
+                - generic [ref=e79]:
+                  - strong [ref=e80]: ₱1,400
+                  - generic [ref=e81]: 60 min
+              - checkbox "Auricle Ear ₱600 60 min" [ref=e82] [cursor=pointer]:
+                - generic [ref=e84]:
+                  - strong [ref=e85]: Auricle
+                  - generic [ref=e86]: Ear
+                - generic [ref=e87]:
+                  - strong [ref=e88]: ₱600
+                  - generic [ref=e89]: 60 min
+              - checkbox "Helix Ear ₱600 60 min" [ref=e90] [cursor=pointer]:
+                - generic [ref=e92]:
+                  - strong [ref=e93]: Helix
+                  - generic [ref=e94]: Ear
+                - generic [ref=e95]:
+                  - strong [ref=e96]: ₱600
+                  - generic [ref=e97]: 60 min
+              - checkbox "Hidden Helix Ear ₱700 60 min" [ref=e98] [cursor=pointer]:
+                - generic [ref=e100]:
+                  - strong [ref=e101]: Hidden Helix
+                  - generic [ref=e102]: Ear
+                - generic [ref=e103]:
+                  - strong [ref=e104]: ₱700
+                  - generic [ref=e105]: 60 min
+              - checkbox "Tragus Ear ₱700 60 min" [ref=e106] [cursor=pointer]:
+                - generic [ref=e108]:
+                  - strong [ref=e109]: Tragus
+                  - generic [ref=e110]: Ear
+                - generic [ref=e111]:
+                  - strong [ref=e112]: ₱700
+                  - generic [ref=e113]: 60 min
+              - checkbox "Conch Ear ₱700 60 min" [ref=e114] [cursor=pointer]:
+                - generic [ref=e116]:
+                  - strong [ref=e117]: Conch
+                  - generic [ref=e118]: Ear
+                - generic [ref=e119]:
+                  - strong [ref=e120]: ₱700
+                  - generic [ref=e121]: 60 min
+              - checkbox "Daith Ear ₱750 60 min" [ref=e122] [cursor=pointer]:
+                - generic [ref=e124]:
+                  - strong [ref=e125]: Daith
+                  - generic [ref=e126]: Ear
+                - generic [ref=e127]:
+                  - strong [ref=e128]: ₱750
+                  - generic [ref=e129]: 60 min
+              - checkbox "Rook Ear ₱700 60 min" [ref=e130] [cursor=pointer]:
+                - generic [ref=e132]:
+                  - strong [ref=e133]: Rook
+                  - generic [ref=e134]: Ear
+                - generic [ref=e135]:
+                  - strong [ref=e136]: ₱700
+                  - generic [ref=e137]: 60 min
+              - checkbox "Forward Helix Ear ₱700 60 min" [ref=e138] [cursor=pointer]:
+                - generic [ref=e140]:
+                  - strong [ref=e141]: Forward Helix
+                  - generic [ref=e142]: Ear
+                - generic [ref=e143]:
+                  - strong [ref=e144]: ₱700
+                  - generic [ref=e145]: 60 min
+              - checkbox "Flat Ear ₱600 60 min" [ref=e146] [cursor=pointer]:
+                - generic [ref=e148]:
+                  - strong [ref=e149]: Flat
+                  - generic [ref=e150]: Ear
+                - generic [ref=e151]:
+                  - strong [ref=e152]: ₱600
+                  - generic [ref=e153]: 60 min
+              - checkbox "Snug Ear ₱700 60 min" [ref=e154] [cursor=pointer]:
+                - generic [ref=e156]:
+                  - strong [ref=e157]: Snug
+                  - generic [ref=e158]: Ear
+                - generic [ref=e159]:
+                  - strong [ref=e160]: ₱700
+                  - generic [ref=e161]: 60 min
+              - checkbox "Anti-Tragus Ear ₱700 60 min" [ref=e162] [cursor=pointer]:
+                - generic [ref=e164]:
+                  - strong [ref=e165]: Anti-Tragus
+                  - generic [ref=e166]: Ear
+                - generic [ref=e167]:
+                  - strong [ref=e168]: ₱700
+                  - generic [ref=e169]: 60 min
+              - checkbox "Industrial Ear ₱1,100 60 min" [ref=e170] [cursor=pointer]:
+                - generic [ref=e172]:
+                  - strong [ref=e173]: Industrial
+                  - generic [ref=e174]: Ear
+                - generic [ref=e175]:
+                  - strong [ref=e176]: ₱1,100
+                  - generic [ref=e177]: 60 min
+          - button "Find an opening" [disabled] [ref=e178]
+      - link "Open Piercing Corner on Instagram" [ref=e181] [cursor=pointer]:
+        - /url: https://www.instagram.com/piercing.corner/
+      - text: ☾
+  - alert [ref=e185]

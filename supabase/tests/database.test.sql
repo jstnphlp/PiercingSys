@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(37);
+select plan(55);
 
 select has_table('public', 'studio_settings', 'singleton studio settings exists');
 select has_table('public', 'staff_profiles', 'staff profiles replace memberships');
@@ -8,6 +8,7 @@ select hasnt_table('public', 'shops', 'multi-tenant shops are removed');
 select results_eq('select name from public.studio_settings where id = 1', array['Piercing Corner'::text], 'studio is seeded without fictitious details');
 select col_is_pk('public', 'studio_settings', 'id', 'studio settings is a singleton primary key');
 select has_function('public', 'create_public_booking', array['uuid[]','timestamp with time zone','uuid','text','text','text','text','text'], 'atomic multi-service public booking exists');
+select has_function('public', 'create_public_booking_with_result', array['uuid[]','timestamp with time zone','uuid','text','text','text','text','text','text'], 'public booking reports whether an idempotent request created the booking');
 select has_function('public', 'create_staff_booking', array['uuid[]','timestamp with time zone','uuid','uuid','uuid','text','text','text','text','text','boolean'], 'atomic staff booking exists');
 select has_function('public', 'reschedule_booking', array['uuid','timestamp with time zone','uuid','uuid'], 'schedule-aware rescheduling exists');
 select has_function('public', 'complete_booking_and_create_sale', array['uuid'], 'appointment completion creates a sale atomically');
@@ -72,6 +73,180 @@ select id, 'cash', 130000, '10000000-0000-0000-0000-000000000001' from public.sa
 select lives_ok($$select public.complete_draft_sale((select id from public.sales where booking_id = '50000000-0000-0000-0000-000000000001'))$$, 'fully priced and paid sale completes');
 select results_eq($$select status::text from public.sales where booking_id = '50000000-0000-0000-0000-000000000001'$$, array['completed'::text], 'linked sale is completed');
 select throws_ok($$update public.sale_items set unit_price_cents = 20000 where sale_id = (select id from public.sales where booking_id = '50000000-0000-0000-0000-000000000001') and description = 'Range snapshot'$$, 'Completed sale details are immutable; create an adjustment', 'completed appointment sale items remain immutable');
+
+select has_function('public', 'available_slots', array['uuid[]','date','date','uuid','boolean'], 'range availability lives in postgres');
+select has_function('public', 'create_sale', array['uuid','uuid','integer','jsonb','jsonb','boolean'], 'atomic sale creation exists');
+select has_function('public', 'studio_report', array[]::text[], 'report aggregates exist');
+select has_view('public', 'customer_directory', 'client directory view exists');
+
+insert into public.service_staff (service_id, staff_id) values
+  ('20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000002')
+on conflict do nothing;
+insert into public.staff_availability (staff_id, weekday, starts_at, ends_at)
+select '10000000-0000-0000-0000-000000000002', weekday, '10:00'::time, '20:00'::time
+from generate_series(0, 6) as weekday
+on conflict do nothing;
+
+select ok(
+  (select count(*) > 0 from public.available_slots(
+    array['20000000-0000-0000-0000-000000000001'::uuid],
+    '2026-09-01'::date,
+    '2026-09-07'::date,
+    '10000000-0000-0000-0000-000000000002',
+    false
+  )),
+  'available_slots returns openings for a qualified piercer'
+);
+
+select lives_ok(
+  $$select * from public.create_sale(
+    '30000000-0000-0000-0000-000000000001',
+    null,
+    0,
+    '[{"type":"service","sourceId":"20000000-0000-0000-0000-000000000001","description":"Walk-in lobe","quantity":1,"unitPriceCents":100000,"discountCents":0}]'::jsonb,
+    '[{"method":"cash","amountCents":100000}]'::jsonb,
+    true
+  )$$,
+  'create_sale completes a paid walk-in in one transaction'
+);
+select is(
+  (select s.status::text from public.sales s join public.sale_items si on si.sale_id = s.id where si.description = 'Walk-in lobe'),
+  'completed',
+  'walk-in sale is stored as completed'
+);
+
+select results_eq(
+  $$select was_created from public.create_public_booking_with_result(
+    array['20000000-0000-0000-0000-000000000001'::uuid],
+    (select s.starts_at from public.available_slots(
+      array['20000000-0000-0000-0000-000000000001'::uuid],
+      (now() at time zone 'Asia/Manila')::date + 2,
+      (now() at time zone 'Asia/Manila')::date + 5,
+      '10000000-0000-0000-0000-000000000002',
+      true
+    ) s limit 1),
+    '10000000-0000-0000-0000-000000000002',
+    'Idem', 'Client', 'idempotent@example.com', '09171111111', '',
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+  )$$,
+  array[true],
+  'the first idempotent public booking reports that it was created'
+);
+select results_eq(
+  $$select was_created from public.create_public_booking_with_result(
+    array['20000000-0000-0000-0000-000000000001'::uuid],
+    now() + interval '3 days',
+    '10000000-0000-0000-0000-000000000002',
+    'Idem', 'Client', 'idempotent@example.com', '09171111111', '',
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+  )$$,
+  array[false],
+  'repeating the same idempotency key reports a replay'
+);
+select is(
+  (select count(*) from public.bookings b join public.customers c on c.id = b.customer_id where c.email = 'idempotent@example.com'),
+  1::bigint,
+  'idempotent retries share one booking row'
+);
+select is(
+  (select count(*) from public.notification_deliveries d
+    join public.bookings b on b.id = d.booking_id
+    join public.customers c on c.id = b.customer_id
+   where c.email = 'idempotent@example.com' and d.kind = 'confirmation'),
+  1::bigint,
+  'idempotent retries share one confirmation delivery'
+);
+
+select throws_ok(
+  $$select public.create_public_booking(
+    array['20000000-0000-0000-0000-000000000001'::uuid],
+    (select b.starts_at from public.bookings b join public.customers c on c.id = b.customer_id where c.email = 'idempotent@example.com'),
+    '10000000-0000-0000-0000-000000000002',
+    'Other', 'Client', 'other@example.com', '09172222222', '',
+    null
+  )$$,
+  '23P01',
+  'slot_unavailable',
+  'a second public booking cannot take an occupied opening'
+);
+
+select throws_ok(
+  $$select public.create_public_booking(
+    array['20000000-0000-0000-0000-000000000001'::uuid, '20000000-0000-0000-0000-000000000001'::uuid],
+    now() + interval '4 days',
+    null, 'A', 'B', 'ab@example.com', '09170000001', '', null
+  )$$,
+  '22023',
+  'invalid_services',
+  'duplicate services are rejected'
+);
+
+select throws_ok(
+  $$select public.create_sale(
+    '30000000-0000-0000-0000-000000000001',
+    null,
+    0,
+    '[{"type":"service","sourceId":"20000000-0000-0000-0000-000000000001","description":"Wrong price","quantity":1,"unitPriceCents":1,"discountCents":0}]'::jsonb,
+    '[]'::jsonb,
+    false
+  )$$,
+  'invalid_service_price',
+  'fixed service prices cannot be overridden at sale time'
+);
+
+select throws_ok(
+  $$select * from public.available_slots(
+    array['20000000-0000-0000-0000-000000000001'::uuid],
+    '2026-09-01'::date,
+    '2026-09-16'::date,
+    null,
+    false
+  )$$,
+  '22023',
+  'invalid_date_range',
+  'availability refuses ranges longer than 14 days'
+);
+
+insert into public.bookings (id, customer_id, assigned_piercer_id, status, starts_at, ends_at)
+values (
+  '50000000-0000-0000-0000-000000000099',
+  '30000000-0000-0000-0000-000000000001',
+  '10000000-0000-0000-0000-000000000002',
+  'cancelled',
+  '2026-09-01 10:00+08',
+  '2026-09-01 10:45+08'
+);
+insert into public.booking_services (booking_id, service_id, position, name, duration_minutes, price_cents)
+values (
+  '50000000-0000-0000-0000-000000000099',
+  '20000000-0000-0000-0000-000000000001',
+  1,
+  'Cancelled hold',
+  30,
+  100000
+);
+
+select ok(
+  exists (
+    select 1 from public.available_slots(
+      array['20000000-0000-0000-0000-000000000001'::uuid],
+      '2026-09-01'::date,
+      '2026-09-01'::date,
+      '10000000-0000-0000-0000-000000000002',
+      false
+    ) s
+    where s.starts_at = timestamptz '2026-09-01 10:00+08'
+  ),
+  'cancelled bookings do not occupy public openings'
+);
+
+select throws_ok(
+  $$insert into public.customers (first_name, last_name, email, phone)
+    values ('Dup', 'User', 'Client@example.com', '09000000000')$$,
+  '23505',
+  null,
+  'the same email and phone cannot create a second customer'
+);
 
 select * from finish();
 rollback;

@@ -2,7 +2,7 @@
 
 import { Check, ChevronLeft, ChevronRight, Clock3, Plus, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { combinedServiceDuration, manilaDate, type BookingStatus, type Service } from "@/lib/domain";
+import { combinedServiceDuration, manilaDate, manilaWeekDates, manilaWeekday, shiftManilaDate, type BookingStatus, type Service } from "@/lib/domain";
 import type { CustomerRecord, StaffRecord } from "@/lib/data/staff";
 import { layoutOverlappingAppointments } from "./calendar-layout";
 import { CalendarGridSkeleton } from "./staff-skeletons";
@@ -71,9 +71,9 @@ export function CalendarWorkspace(props: Props) {
 
   return <div className="feature-view calendar-workspace">
     <div className="calendar-toolbar" aria-label="Calendar controls">
-      <button className="btn btn-secondary icon-button" aria-label={`Previous ${mode}`} onClick={() => setAnchor(shiftDate(anchor, mode === "week" ? -7 : -1))}><ChevronLeft/></button>
+      <button className="btn btn-secondary icon-button" aria-label={`Previous ${mode}`} onClick={() => setAnchor(shiftManilaDate(anchor, mode === "week" ? -7 : -1))}><ChevronLeft/></button>
       <button className="btn btn-secondary" onClick={() => setAnchor(manilaDate(new Date()))}>Today</button>
-      <button className="btn btn-secondary icon-button" aria-label={`Next ${mode}`} onClick={() => setAnchor(shiftDate(anchor, mode === "week" ? 7 : 1))}><ChevronRight/></button>
+      <button className="btn btn-secondary icon-button" aria-label={`Next ${mode}`} onClick={() => setAnchor(shiftManilaDate(anchor, mode === "week" ? 7 : 1))}><ChevronRight/></button>
       <select aria-label="Filter by piercer" value={piercerId} disabled={props.role === "piercer"} onChange={(event) => setPiercerId(event.target.value)}>
         <option value="">All piercers</option>{props.staff.filter(isPiercer).map((person) => <option key={person.id} value={person.id}>{person.displayName}</option>)}
       </select>

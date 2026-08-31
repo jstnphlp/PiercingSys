@@ -14,7 +14,6 @@ export const metadata: Metadata = {
   ),
   title: { default: "Piercing Corner", template: "%s · Piercing Corner" },
   description: "Book and manage appointments with Piercing Corner in Parañaque.",
-  icons: { icon: "/logo.png", apple: "/logo.png" },
   openGraph: { title: "Piercing Corner", description: "Piercing appointments in Parañaque.", images: ["/logo.png"] },
 };
 

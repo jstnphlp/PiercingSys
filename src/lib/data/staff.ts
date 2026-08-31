@@ -7,6 +7,7 @@ import type {
   Service,
   StudioSettings,
 } from "@/lib/domain";
+import { manilaDayBounds } from "@/lib/domain";
 import { seededStudio } from "@/lib/data/public";
 
 export type BookingRecord = {
@@ -36,6 +37,8 @@ export type CustomerRecord = {
   email: string;
   phone: string;
   createdAt: string;
+  appointmentCount?: number;
+  lastActivityAt?: string | null;
 };
 export type SaleRecord = {
   id: string;
@@ -85,9 +88,53 @@ export type AvailabilityRecord = {
   endsAt: string;
 };
 
+export const bookingDetailSelect =
+  "id,reference,status,starts_at,ends_at,notes,customers(id,first_name,last_name,email,phone),booking_services(id,service_id,position,name,price_cents,min_price_cents,max_price_cents,price_unit,duration_minutes),staff_profiles!bookings_assigned_piercer_id_fkey(user_id,display_name,color),stations(name),sales(id,status)";
+
 type Relation = Record<string, unknown> | Array<Record<string, unknown>> | null;
 function one(value: Relation) {
   return Array.isArray(value) ? value[0] : value;
+}
+
+export function mapBookingRow(row: Record<string, unknown>): BookingRecord {
+  const customer = one(row.customers as Relation);
+  const services = ((row.booking_services ?? []) as Array<Record<string, unknown>>)
+    .sort((a, b) => Number(a.position) - Number(b.position));
+  const piercer = one(row.staff_profiles as Relation);
+  const station = one(row.stations as Relation);
+  const sale = one(row.sales as Relation);
+  return {
+    id: String(row.id),
+    reference: String(row.reference),
+    status: row.status as BookingStatus,
+    startsAt: String(row.starts_at),
+    endsAt: String(row.ends_at),
+    notes: row.notes == null ? null : String(row.notes),
+    customer: {
+      id: String(customer?.id ?? ""),
+      name: `${customer?.first_name ?? ""} ${customer?.last_name ?? ""}`.trim(),
+      email: String(customer?.email ?? ""),
+      phone: String(customer?.phone ?? ""),
+    },
+    services: services.map((service) => ({
+      id: String(service.service_id ?? ""),
+      name: String(service.name ?? "Service"),
+      priceCents: service.price_cents == null ? null : Number(service.price_cents),
+      minPriceCents: service.min_price_cents == null ? null : Number(service.min_price_cents),
+      maxPriceCents: service.max_price_cents == null ? null : Number(service.max_price_cents),
+      priceUnit: service.price_unit ? String(service.price_unit) : null,
+      durationMinutes: Number(service.duration_minutes ?? 0),
+    })),
+    piercer: piercer
+      ? {
+          id: String(piercer.user_id),
+          name: String(piercer.display_name),
+          color: String(piercer.color),
+        }
+      : null,
+    station: station ? String(station.name) : null,
+    saleState: sale ? String(sale.status) : null,
+  };
 }
 
 export type StaffDataScope =
@@ -99,32 +146,45 @@ export type StaffDataScope =
   | "settings"
   | "all";
 
+const emptyData = {
+  studio: seededStudio,
+  services: [] as Service[],
+  bookings: [] as BookingRecord[],
+  customers: [] as CustomerRecord[],
+  sales: [] as SaleRecord[],
+  staff: [] as StaffRecord[],
+  serviceAssignments: [] as Array<{ serviceId: string; staffId: string }>,
+  deliveries: [] as DeliveryRecord[],
+  stations: [] as Array<{ id: string; name: string }>,
+  closures: [] as ClosureRecord[],
+  availability: [] as AvailabilityRecord[],
+  customerCount: 0,
+  bookingStatusCounts: {} as Record<string, number>,
+  paymentMethodTotals: {} as Record<string, number>,
+  completedRevenueCents: 0,
+  completedSaleCount: 0,
+  error: null as string | null,
+};
+
 export async function getStaffData(scope: StaffDataScope = "all") {
   const supabase = await createSupabaseServerClient();
   if (!supabase)
     return {
-      studio: seededStudio,
-      services: [] as Service[],
-      bookings: [] as BookingRecord[],
-      customers: [] as CustomerRecord[],
-      sales: [] as SaleRecord[],
-      staff: [] as StaffRecord[],
-      serviceAssignments: [] as Array<{ serviceId: string; staffId: string }>,
-      deliveries: [] as DeliveryRecord[],
-      stations: [] as Array<{ id: string; name: string }>,
-      closures: [] as ClosureRecord[],
-      availability: [] as AvailabilityRecord[],
+      ...emptyData,
       error: "Supabase is not configured. Add the required environment values and restart the application.",
     };
   const includes = (...scopes: StaffDataScope[]) =>
     scope === "all" || scopes.includes(scope);
-  const emptyMany = Promise.resolve({ data: [], error: null });
-  const emptySingle = Promise.resolve({ data: null, error: null });
+  const emptyMany = Promise.resolve({ data: [] as never[], error: null, count: null });
+  const emptySingle = Promise.resolve({ data: null, error: null, count: null });
+  const today = manilaDayBounds();
   const [
     settingsResult,
     servicesResult,
     bookingsResult,
     customersResult,
+    customerCountResult,
+    directoryResult,
     salesResult,
     staffResult,
     assignmentResult,
@@ -132,38 +192,49 @@ export async function getStaffData(scope: StaffDataScope = "all") {
     stationResult,
     availabilityResult,
     closureResult,
+    reportResult,
   ] = await Promise.all([
     includes("overview", "settings")
-      ? supabase.from("studio_settings").select("*").eq("id", 1).single()
+      ? supabase.from("studio_settings").select("id,name,location,address,email,phone,instagram_url,business_hours,booking_interval_minutes,minimum_lead_hours,booking_horizon_days,minimum_age,cancellation_policy").eq("id", 1).single()
       : emptySingle,
     includes("overview", "calendar", "sales", "settings")
-      ? supabase.from("services").select("*").order("sort_order")
+      ? supabase.from("services").select("id,name,description,body_area,category,duration_minutes,price_cents,min_price_cents,max_price_cents,price_unit,is_active,sort_order").order("sort_order")
       : emptyMany,
-    // The calendar loads its visible date range from /api/appointments. Avoid
-    // fetching the complete booking history during every calendar navigation.
-    // Overview and client records still need the full permitted history here.
-    includes("overview", "clients")
+    includes("overview")
       ? supabase
           .from("bookings")
-          .select(
-            "id,reference,status,starts_at,ends_at,notes,customers(id,first_name,last_name,email,phone),booking_services(id,service_id,position,name,price_cents,min_price_cents,max_price_cents,price_unit,duration_minutes),staff_profiles!bookings_assigned_piercer_id_fkey(user_id,display_name,color),stations(name),sales(id,status)",
-          )
+          .select(bookingDetailSelect)
+          .gte("starts_at", today.start)
+          .lt("starts_at", today.end)
           .order("starts_at")
+          .limit(200)
       : emptyMany,
-    includes("calendar", "clients", "sales")
+    includes("calendar", "sales")
       ? supabase
           .from("customers")
           .select("id,first_name,last_name,email,phone,created_at")
           .order("created_at", { ascending: false })
+          .limit(500)
       : emptyMany,
-    includes("overview", "sales", "reports")
+    includes("overview")
+      ? supabase.from("customers").select("id", { count: "exact", head: true })
+      : emptySingle,
+    includes("clients")
+      ? supabase
+          .from("customer_directory")
+          .select("id,first_name,last_name,email,phone,created_at,appointment_count,last_appointment_at")
+          .order("created_at", { ascending: false })
+          .limit(500)
+      : emptyMany,
+    includes("overview", "sales")
       ? supabase
           .from("sales")
           .select(
             "id,reference,status,total_cents,created_at,booking_id,customers(first_name,last_name),payments(method,amount_cents),sale_adjustments(kind,amount_cents),sale_items(id,description,unit_price_cents,min_price_cents,max_price_cents)",
           )
+          .gte("created_at", scope === "overview" ? today.start : "1970-01-01T00:00:00.000Z")
           .order("created_at", { ascending: false })
-          .limit(300)
+          .limit(scope === "overview" ? 100 : 300)
       : emptyMany,
     includes("overview", "calendar", "settings")
       ? supabase
@@ -198,6 +269,9 @@ export async function getStaffData(scope: StaffDataScope = "all") {
           .order("starts_at", { ascending: false })
           .limit(100)
       : emptyMany,
+    includes("reports")
+      ? supabase.rpc("studio_report")
+      : emptySingle,
   ]);
   const settingsRow = settingsResult.data;
   const studio: StudioSettings = settingsRow
@@ -232,47 +306,8 @@ export async function getStaffData(scope: StaffDataScope = "all") {
     priceUnit: row.price_unit,
     isActive: row.is_active,
   }));
-  const bookings: BookingRecord[] = (bookingsResult.data ?? []).map((row) => {
-    const customer = one(row.customers as Relation);
-    const services = ((row.booking_services ?? []) as Array<Record<string, unknown>>)
-      .sort((a, b) => Number(a.position) - Number(b.position));
-    const piercer = one(row.staff_profiles as Relation);
-    const station = one(row.stations as Relation);
-    const sale = one(row.sales as Relation);
-    return {
-      id: row.id,
-      reference: row.reference,
-      status: row.status,
-      startsAt: row.starts_at,
-      endsAt: row.ends_at,
-      notes: row.notes,
-      customer: {
-        id: String(customer?.id ?? ""),
-        name: `${customer?.first_name ?? ""} ${customer?.last_name ?? ""}`.trim(),
-        email: String(customer?.email ?? ""),
-        phone: String(customer?.phone ?? ""),
-      },
-      services: services.map((service) => ({
-        id: String(service.service_id ?? ""),
-        name: String(service.name ?? "Service"),
-        priceCents: service.price_cents == null ? null : Number(service.price_cents),
-        minPriceCents: service.min_price_cents == null ? null : Number(service.min_price_cents),
-        maxPriceCents: service.max_price_cents == null ? null : Number(service.max_price_cents),
-        priceUnit: service.price_unit ? String(service.price_unit) : null,
-        durationMinutes: Number(service.duration_minutes ?? 0),
-      })),
-      piercer: piercer
-        ? {
-            id: String(piercer.user_id),
-            name: String(piercer.display_name),
-            color: String(piercer.color),
-          }
-        : null,
-      station: station ? String(station.name) : null,
-      saleState: sale ? String(sale.status) : null,
-    };
-  });
-  const customers: CustomerRecord[] = (customersResult.data ?? []).map(
+  const bookings: BookingRecord[] = (bookingsResult.data ?? []).map((row) => mapBookingRow(row as Record<string, unknown>));
+  const listedCustomers: CustomerRecord[] = (customersResult.data ?? []).map(
     (row) => ({
       id: row.id,
       name: `${row.first_name} ${row.last_name}`,
@@ -281,6 +316,15 @@ export async function getStaffData(scope: StaffDataScope = "all") {
       createdAt: row.created_at,
     }),
   );
+  const directoryCustomers: CustomerRecord[] = (directoryResult.data ?? []).map((row) => ({
+    id: row.id,
+    name: `${row.first_name} ${row.last_name}`,
+    email: row.email,
+    phone: row.phone,
+    createdAt: row.created_at,
+    appointmentCount: Number(row.appointment_count ?? 0),
+    lastActivityAt: row.last_appointment_at ?? null,
+  }));
   const sales: SaleRecord[] = (salesResult.data ?? []).map((row) => {
     const customer = one(row.customers as Relation);
     const payments = (row.payments ?? []) as Array<{
@@ -345,11 +389,19 @@ export async function getStaffData(scope: StaffDataScope = "all") {
     startsAt: row.starts_at,
     endsAt: row.ends_at,
   }));
+  const report = (reportResult.data ?? null) as {
+    revenue_cents?: number;
+    completed_sales?: number;
+    booking_statuses?: Record<string, number>;
+    methods?: Record<string, number>;
+  } | null;
   const queryErrors = [
     settingsResult.error,
     servicesResult.error,
     bookingsResult.error,
     customersResult.error,
+    customerCountResult.error,
+    directoryResult.error,
     salesResult.error,
     staffResult.error,
     assignmentResult.error,
@@ -357,12 +409,13 @@ export async function getStaffData(scope: StaffDataScope = "all") {
     stationResult.error,
     closureResult.error,
     availabilityResult.error,
+    reportResult.error,
   ].filter((error): error is NonNullable<typeof error> => Boolean(error));
   return {
     studio,
     services,
     bookings,
-    customers,
+    customers: directoryCustomers.length ? directoryCustomers : listedCustomers,
     sales,
     staff,
     serviceAssignments: (assignmentResult.data ?? []).map((row) => ({
@@ -373,6 +426,11 @@ export async function getStaffData(scope: StaffDataScope = "all") {
     stations: stationResult.data ?? [],
     closures,
     availability,
+    customerCount: customerCountResult.count ?? directoryCustomers.length ?? listedCustomers.length,
+    bookingStatusCounts: report?.booking_statuses ?? {},
+    paymentMethodTotals: report?.methods ?? {},
+    completedRevenueCents: Number(report?.revenue_cents ?? 0),
+    completedSaleCount: Number(report?.completed_sales ?? 0),
     error: queryErrors.length
       ? queryErrors.map((error) => error.message).join(" ")
       : null,

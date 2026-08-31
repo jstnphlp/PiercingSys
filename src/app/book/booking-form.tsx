@@ -15,8 +15,12 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import {
+  canNavigateToNextBookingWeek,
   combinedServiceDuration,
   formatServicePrice,
+  manilaDate,
+  manilaWeekDates,
+  shiftManilaDate,
   type AvailableSlot,
   type PublicBookingResult,
   type Service,
@@ -28,7 +32,7 @@ type Props = {
   piercers: Array<{ id: string; name: string }>;
   assignments: Array<{ serviceId: string; staffId: string }>;
   minimumAge: number;
-  minDate: string;
+  bookingHorizonDays: number;
   preview?: boolean;
 };
 type ApiError = { error?: { message?: string } };
@@ -38,9 +42,10 @@ export function BookingForm({
   piercers,
   assignments,
   minimumAge,
-  minDate,
+  bookingHorizonDays,
   preview = false,
 }: Props) {
+  const minDate = manilaDate(new Date());
   const displayServices = useMemo<Service[]>(
     () =>
       services.length || !preview
@@ -73,7 +78,9 @@ export function BookingForm({
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [serviceLimitReached, setServiceLimitReached] = useState(false);
   const [result, setResult] = useState<PublicBookingResult | null>(null);
+  const [idempotencyKey] = useState(() => crypto.randomUUID());
   const selectedServices = useMemo(
     () => serviceIds
       .map((id) => displayServices.find((item) => item.id === id))
@@ -82,16 +89,27 @@ export function BookingForm({
   );
   const durationMinutes = combinedServiceDuration(selectedServices);
   const eligiblePiercers = useMemo(
-    () => piercers.filter((person) => serviceIds.every((serviceId) =>
-      assignments.some((item) => item.serviceId === serviceId && item.staffId === person.id),
-    )),
+    () => qualifiedPiercersForServices(serviceIds, piercers, assignments),
     [assignments, piercers, serviceIds],
   );
+  const incompatibleServices = isIncompatibleServiceSelection(serviceIds, piercers, assignments);
   const filteredServices = useMemo(() => displayServices.filter((service) =>
     service.category === serviceCategory &&
     `${service.name} ${service.description ?? ""} ${service.bodyArea ?? ""}`.toLowerCase().includes(serviceSearch.trim().toLowerCase()),
   ), [displayServices, serviceCategory, serviceSearch]);
-  const visibleDates = useMemo(() => weekDates(date), [date]);
+  const visibleDates = useMemo(() => manilaWeekDates(date), [date]);
+  const canNavigateNextWeek = canNavigateToNextBookingWeek(date, minDate, bookingHorizonDays);
+
+  function toggleService(serviceId: string) {
+    const next = toggleServiceSelection(serviceIds, serviceId);
+    setServiceLimitReached(next.limitReached);
+    if (next.serviceIds === serviceIds) return;
+    setServiceIds(next.serviceIds);
+    setSlot(null);
+    if (piercerId && !next.serviceIds.every((id) =>
+      assignments.some((item) => item.serviceId === id && item.staffId === piercerId)
+    )) setPiercerId("");
+  }
 
   async function loadSlots(
     nextServiceIds = serviceIds,
@@ -99,7 +117,8 @@ export function BookingForm({
     nextPiercerId = piercerId,
   ) {
     if (!nextServiceIds.length || !nextDate) return;
-    const dates = weekDates(nextDate);
+    if (isIncompatibleServiceSelection(nextServiceIds, piercers, assignments)) return;
+    const dates = manilaWeekDates(nextDate);
     setLoadingSlots(true);
     setSlot(null);
     setError("");
@@ -119,16 +138,13 @@ export function BookingForm({
       return;
     }
     try {
-      const results = await Promise.all(dates.map(async (calendarDate) => {
-        const query = new URLSearchParams({ date: calendarDate });
-        nextServiceIds.forEach((id) => query.append("serviceIds", id));
-        if (nextPiercerId) query.set("piercerId", nextPiercerId);
-        const response = await fetch(`/api/public/availability?${query}`);
-        const body = await response.json();
-        if (!response.ok) throw new Error(body.error?.message);
-        return body.data as AvailableSlot[];
-      }));
-      setSlots(results.flat());
+      const query = new URLSearchParams({ from: dates[0], to: dates.at(-1)! });
+      nextServiceIds.forEach((id) => query.append("serviceIds", id));
+      if (nextPiercerId) query.set("piercerId", nextPiercerId);
+      const response = await fetch(`/api/public/availability?${query}`);
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error?.message);
+      setSlots((body.data as AvailableSlot[]) ?? []);
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -159,6 +175,7 @@ export function BookingForm({
     serviceIds.forEach((id) => form.append("serviceIds", id));
     form.set("startsAt", slot.startsAt);
     form.set("preferredPiercerId", piercerId);
+    form.set("idempotencyKey", idempotencyKey);
     const response = await fetch("/api/public/bookings", {
       method: "POST",
       body: form,
@@ -247,16 +264,12 @@ export function BookingForm({
                 {(["Ear Piercings", "Face & Body Piercings", "Other Services"] as Service["category"][]).map((category) => <button type="button" key={category} className={serviceCategory === category ? "active" : ""} aria-pressed={serviceCategory === category} onClick={() => setServiceCategory(category)}>{category.replace(" Piercings", "")}</button>)}
               </div>
             </div>
-            {selectedServices.length > 0 && <div className="selected-services" aria-live="polite"><span><strong>{selectedServices.length} selected</strong><small>{durationMinutes} minutes total</small></span>{selectedServices.map((service) => <button type="button" key={service.id} onClick={() => { setServiceIds(serviceIds.filter((id) => id !== service.id)); setSlot(null); }} aria-label={`Remove ${service.name}`}>{service.name} <b>×</b></button>)}</div>}
+            {selectedServices.length > 0 && <div className="selected-services" aria-live="polite"><span><strong>{selectedServices.length} selected</strong><small>{durationMinutes} minutes total</small></span>{selectedServices.map((service) => <button type="button" key={service.id} onClick={() => toggleService(service.id)} aria-label={`Remove ${service.name}`}>{service.name} <b>×</b></button>)}</div>}
             <div className="service-list compact" role="group" aria-label={`${serviceCategory} services`}>
               {filteredServices.map((service) => <button
                 type="button" role="checkbox" aria-checked={serviceIds.includes(service.id)} key={service.id}
                 className={serviceIds.includes(service.id) ? "selected" : ""}
-                onClick={() => {
-                  const next = serviceIds.includes(service.id) ? serviceIds.filter((id) => id !== service.id) : [...serviceIds, service.id];
-                  setServiceIds(next); setSlot(null);
-                  if (piercerId && !next.every((serviceId) => assignments.some((item) => item.serviceId === serviceId && item.staffId === piercerId))) setPiercerId("");
-                }}>
+                onClick={() => toggleService(service.id)}>
                 <span className="service-radio">{serviceIds.includes(service.id) && <i />}</span>
                 <span><strong>{service.name}</strong><small>{service.bodyArea || service.description || "Piercing service"}</small></span>
                 <span><strong>{preview ? "Price TBD" : formatServicePrice(service)}</strong><small>{preview ? "Duration TBD" : `${service.durationMinutes} min`}</small></span>
@@ -264,10 +277,21 @@ export function BookingForm({
               {!filteredServices.length && <p className="service-empty">No services match that search.</p>}
             </div>
           </div>
+          {serviceLimitReached && (
+            <p className="form-error service-selection-error" role="alert">
+              You can select up to 12 services. Remove one to choose another.
+            </p>
+          )}
+          {incompatibleServices && (
+            <p className="form-error service-selection-error" role="alert">
+              These services can’t be booked together because no piercer is qualified for all of them. Remove a service or book each service separately.
+            </p>
+          )}
           <button
             className="btn btn-primary next-button"
-            disabled={!serviceIds.length}
+            disabled={!serviceIds.length || incompatibleServices}
             onClick={() => {
+              if (incompatibleServices) return;
               setStep(2);
               void loadSlots();
             }}
@@ -284,9 +308,9 @@ export function BookingForm({
             {selectedServices.map((service) => service.name).join(" + ")} {preview ? "· preview openings" : `· ${durationMinutes} minutes total`}
           </p>
           <div className="public-calendar-toolbar">
-            <button type="button" aria-label="Previous week" disabled={shiftDate(visibleDates.at(-1)!, -7) < minDate} onClick={() => { const next = shiftDate(date, -7); setDate(next); void loadSlots(serviceIds, next, piercerId); }}><ChevronLeft/></button>
+            <button type="button" aria-label="Previous week" disabled={shiftManilaDate(visibleDates.at(-1)!, -7) < minDate} onClick={() => { const next = shiftManilaDate(date, -7); setDate(next); void loadSlots(serviceIds, next, piercerId); }}><ChevronLeft/></button>
             <button type="button" onClick={() => { setDate(minDate); void loadSlots(serviceIds, minDate, piercerId); }}>Today</button>
-            <button type="button" aria-label="Next week" onClick={() => { const next = shiftDate(date, 7); setDate(next); void loadSlots(serviceIds, next, piercerId); }}><ChevronRight/></button>
+            <button type="button" aria-label="Next week" disabled={!canNavigateNextWeek} onClick={() => { if (!canNavigateNextWeek) return; const next = shiftManilaDate(date, 7); setDate(next); void loadSlots(serviceIds, next, piercerId); }}><ChevronRight/></button>
             <strong>{formatWeekRange(visibleDates)}</strong>
             <label><span>Piercer</span><select value={piercerId} onChange={(event) => { const value = event.target.value; setPiercerId(value); void loadSlots(serviceIds, date, value); }}><option value="">Any qualified piercer</option>{eligiblePiercers.map((person) => <option value={person.id} key={person.id}>{person.name}</option>)}</select></label>
           </div>
@@ -325,8 +349,8 @@ export function BookingForm({
           <p className="eyebrow">STEP 3 OF 3</p>
           <h2>Tell us about you.</h2>
           <p>
-            Your selected opening stays available until the booking is
-            submitted.
+            We’ll check that your selected opening is still available when you
+            confirm your appointment.
           </p>
           <div className="detail-grid">
             <label className="field">
@@ -433,16 +457,6 @@ const publicCalendarStartHour = 8;
 const publicCalendarEndHour = 21;
 const publicCalendarHourHeight = 56;
 
-function shiftDate(date: string, days: number) {
-  const value = new Date(`${date}T12:00:00Z`);
-  value.setUTCDate(value.getUTCDate() + days);
-  return value.toISOString().slice(0, 10);
-}
-function weekday(date: string) { return new Date(`${date}T12:00:00Z`).getUTCDay(); }
-function weekDates(anchor: string) {
-  const sunday = shiftDate(anchor, -weekday(anchor));
-  return Array.from({ length: 7 }, (_, index) => shiftDate(sunday, index));
-}
 function formatWeekRange(dates: string[]) {
   const format = (date: string) => new Intl.DateTimeFormat("en-PH", { month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(`${date}T12:00:00Z`));
   return `${format(dates[0])}–${format(dates.at(-1)!)} `;

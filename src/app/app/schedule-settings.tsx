@@ -2,7 +2,7 @@
 
 import { ChevronLeft, ChevronRight, Clock3, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
-import { manilaDate, type StudioSettings } from "@/lib/domain";
+import { manilaDate, manilaWeekDates, manilaWeekday, shiftManilaDate, type StudioSettings } from "@/lib/domain";
 import type { AvailabilityRecord, ClosureRecord, StaffRecord } from "@/lib/data/staff";
 import { Dialog } from "./calendar-workspace";
 

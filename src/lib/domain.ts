@@ -164,6 +164,47 @@ export function manilaDateTime(date: string, time: string) {
   return new Date(`${date}T${time.length === 5 ? `${time}:00` : time}+08:00`);
 }
 
+export function eachManilaDate(from: string, to: string) {
+  const dates: string[] = [];
+  let current = from;
+  while (current <= to) {
+    dates.push(current);
+    current = shiftManilaDate(current, 1);
+  }
+  return dates;
+}
+
+export function shiftManilaDate(date: string, days: number) {
+  const value = new Date(`${date}T12:00:00Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
+
+export function manilaWeekday(date: string) {
+  return new Date(`${date}T12:00:00Z`).getUTCDay();
+}
+
+export function manilaWeekDates(anchor: string) {
+  const sunday = shiftManilaDate(anchor, -manilaWeekday(anchor));
+  return Array.from({ length: 7 }, (_, index) => shiftManilaDate(sunday, index));
+}
+
+export function canNavigateToNextBookingWeek(
+  anchor: string,
+  today: string,
+  bookingHorizonDays: number,
+) {
+  const nextWeekStart = manilaWeekDates(shiftManilaDate(anchor, 7))[0];
+  const bookingHorizonDate = shiftManilaDate(today, bookingHorizonDays);
+  return nextWeekStart <= bookingHorizonDate;
+}
+
+export function manilaDayBounds(date: Date | string = new Date()) {
+  const day = manilaDate(date);
+  const start = manilaDateTime(day, "00:00");
+  return { day, start: start.toISOString(), end: new Date(start.getTime() + 86_400_000).toISOString() };
+}
+
 type SlotStaff = { id: string; active: boolean };
 type Availability = { staffId: string; weekday: number; startsAt: string; endsAt: string };
 type Occupied = { piercerId: string; startsAt: string; endsAt: string; status?: BookingStatus };
@@ -186,30 +227,48 @@ export function generateAvailableSlots(input: {
   now?: Date;
 }): AvailableSlot[] {
   const now = input.now ?? new Date();
+  if (input.serviceDurationMinutes <= 0 || input.bookingIntervalMinutes <= 0) return [];
   const dayStart = manilaDateTime(input.date, "00:00");
   const horizon = new Date(now.getTime() + input.bookingHorizonDays * 86_400_000);
   if ((input.enforceBookingWindow ?? true) &&
       (dayStart < new Date(`${manilaDate(now)}T00:00:00+08:00`) || dayStart > horizon)) return [];
-  const weekday = new Date(`${input.date}T12:00:00Z`).getUTCDay();
+  const weekday = manilaWeekday(input.date);
   const studioHours = input.businessHours[String(weekday)];
   if (!studioHours || studioHours.closed) return [];
   const leadCutoff = new Date(now.getTime() + input.minimumLeadHours * 3_600_000);
   const qualified = new Set(input.qualifiedStaffIds);
   const staffIds = input.staff.filter((person) => person.active && qualified.has(person.id)).map((person) => person.id)
     .filter((id) => !input.preferredPiercerId || id === input.preferredPiercerId);
+  const closures = input.closures.map((item) => ({ start: new Date(item.startsAt).getTime(), end: new Date(item.endsAt).getTime() }));
+  const bookingsByPiercer = new Map<string, Array<{ start: number; end: number }>>();
+  for (const item of input.bookings) {
+    if (item.status === "cancelled" || item.status === "rejected") continue;
+    const list = bookingsByPiercer.get(item.piercerId) ?? [];
+    list.push({ start: new Date(item.startsAt).getTime(), end: new Date(item.endsAt).getTime() });
+    bookingsByPiercer.set(item.piercerId, list);
+  }
+  const blocksByStaff = new Map<string, Availability[]>();
+  for (const block of input.availability) {
+    if (block.weekday !== weekday) continue;
+    const list = blocksByStaff.get(block.staffId) ?? [];
+    list.push(block);
+    blocksByStaff.set(block.staffId, list);
+  }
   const byStart = new Map<number, AvailableSlot>();
+  const intervalMs = input.bookingIntervalMinutes * 60_000;
+  const durationMs = input.serviceDurationMinutes * 60_000;
+  const studioOpen = manilaDateTime(input.date, studioHours.open).getTime();
+  const studioClose = manilaDateTime(input.date, studioHours.close).getTime();
   for (const staffId of staffIds) {
-    for (const block of input.availability.filter((item) => item.staffId === staffId && item.weekday === weekday)) {
-      const opens = Math.max(manilaDateTime(input.date, studioHours.open).getTime(), manilaDateTime(input.date, block.startsAt.slice(0, 5)).getTime());
-      const closes = Math.min(manilaDateTime(input.date, studioHours.close).getTime(), manilaDateTime(input.date, block.endsAt.slice(0, 5)).getTime());
-      const intervalMs = input.bookingIntervalMinutes * 60_000;
-      const durationMs = input.serviceDurationMinutes * 60_000;
+    for (const block of blocksByStaff.get(staffId) ?? []) {
+      const opens = Math.max(studioOpen, manilaDateTime(input.date, block.startsAt.slice(0, 5)).getTime());
+      const closes = Math.min(studioClose, manilaDateTime(input.date, block.endsAt.slice(0, 5)).getTime());
+      const occupied = bookingsByPiercer.get(staffId) ?? [];
       for (let start = opens; start + durationMs <= closes; start += intervalMs) {
         const end = start + durationMs;
         if ((input.enforceBookingWindow ?? true) && start < leadCutoff.getTime()) continue;
-        const overlapsClosure = input.closures.some((item) => start < new Date(item.endsAt).getTime() && end > new Date(item.startsAt).getTime());
-        const overlapsBooking = input.bookings.some((item) => item.piercerId === staffId && item.status !== "cancelled" && item.status !== "rejected" && start < new Date(item.endsAt).getTime() && end > new Date(item.startsAt).getTime());
-        if (overlapsClosure || overlapsBooking) continue;
+        if (closures.some((item) => start < item.end && end > item.start)) continue;
+        if (occupied.some((item) => start < item.end && end > item.start)) continue;
         const existing = byStart.get(start);
         if (existing && !existing.piercerIds.includes(staffId)) existing.piercerIds.push(staffId);
         else byStart.set(start, { startsAt: new Date(start).toISOString(), endsAt: new Date(end).toISOString(), piercerIds: [staffId] });
@@ -217,4 +276,10 @@ export function generateAvailableSlots(input: {
     }
   }
   return [...byStart.values()].sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+}
+
+export function generateAvailableSlotsForRange(
+  input: Omit<Parameters<typeof generateAvailableSlots>[0], "date"> & { from: string; to: string },
+) {
+  return eachManilaDate(input.from, input.to).flatMap((date) => generateAvailableSlots({ ...input, date }));
 }

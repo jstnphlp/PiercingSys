@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { getStaffSession } from "@/lib/auth";
+import { queueBookingEmail } from "@/lib/booking-side-effects";
 import { canTransition, type BookingStatus } from "@/lib/domain";
-import { deliverBookingEmail } from "@/lib/email";
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
 import { validationError } from "@/lib/validation";
 
@@ -61,7 +61,7 @@ export async function PATCH(request: Request, context: RouteContext<"/api/appoin
     const admin = createSupabaseAdminClient();
     const { data: delivery } = admin ? await admin.from("notification_deliveries")
       .insert({ booking_id: id, kind, recipient: customer.email, idempotency_key: key }).select("id").single() : { data: null };
-    if (delivery) await deliverBookingEmail(delivery.id);
+    if (delivery) queueBookingEmail(delivery.id);
   }
   return Response.json({ data: { updated: true, sale } });
 }

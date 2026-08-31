@@ -1,0 +1,2 @@
+-- Local fixture data is created by the checked-in migrations.
+-- Run `npm run prisma:seed` after a reset to create the local owner account.

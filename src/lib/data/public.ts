@@ -3,7 +3,8 @@ import { unstable_cache } from "next/cache";
 import {
   combinedServiceDuration,
   commonQualifiedPiercerIds,
-  generateAvailableSlots,
+  eachManilaDate,
+  generateAvailableSlotsForRange,
   type AvailableSlot,
   type Service,
   type StudioSettings,
@@ -82,10 +83,10 @@ async function loadPublicCatalog() {
     };
   const [settingsResult, servicesResult, staffResult, assignmentsResult] =
     await Promise.all([
-      admin.from("studio_settings").select("*").eq("id", 1).single(),
+      admin.from("studio_settings").select("id,name,location,address,email,phone,instagram_url,business_hours,booking_interval_minutes,minimum_lead_hours,booking_horizon_days,minimum_age,cancellation_policy").eq("id", 1).single(),
       admin
         .from("services")
-        .select("*")
+        .select("id,name,description,body_area,category,duration_minutes,price_cents,min_price_cents,max_price_cents,price_unit,is_active")
         .eq("is_active", true)
         .order("sort_order"),
       admin
@@ -139,15 +140,44 @@ export const getPublicCatalog = unstable_cache(
   { revalidate: 60, tags: ["public-catalog"] },
 );
 
-export async function getAvailableSlots(
+export async function getAvailableSlots(input: {
+  serviceIds: string[];
+  from: string;
+  to?: string;
+  piercerId?: string;
+}): Promise<AvailableSlot[]> {
+  const admin = createSupabaseAdminClient();
+  if (!admin) return [];
+  const from = input.from;
+  const to = input.to ?? input.from;
+  const rpc = await admin.rpc("available_slots", {
+    p_service_ids: input.serviceIds,
+    p_from: from,
+    p_to: to,
+    p_piercer_id: input.piercerId ?? null,
+    p_enforce_booking_window: true,
+  });
+  if (!rpc.error && rpc.data) {
+    return (rpc.data as Array<{ starts_at: string; ends_at: string; piercer_ids: string[] }>).map((row) => ({
+      startsAt: row.starts_at,
+      endsAt: row.ends_at,
+      piercerIds: row.piercer_ids ?? [],
+    }));
+  }
+  return loadAvailableSlotsInProcess(input.serviceIds, from, to, input.piercerId);
+}
+
+async function loadAvailableSlotsInProcess(
   serviceIds: string[],
-  date: string,
+  from: string,
+  to: string,
   piercerId?: string,
 ): Promise<AvailableSlot[]> {
   const admin = createSupabaseAdminClient();
   if (!admin) return [];
-  const dayStart = new Date(`${date}T00:00:00+08:00`);
-  const dayEnd = new Date(dayStart.getTime() + 86_400_000);
+  const rangeStart = new Date(`${from}T00:00:00+08:00`);
+  const rangeEnd = new Date(new Date(`${to}T00:00:00+08:00`).getTime() + 86_400_000);
+  const weekdays = [...new Set(eachManilaDate(from, to).map((date) => new Date(`${date}T12:00:00Z`).getUTCDay()))];
   const [
     settingsResult,
     servicesResult,
@@ -157,49 +187,34 @@ export async function getAvailableSlots(
     bookingsResult,
     closuresResult,
   ] = await Promise.all([
-    admin.from("studio_settings").select("*").eq("id", 1).single(),
-    admin.from("services").select("*").in("id", serviceIds).eq("is_active", true),
+    admin.from("studio_settings").select("id,name,location,address,email,phone,instagram_url,business_hours,booking_interval_minutes,minimum_lead_hours,booking_horizon_days,minimum_age,cancellation_policy").eq("id", 1).single(),
+    admin.from("services").select("id,name,description,body_area,category,duration_minutes,price_cents,min_price_cents,max_price_cents,price_unit,is_active").in("id", serviceIds).eq("is_active", true),
     admin.from("service_staff").select("staff_id,service_id").in("service_id", serviceIds),
-    admin
-      .from("staff_profiles")
-      .select("user_id,active,role")
-      .eq("active", true)
-      .eq("role", "piercer"),
-    admin
-      .from("staff_availability")
-      .select("staff_id,weekday,starts_at,ends_at"),
-    admin
-      .from("bookings")
-      .select("assigned_piercer_id,starts_at,ends_at,status")
-      .lt("starts_at", dayEnd.toISOString())
-      .gt("ends_at", dayStart.toISOString()),
-    admin
-      .from("closures")
-      .select("starts_at,ends_at")
-      .lt("starts_at", dayEnd.toISOString())
-      .gt("ends_at", dayStart.toISOString()),
+    admin.from("staff_profiles").select("user_id,active,role").eq("active", true).eq("role", "piercer"),
+    admin.from("staff_availability").select("staff_id,weekday,starts_at,ends_at").in("weekday", weekdays),
+    admin.from("bookings").select("assigned_piercer_id,starts_at,ends_at,status")
+      .lt("starts_at", rangeEnd.toISOString()).gt("ends_at", rangeStart.toISOString())
+      .not("status", "in", "(cancelled,rejected)"),
+    admin.from("closures").select("starts_at,ends_at")
+      .lt("starts_at", rangeEnd.toISOString()).gt("ends_at", rangeStart.toISOString()),
   ]);
   if (settingsResult.error || servicesResult.error ||
       (servicesResult.data ?? []).length !== serviceIds.length) return [];
   const settings = mapSettings(settingsResult.data as Record<string, unknown>);
-  const services = (servicesResult.data ?? []).map((row) =>
-    mapService(row as Record<string, unknown>),
-  );
+  const services = (servicesResult.data ?? []).map((row) => mapService(row as Record<string, unknown>));
   const assignments = (assignmentsResult.data ?? []).map((row) => ({
     staffId: row.staff_id,
     serviceId: row.service_id,
   }));
-  return generateAvailableSlots({
-    date,
+  return generateAvailableSlotsForRange({
+    from,
+    to,
     serviceDurationMinutes: combinedServiceDuration(services),
     bookingIntervalMinutes: settings.bookingIntervalMinutes,
     minimumLeadHours: settings.minimumLeadHours,
     bookingHorizonDays: settings.bookingHorizonDays,
     businessHours: settings.businessHours,
-    staff: (staffResult.data ?? []).map((row) => ({
-      id: row.user_id,
-      active: row.active,
-    })),
+    staff: (staffResult.data ?? []).map((row) => ({ id: row.user_id, active: row.active })),
     qualifiedStaffIds: commonQualifiedPiercerIds(serviceIds, assignments),
     availability: (availabilityResult.data ?? []).map((row) => ({
       staffId: row.staff_id,

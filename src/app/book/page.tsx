@@ -1,9 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
-import { connection } from "next/server";
 import { AtSign, Clock3, MapPin, MoonStar, Sparkles } from "lucide-react";
 import { getPublicCatalog } from "@/lib/data/public";
-import { manilaDate } from "@/lib/domain";
 import { BookingForm } from "./booking-form";
 import "./booking.css";
 
@@ -11,7 +9,6 @@ export const metadata: Metadata = { title: "Book an appointment" };
 const instagramUrl = "https://www.instagram.com/piercing.corner/";
 
 export default async function BookingPage() {
-  await connection();
   const catalog = await getPublicCatalog();
   return (
     <div className="booking-page">
@@ -58,7 +55,7 @@ export default async function BookingPage() {
               piercers={catalog.piercers}
               assignments={catalog.assignments}
               minimumAge={catalog.studio.minimumAge}
-              minDate={manilaDate(new Date())}
+              bookingHorizonDays={catalog.studio.bookingHorizonDays}
               preview={catalog.reason === "connection"}
             />
           ) : (

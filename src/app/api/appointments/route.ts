@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { getStaffSession } from "@/lib/auth";
-import { deliverBookingEmail } from "@/lib/email";
+import { queueBookingEmail } from "@/lib/booking-side-effects";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { validationError } from "@/lib/validation";
 
@@ -95,7 +95,7 @@ export async function POST(request: Request) {
   const booking = Array.isArray(data) ? data[0] : data;
   if (booking && value.sendConfirmation) {
     const delivery = await supabase!.from("notification_deliveries").select("id").eq("booking_id", booking.id).eq("kind", "confirmation").maybeSingle();
-    if (delivery.data) await deliverBookingEmail(delivery.data.id);
+    if (delivery.data) queueBookingEmail(delivery.data.id);
   }
   return Response.json({ data: booking }, { status: 201 });
 }
