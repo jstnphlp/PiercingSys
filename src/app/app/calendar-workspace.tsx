@@ -4,6 +4,7 @@ import { Check, ChevronLeft, ChevronRight, Clock3, Plus, X } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react";
 import { combinedServiceDuration, manilaDate, type BookingStatus, type Service } from "@/lib/domain";
 import type { CustomerRecord, StaffRecord } from "@/lib/data/staff";
+import { layoutOverlappingAppointments } from "./calendar-layout";
 
 type Station = { id: string; name: string };
 type RawAppointment = {
@@ -113,20 +114,25 @@ function WeekCalendar({ days, anchor, appointments, now, onSelectDate, onSelectA
         <span>{dayNames[weekday(date)]}</span><strong>{date.slice(8)}</strong><small>{formatMonth(date)}</small>
       </button>)}
       <div className="calendar-times">{Array.from({ length: gridEndHour - gridStartHour + 1 }, (_, index) => <span key={index} style={{ top: index * hourHeight }}>{formatHour(gridStartHour + index)}</span>)}</div>
-      {days.map((date) => <div className={`calendar-column ${date === today ? "today" : ""} ${date === anchor ? "selected" : ""}`} key={date}>
-        {appointments.filter((item) => manilaDate(item.starts_at) === date).map((item) => {
-          const start = manilaMinutes(item.starts_at); const end = manilaMinutes(item.ends_at); const piercer = one(item.staff_profiles);
+      {days.map((date) => {
+        const positionedAppointments = layoutOverlappingAppointments(appointments.filter((item) => manilaDate(item.starts_at) === date));
+        return <div className={`calendar-column ${date === today ? "today" : ""} ${date === anchor ? "selected" : ""}`} key={date}>
+        {positionedAppointments.map(({ item, lane, laneCount }) => {
+          const start = manilaMinutes(item.starts_at); const end = manilaMinutes(item.ends_at); const piercer = one(item.staff_profiles); const station = one(item.stations);
+          const accessibleLabel = `${formatTime(item.starts_at)} to ${formatTime(item.ends_at)}, ${clientName(item)}, ${servicesLabel(item)}, ${piercer?.display_name ?? "Unassigned"}, ${station?.name ?? "No station"}`;
           return <button type="button" key={item.id} className={`calendar-event ${item.status}`} style={{
             top: Math.max(0, (start - gridStartHour * 60) * hourHeight / 60),
             height: Math.max(34, (end - start) * hourHeight / 60),
             "--event-color": piercer?.color ?? "#e86f2c",
-          } as React.CSSProperties} onClick={() => onSelectAppointment(item)}>
+            "--event-lane": lane,
+            "--event-lanes": laneCount,
+          } as React.CSSProperties} onClick={() => onSelectAppointment(item)} aria-label={accessibleLabel} title={accessibleLabel}>
             <strong>{formatTime(item.starts_at)} · {clientName(item)}</strong>
-            <small>{servicesLabel(item)}</small>
-            <i>{piercer?.display_name ?? "Unassigned"}</i>
+            <small>{piercer?.display_name ?? "Unassigned"} · {station?.name ?? "No station"}</small>
+            <i>{servicesLabel(item)}</i>
           </button>;
         })}
-      </div>)}
+      </div>;})}
       {showNow && <div className="calendar-now-line" style={{ top: 64 + (currentMinutes - gridStartHour * 60) * hourHeight / 60 }} aria-hidden="true"><span/></div>}
     </div>
   </div>;
