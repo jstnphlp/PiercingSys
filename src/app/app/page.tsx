@@ -192,7 +192,7 @@ function Overview({
 function Clients({ data }: { data: Awaited<ReturnType<typeof getStaffData>> }) {
   return (
     <div className="feature-view">
-      <ClientRecords customers={data.customers} bookings={data.bookings} />
+      <ClientRecords customers={data.customers} />
     </div>
   );
 }

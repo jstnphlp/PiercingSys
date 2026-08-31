@@ -26,6 +26,11 @@ import {
   type Service,
 } from "@/lib/domain";
 import { CalendarGridSkeleton } from "@/app/app/staff-skeletons";
+import {
+  isIncompatibleServiceSelection,
+  qualifiedPiercersForServices,
+  toggleServiceSelection,
+} from "./booking-selection";
 
 type Props = {
   services: Service[];

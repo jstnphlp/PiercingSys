@@ -2,7 +2,7 @@
 
 import { Check, ChevronLeft, ChevronRight, Clock3, Plus, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { combinedServiceDuration, manilaDate, manilaWeekDates, manilaWeekday, shiftManilaDate, type BookingStatus, type Service } from "@/lib/domain";
+import { combinedServiceDuration, manilaDate, shiftManilaDate, type BookingStatus, type Service } from "@/lib/domain";
 import type { CustomerRecord, StaffRecord } from "@/lib/data/staff";
 import { layoutOverlappingAppointments } from "./calendar-layout";
 import { CalendarGridSkeleton } from "./staff-skeletons";
