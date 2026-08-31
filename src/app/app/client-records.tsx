@@ -1,19 +1,84 @@
 "use client";
 
-import { CalendarDays, Mail, Phone, X } from "lucide-react";
+import { CalendarDays, Mail, Phone, Plus, X } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { BookingRecord, CustomerRecord } from "@/lib/data/staff";
 
-export function ClientRecords({ customers }: { customers: CustomerRecord[] }) {
+export function ClientRecords({ customers, canCreate }: { customers: CustomerRecord[]; canCreate: boolean }) {
   const [selected, setSelected] = useState<CustomerRecord | null>(null);
+  const [creating, setCreating] = useState(false);
   return <>
+    {canCreate && <button className="btn btn-primary page-add" type="button" onClick={() => setCreating(true)}><Plus size={16}/> Add client</button>}
     {customers.length ? <section className="panel table-panel"><table><thead><tr><th>Client</th><th>Contact</th><th>Appointments</th><th>Last activity</th></tr></thead><tbody>{customers.map((customer) => {
       return <tr key={customer.id} className="clickable-row" tabIndex={0} onClick={() => setSelected(customer)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelected(customer); } }}>
         <td><strong>{customer.name}</strong></td><td><span>{customer.email}</span><small>{customer.phone}</small></td><td>{customer.appointmentCount ?? 0}</td><td>{formatDate(customer.lastActivityAt ?? customer.createdAt)}</td>
       </tr>;
-    })}</tbody></table></section> : <section className="panel state-card"><CalendarDays/><h2>No clients yet</h2><p>A client record is created automatically with their first confirmed booking.</p></section>}
+    })}</tbody></table></section> : <section className="panel state-card"><CalendarDays/><h2>No clients yet</h2><p>Add a client manually or create one automatically with their first confirmed booking.</p></section>}
+    {creating && <AddClientDialog onClose={() => setCreating(false)}/>}
     {selected && <ClientDialog key={selected.id} customer={selected} onClose={() => setSelected(null)}/>}
   </>;
+}
+
+function AddClientDialog({ onClose }: { onClose: () => void }) {
+  const router = useRouter();
+  const ref = useRef<HTMLDivElement>(null);
+  const firstInput = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null;
+    firstInput.current?.focus();
+    function keydown(event: KeyboardEvent) {
+      if (event.key === "Escape" && !busy) onClose();
+      if (event.key === "Tab" && ref.current) {
+        const nodes = [...ref.current.querySelectorAll<HTMLElement>('button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[href]')];
+        const first = nodes[0], last = nodes.at(-1);
+        if (event.shiftKey && document.activeElement === first && last) { event.preventDefault(); last.focus(); }
+        else if (!event.shiftKey && document.activeElement === last && first) { event.preventDefault(); first.focus(); }
+      }
+    }
+    document.addEventListener("keydown", keydown);
+    return () => { document.removeEventListener("keydown", keydown); previous?.focus(); };
+  }, [busy, onClose]);
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch("/api/customers", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          firstName: form.get("firstName"),
+          lastName: form.get("lastName"),
+          email: form.get("email"),
+          phone: form.get("phone"),
+        }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error?.message ?? "The client could not be saved.");
+      onClose();
+      router.refresh();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "The client could not be saved.");
+      setBusy(false);
+    }
+  }
+  return <div className="operation-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onClose(); }}><div className="operation-dialog client-create-dialog" role="dialog" aria-modal="true" aria-labelledby="add-client-dialog-title" tabIndex={-1} ref={ref}>
+    <header><div><h2 id="add-client-dialog-title">Add client</h2><p>Create a client record without booking an appointment.</p></div><button type="button" aria-label="Close add client form" disabled={busy} onClick={onClose}><X/></button></header>
+    <form className="operation-form" onSubmit={submit}>
+      <div className="form-grid">
+        <label className="field">First name<input ref={firstInput} name="firstName" autoComplete="given-name" maxLength={80} required/></label>
+        <label className="field">Last name<input name="lastName" autoComplete="family-name" maxLength={80} required/></label>
+        <label className="field">Email<input name="email" type="email" autoComplete="email" required/></label>
+        <label className="field">Phone<input name="phone" type="tel" autoComplete="tel" minLength={7} maxLength={30} required/></label>
+      </div>
+      {error && <p className="form-error" role="alert">{error}</p>}
+      <footer><button className="btn btn-secondary" type="button" disabled={busy} onClick={onClose}>Cancel</button><button className="btn btn-primary" disabled={busy}>{busy ? "Saving…" : "Save client"}</button></footer>
+    </form>
+  </div></div>;
 }
 
 function ClientDialog({ customer, onClose }: { customer: CustomerRecord; onClose: () => void }) {
