@@ -130,7 +130,7 @@ function Overview({
           />
         )}
       </div>
-      <div className="two-panel">
+      <div className="two-panel overview-panels">
         <section className="panel">
           <PanelHead
             title="Today’s appointments"
