@@ -164,10 +164,15 @@ const emptyData = {
   paymentMethodTotals: {} as Record<string, number>,
   completedRevenueCents: 0,
   completedSaleCount: 0,
+  reportSaleCount: 0,
+  reportBookingCount: 0,
   error: null as string | null,
 };
 
-export async function getStaffData(scope: StaffDataScope = "all") {
+export async function getStaffData(
+  scope: StaffDataScope = "all",
+  reportRange?: { startUtc: string; endUtc: string },
+) {
   const supabase = await createSupabaseServerClient();
   if (!supabase)
     return {
@@ -271,7 +276,12 @@ export async function getStaffData(scope: StaffDataScope = "all") {
           .limit(100)
       : emptyMany,
     includes("reports")
-      ? supabase.rpc("studio_report")
+      ? reportRange
+        ? supabase.rpc("studio_report", {
+            p_start: reportRange.startUtc,
+            p_end: reportRange.endUtc,
+          })
+        : supabase.rpc("studio_report")
       : emptySingle,
   ]);
   const settingsRow = settingsResult.data;
@@ -394,6 +404,8 @@ export async function getStaffData(scope: StaffDataScope = "all") {
   const report = (reportResult.data ?? null) as {
     revenue_cents?: number;
     completed_sales?: number;
+    sale_count?: number;
+    booking_count?: number;
     booking_statuses?: Record<string, number>;
     methods?: Record<string, number>;
   } | null;
@@ -433,6 +445,8 @@ export async function getStaffData(scope: StaffDataScope = "all") {
     paymentMethodTotals: report?.methods ?? {},
     completedRevenueCents: Number(report?.revenue_cents ?? 0),
     completedSaleCount: Number(report?.completed_sales ?? 0),
+    reportSaleCount: Number(report?.sale_count ?? 0),
+    reportBookingCount: Number(report?.booking_count ?? 0),
     error: queryErrors.length
       ? queryErrors.map((error) => error.message).join(" ")
       : null,

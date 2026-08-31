@@ -6,7 +6,6 @@ import {
   CalendarDays,
   CircleDollarSign,
   Clock3,
-  Download,
   ShoppingBag,
   Sparkles,
   UsersRound,
@@ -23,6 +22,7 @@ import {
   type BookingRecord,
   type StaffDataScope,
 } from "@/lib/data/staff";
+import { resolveReportPeriod, type ReportPeriod, type ReportPreset } from "@/lib/report-period";
 import {
   BookingActions,
   InviteForm,
@@ -38,6 +38,7 @@ import {
 import { CalendarWorkspace } from "./calendar-workspace";
 import { ClientRecords } from "./client-records";
 import { ScheduleSettings } from "./schedule-settings";
+import { ReportsView } from "./reports-view";
 import { StaffViewSkeleton } from "./staff-skeletons";
 import { resolveStaffView, type StaffView } from "./view-config";
 
@@ -46,25 +47,27 @@ export const metadata: Metadata = { title: "Studio operations" };
 export default async function AppPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string }>;
+  searchParams: Promise<{ view?: string; period?: string; from?: string; to?: string }>;
 }) {
   const params = await searchParams;
   const session = await getStaffSession();
   if (!session) redirect("/login");
   const view = resolveStaffView(params.view, session.role);
-  return <Suspense key={view} fallback={<StaffViewSkeleton view={view} label={`Loading ${view}`}/>}><StaffViewData view={view} session={session}/></Suspense>;
+  const reportPeriod = resolveReportPeriod(params);
+  return <Suspense key={view} fallback={<StaffViewSkeleton view={view} label={`Loading ${view}`}/>}><StaffViewData view={view} session={session} reportPeriod={reportPeriod}/></Suspense>;
 }
 
-async function StaffViewData({ view, session }: { view: StaffView; session: NonNullable<Awaited<ReturnType<typeof getStaffSession>>> }) {
+async function StaffViewData({ view, session, reportPeriod }: { view: StaffView; session: NonNullable<Awaited<ReturnType<typeof getStaffSession>>>; reportPeriod: ReportPeriod }) {
   await connection();
-  const data = await getStaffData(view as StaffDataScope);
-  return data.error ? <StateCard title="Data could not be loaded" detail={data.error}/> : viewContent(view, data, session);
+  const data = await getStaffData(view as StaffDataScope, view === "reports" ? reportPeriod : undefined);
+  return data.error ? <StateCard title="Data could not be loaded" detail={data.error}/> : viewContent(view, data, session, reportPeriod);
 }
 
 function viewContent(
   view: StaffView,
   data: Awaited<ReturnType<typeof getStaffData>>,
   session: { role: string; userId: string },
+  reportPeriod: ReportPeriod,
 ) {
   const role = session.role;
   if (view === "overview") return <Overview data={data} role={role} />;
@@ -72,7 +75,7 @@ function viewContent(
     return <CalendarWorkspace role={role} userId={session.userId} services={data.services} staff={data.staff} assignments={data.serviceAssignments} stations={data.stations} customers={data.customers} />;
   if (view === "clients") return <Clients data={data} />;
   if (view === "sales") return <Sales data={data} />;
-  if (view === "reports") return <Reports data={data} />;
+  if (view === "reports") return <Reports data={data} period={reportPeriod} />;
   return <StudioSettings data={data} role={role} />;
 }
 
@@ -287,81 +290,36 @@ function Sales({ data }: { data: Awaited<ReturnType<typeof getStaffData>> }) {
   );
 }
 
-function Reports({ data }: { data: Awaited<ReturnType<typeof getStaffData>> }) {
-  const revenue = data.completedRevenueCents;
-  const completedCount = data.completedSaleCount;
-  const completeBookings = data.bookingStatusCounts.completed ?? 0;
-  const methodTotals = new Map(Object.entries(data.paymentMethodTotals));
-  const today = manilaDate(new Date());
-  const first = `${today.slice(0, 8)}01`;
-  return (
-    <div className="feature-view">
-      <div className="view-actions"><a className="btn btn-secondary" href={`/api/reports/export?from=${first}&to=${today}`}><Download size={16} /> Export CSV</a></div>
-      <div className="metric-grid compact">
-        <Metric
-          icon={<CircleDollarSign />}
-          label="Revenue"
-          value={formatPhp(revenue)}
-          note="Completed sales"
-        />
-        <Metric
-          icon={<ShoppingBag />}
-          label="Transactions"
-          value={String(completedCount)}
-          note="Completed"
-        />
-        <Metric
-          icon={<CalendarDays />}
-          label="Procedures"
-          value={String(completeBookings)}
-          note={`${data.bookingStatusCounts.no_show ?? 0} no-shows`}
-        />
-      </div>
-      <div className="two-panel">
-        <section className="panel">
-          <PanelHead title="Payment methods" detail="Collected amounts" />
-          {methodTotals.size ? (
-            <div className="report-list">
-              {[...methodTotals].map(([method, amount]) => (
-                <div key={method}>
-                  <span>{method.replace("_", " ")}</span>
-                  <strong>{formatPhp(amount)}</strong>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <Empty
-              icon={<CircleDollarSign />}
-              title="No report data"
-              text="Complete a sale to populate this report."
-            />
-          )}
-        </section>
-        <section className="panel">
-          <PanelHead
-            title="Appointment outcomes"
-            detail="Current stored records"
-          />
-          <div className="report-list">
-            {["confirmed", "completed", "cancelled", "no_show", "rejected"].map(
-              (status) => (
-                <div key={status}>
-                  <span>{status.replace("_", " ")}</span>
-                  <strong>
-                    {data.bookingStatusCounts[status] ?? 0}
-                  </strong>
-                </div>
-              ),
-            )}
-          </div>
-        </section>
-      </div>
-      <p className="report-note">
-        Operational reporting only; this is not a tax invoice or official
-        accounting ledger.
-      </p>
-    </div>
-  );
+const reportPresets: Array<{ value: ReportPreset; label: string }> = [
+  { value: "today", label: "Today" },
+  { value: "this-week", label: "This Week" },
+  { value: "this-month", label: "This Month" },
+  { value: "last-month", label: "Last Month" },
+  { value: "custom", label: "Custom Range" },
+];
+
+function Reports({ data, period }: { data: Awaited<ReturnType<typeof getStaffData>>; period: ReportPeriod }) {
+  const presetLinks = reportPresets.map((item) => {
+    const resolved = resolveReportPeriod({ period: item.value });
+    return {
+      ...item,
+      href: item.value === "custom"
+        ? `/app?view=reports&period=custom&from=${period.from}&to=${period.to}`
+        : `/app?view=reports&period=${item.value}&from=${resolved.from}&to=${resolved.to}`,
+    };
+  });
+  return <ReportsView
+    initialPeriod={period}
+    presets={presetLinks}
+    initialSummary={{
+      revenue_cents: data.completedRevenueCents,
+      completed_sales: data.completedSaleCount,
+      sale_count: data.reportSaleCount,
+      booking_count: data.reportBookingCount,
+      booking_statuses: data.bookingStatusCounts,
+      methods: data.paymentMethodTotals,
+    }}
+  />;
 }
 
 function StudioSettings({
