@@ -1,21 +1,16 @@
 import type { Metadata } from "next";
-import Image from "next/image";
-import Link from "next/link";
 import { redirect } from "next/navigation";
+import { connection } from "next/server";
+import { Suspense } from "react";
 import {
-  BarChart3,
   CalendarDays,
   CircleDollarSign,
   Clock3,
   Download,
-  ExternalLink,
-  LayoutDashboard,
-  Settings,
   ShoppingBag,
   Sparkles,
   UsersRound,
 } from "lucide-react";
-import { signOut } from "@/app/login/actions";
 import { getStaffSession } from "@/lib/auth";
 import {
   calculateBalance,
@@ -43,26 +38,10 @@ import {
 import { CalendarWorkspace } from "./calendar-workspace";
 import { ClientRecords } from "./client-records";
 import { ScheduleSettings } from "./schedule-settings";
-import "./dashboard.css";
-import "./dashboard-maximalist.css";
+import { StaffViewSkeleton } from "./staff-skeletons";
+import { resolveStaffView, type StaffView } from "./view-config";
 
 export const metadata: Metadata = { title: "Studio operations" };
-type View =
-  | "overview"
-  | "calendar"
-  | "clients"
-  | "sales"
-  | "reports"
-  | "settings";
-const managementViews: View[] = [
-  "overview",
-  "calendar",
-  "clients",
-  "sales",
-  "reports",
-  "settings",
-];
-const piercerViews: View[] = ["overview", "calendar", "clients"];
 
 export default async function AppPage({
   searchParams,
@@ -70,86 +49,20 @@ export default async function AppPage({
   searchParams: Promise<{ view?: string }>;
 }) {
   const params = await searchParams;
-  const requested = params.view as View | undefined;
-  const requestedScope: StaffDataScope =
-    requested && managementViews.includes(requested) ? requested : "overview";
-  const [session, scopedData] = await Promise.all([
-    getStaffSession(),
-    getStaffData(requestedScope),
-  ]);
+  const session = await getStaffSession();
   if (!session) redirect("/login");
-  const allowed = session.role === "piercer" ? piercerViews : managementViews;
-  const view =
-    requested && allowed.includes(requested) ? requested : "overview";
-  const data = view === requestedScope ? scopedData : await getStaffData(view);
-  return (
-    <div className="staff-shell">
-      <aside className="staff-sidebar">
-        <Link href="/app" className="staff-brand">
-          <Image src="/logo.png" alt="" width={48} height={48} priority />
-          <span>
-            <strong>Piercing Corner</strong>
-            <small>STUDIO DESK</small>
-          </span>
-        </Link>
-        <p className="nav-label">Workspace</p>
-        <nav>
-          {allowed.map((item) => (
-            <Link
-              key={item}
-              href={item === "overview" ? "/app" : `/app?view=${item}`}
-              className={view === item ? "active" : ""}
-            >
-              {navIcon(item)}
-              <span>{item[0].toUpperCase() + item.slice(1)}</span>
-            </Link>
-          ))}
-        </nav>
-        <div className="staff-account">
-          <span className="avatar">{initials(session.displayName)}</span>
-          <span>
-            <strong>{session.displayName}</strong>
-            <small>{session.role}</small>
-          </span>
-          <form action={signOut}>
-            <button>Sign out</button>
-          </form>
-        </div>
-      </aside>
-      <main className="staff-main">
-        <header className="staff-topbar">
-          <div>
-            <p className="eyebrow">
-              PIERCING CORNER · {session.role.toUpperCase()}
-            </p>
-            <h1>
-              {view === "overview"
-                ? "Today at the corner"
-                : view[0].toUpperCase() + view.slice(1)}
-            </h1>
-          </div>
-          <div className="top-actions">
-            <Link href="/book" target="_blank" className="btn btn-secondary">
-              <ExternalLink size={15} /> Public booking
-            </Link>
-          </div>
-        </header>
-        <div className="staff-content">
-          <div className="dashboard-content">
-            {data.error ? (
-              <StateCard title="Data could not be loaded" detail={data.error} />
-            ) : (
-              viewContent(view, data, session)
-            )}
-          </div>
-        </div>
-      </main>
-    </div>
-  );
+  const view = resolveStaffView(params.view, session.role);
+  return <Suspense key={view} fallback={<StaffViewSkeleton view={view} label={`Loading ${view}`}/>}><StaffViewData view={view} session={session}/></Suspense>;
+}
+
+async function StaffViewData({ view, session }: { view: StaffView; session: NonNullable<Awaited<ReturnType<typeof getStaffSession>>> }) {
+  await connection();
+  const data = await getStaffData(view as StaffDataScope);
+  return data.error ? <StateCard title="Data could not be loaded" detail={data.error}/> : viewContent(view, data, session);
 }
 
 function viewContent(
-  view: View,
+  view: StaffView,
   data: Awaited<ReturnType<typeof getStaffData>>,
   session: { role: string; userId: string },
 ) {
@@ -187,13 +100,6 @@ function Overview({
   ).length;
   return (
     <div className="feature-view">
-      <PageIntro
-        title="Daily overview"
-        detail={new Intl.DateTimeFormat("en-PH", {
-          dateStyle: "full",
-          timeZone: "Asia/Manila",
-        }).format(new Date())}
-      />
       <div className="metric-grid">
         <Metric
           icon={<CalendarDays />}
@@ -224,7 +130,7 @@ function Overview({
           />
         )}
       </div>
-      <div className="two-panel">
+      <div className="two-panel overview-panels">
         <section className="panel">
           <PanelHead
             title="Today’s appointments"
@@ -286,11 +192,7 @@ function Overview({
 function Clients({ data }: { data: Awaited<ReturnType<typeof getStaffData>> }) {
   return (
     <div className="feature-view">
-      <PageIntro
-        title="Client records"
-        detail="Contact details and appointment history visible under your role permissions."
-      />
-      <ClientRecords customers={data.customers} />
+      <ClientRecords customers={data.customers} bookings={data.bookings} />
     </div>
   );
 }
@@ -307,10 +209,6 @@ function Sales({ data }: { data: Awaited<ReturnType<typeof getStaffData>> }) {
     );
   return (
     <div className="feature-view">
-      <PageIntro
-        title="Sales & payments"
-        detail="Record deposits and full payments in centavo-based PHP values."
-      />
       <div className="metric-grid compact">
         <Metric
           icon={<CircleDollarSign />}
@@ -398,18 +296,7 @@ function Reports({ data }: { data: Awaited<ReturnType<typeof getStaffData>> }) {
   const first = `${today.slice(0, 8)}01`;
   return (
     <div className="feature-view">
-      <PageIntro
-        title="Operational reports"
-        detail="Stored sales and appointment outcomes, grouped on Manila business dates."
-        action={
-          <a
-            className="btn btn-secondary"
-            href={`/api/reports/export?from=${first}&to=${today}`}
-          >
-            <Download size={16} /> Export CSV
-          </a>
-        }
-      />
+      <div className="view-actions"><a className="btn btn-secondary" href={`/api/reports/export?from=${first}&to=${today}`}><Download size={16} /> Export CSV</a></div>
       <div className="metric-grid compact">
         <Metric
           icon={<CircleDollarSign />}
@@ -486,10 +373,6 @@ function StudioSettings({
 }) {
   return (
     <div className="feature-view">
-      <PageIntro
-        title="Studio settings"
-        detail="Piercing Corner is a single-studio system; there is no workspace or studio switcher."
-      />
       <div className="settings-stack">
         <SettingsForm studio={data.studio} />
         <ScheduleSettings studio={data.studio} staff={data.staff} availability={data.availability} closures={data.closures} />
@@ -658,25 +541,6 @@ function Metric({
     </section>
   );
 }
-function PageIntro({
-  title,
-  detail,
-  action,
-}: {
-  title: string;
-  detail: string;
-  action?: React.ReactNode;
-}) {
-  return (
-    <div className="page-intro">
-      <div>
-        <h2>{title}</h2>
-        <p>{detail}</p>
-      </div>
-      {action}
-    </div>
-  );
-}
 function PanelHead({ title, detail }: { title: string; detail: string }) {
   return (
     <div className="panel-head">
@@ -758,19 +622,4 @@ function initials(value: string) {
       .join("")
       .toUpperCase() || "PC"
   );
-}
-function navIcon(view: View) {
-  const Icon =
-    view === "overview"
-      ? LayoutDashboard
-      : view === "calendar"
-        ? CalendarDays
-        : view === "clients"
-          ? UsersRound
-          : view === "sales"
-            ? ShoppingBag
-            : view === "reports"
-              ? BarChart3
-              : Settings;
-  return <Icon />;
 }

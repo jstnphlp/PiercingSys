@@ -4,6 +4,8 @@ import { Check, ChevronLeft, ChevronRight, Clock3, Plus, X } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react";
 import { combinedServiceDuration, manilaDate, manilaWeekDates, manilaWeekday, shiftManilaDate, type BookingStatus, type Service } from "@/lib/domain";
 import type { CustomerRecord, StaffRecord } from "@/lib/data/staff";
+import { layoutOverlappingAppointments } from "./calendar-layout";
+import { CalendarGridSkeleton } from "./staff-skeletons";
 
 type Station = { id: string; name: string };
 type RawAppointment = {
@@ -29,7 +31,7 @@ type Props = {
 const dayNames = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 const gridStartHour = 8;
 const gridEndHour = 21;
-const hourHeight = 64;
+const hourHeight = 60;
 
 export function CalendarWorkspace(props: Props) {
   const [mode, setMode] = useState<"week" | "day">("week");
@@ -41,7 +43,9 @@ export function CalendarWorkspace(props: Props) {
   const [error, setError] = useState("");
   const [newOpen, setNewOpen] = useState(false);
   const [selected, setSelected] = useState<RawAppointment | null>(null);
-  const days = useMemo(() => mode === "week" ? manilaWeekDates(anchor) : [anchor], [anchor, mode]);
+  const [now, setNow] = useState(() => new Date());
+  const days = useMemo(() => mode === "week" ? weekDates(anchor) : [anchor], [anchor, mode]);
+  const visibleAppointments = useMemo(() => appointments.filter(isVisibleAppointment), [appointments]);
 
   async function load() {
     setLoading(true); setError("");
@@ -60,15 +64,12 @@ export function CalendarWorkspace(props: Props) {
     const timer = window.setTimeout(() => void load(), 0);
     return () => window.clearTimeout(timer);
   }, [anchor, mode, piercerId, stationId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
-  const title = mode === "week"
-    ? `${formatShortDate(days[0])}–${formatShortDate(days.at(-1)!)}`
-    : formatLongDate(anchor);
   return <div className="feature-view calendar-workspace">
-    <div className="page-intro">
-      <div><h2>Studio calendar</h2><p>{title} · Asia/Manila</p></div>
-      <button className="btn btn-primary" onClick={() => setNewOpen(true)}><Plus size={16}/> New appointment</button>
-    </div>
     <div className="calendar-toolbar" aria-label="Calendar controls">
       <button className="btn btn-secondary icon-button" aria-label={`Previous ${mode}`} onClick={() => setAnchor(shiftManilaDate(anchor, mode === "week" ? -7 : -1))}><ChevronLeft/></button>
       <button className="btn btn-secondary" onClick={() => setAnchor(manilaDate(new Date()))}>Today</button>
@@ -83,36 +84,81 @@ export function CalendarWorkspace(props: Props) {
         <button className={mode === "week" ? "active" : ""} aria-pressed={mode === "week"} onClick={() => setMode("week")}>Week</button>
         <button className={mode === "day" ? "active" : ""} aria-pressed={mode === "day"} onClick={() => setMode("day")}>Day</button>
       </div>
+      <button className="btn btn-primary calendar-create-button" onClick={() => setNewOpen(true)}><Plus size={16}/> New appointment</button>
     </div>
     {error && <p className="form-error" role="alert">{error}</p>}
     <section className="panel operation-calendar" aria-busy={loading}>
-      <div className={`calendar-scroll ${mode}`}>
-        <div className="calendar-grid" style={{ "--calendar-days": days.length } as React.CSSProperties}>
-          <div className="calendar-corner"><Clock3/></div>
-          {days.map((date) => <div className={`calendar-date ${date === manilaDate(new Date()) ? "today" : ""}`} key={date}>
-            <span>{dayNames[manilaWeekday(date)]}</span><strong>{date.slice(8)}</strong><small>{formatMonth(date)}</small>
-          </div>)}
-          <div className="calendar-times">{Array.from({ length: gridEndHour - gridStartHour + 1 }, (_, index) => <span key={index} style={{ top: index * hourHeight }}>{formatHour(gridStartHour + index)}</span>)}</div>
-          {days.map((date) => <div className={`calendar-column ${date === manilaDate(new Date()) ? "today" : ""}`} key={date}>
-            {appointments.filter((item) => manilaDate(item.starts_at) === date && !["cancelled", "rejected"].includes(item.status)).map((item) => {
-              const start = manilaMinutes(item.starts_at); const end = manilaMinutes(item.ends_at); const piercer = one(item.staff_profiles);
-              return <button key={item.id} className={`calendar-event ${item.status}`} style={{
-                top: Math.max(0, (start - gridStartHour * 60) * hourHeight / 60),
-                height: Math.max(34, (end - start) * hourHeight / 60),
-                "--event-color": piercer?.color ?? "#e86f2c",
-              } as React.CSSProperties} onClick={() => setSelected(item)}>
-                <strong>{formatTime(item.starts_at)} · {clientName(item)}</strong>
-                <small>{item.booking_services.sort(byPosition).map((service) => service.name).join(" + ")}</small>
-                <i>{piercer?.display_name ?? "Unassigned"}</i>
-              </button>;
-            })}
-          </div>)}
-        </div>
-      </div>
-      {loading && <div className="calendar-loading" role="status">Loading live appointments…</div>}
+      {loading ? <><span className="sr-only" role="status">Loading live appointments</span><div className="calendar-scroll"><CalendarGridSkeleton day={mode === "day"}/></div></>
+        : mode === "week" ? <WeekCalendar days={days} anchor={anchor} appointments={visibleAppointments} now={now} onSelectDate={(date) => { setAnchor(date); setMode("day"); }} onSelectAppointment={setSelected}/>
+          : <DayCalendar date={anchor} appointments={visibleAppointments} onSelectAppointment={setSelected}/>}
     </section>
     {newOpen && <AppointmentFormDialog {...props} initialDate={anchor} onClose={() => setNewOpen(false)} onSaved={async () => { setNewOpen(false); await load(); }}/>} 
     {selected && <AppointmentDialog appointment={selected} {...props} onClose={() => setSelected(null)} onSaved={async () => { setSelected(null); await load(); }}/>} 
+  </div>;
+}
+
+function WeekCalendar({ days, anchor, appointments, now, onSelectDate, onSelectAppointment }: {
+  days: string[];
+  anchor: string;
+  appointments: RawAppointment[];
+  now: Date;
+  onSelectDate: (date: string) => void;
+  onSelectAppointment: (appointment: RawAppointment) => void;
+}) {
+  const today = manilaDate(now);
+  const currentMinutes = manilaMinutes(now.toISOString());
+  const showNow = days.includes(today) && currentMinutes >= gridStartHour * 60 && currentMinutes <= gridEndHour * 60;
+  return <div className="calendar-scroll week">
+    <div className="calendar-grid" style={{ "--calendar-days": days.length } as React.CSSProperties}>
+      <div className="calendar-corner"><Clock3/><span>GMT+8</span></div>
+      {days.map((date) => <button type="button" className={`calendar-date ${date === today ? "today" : ""} ${date === anchor ? "selected" : ""}`} key={date} onClick={() => onSelectDate(date)} aria-label={`Open day view for ${formatLongDate(date)}`}>
+        <span>{dayNames[weekday(date)]}</span><strong>{date.slice(8)}</strong><small>{formatMonth(date)}</small>
+      </button>)}
+      <div className="calendar-times">{Array.from({ length: gridEndHour - gridStartHour + 1 }, (_, index) => <span key={index} style={{ top: index * hourHeight }}>{formatHour(gridStartHour + index)}</span>)}</div>
+      {days.map((date) => {
+        const positionedAppointments = layoutOverlappingAppointments(appointments.filter((item) => manilaDate(item.starts_at) === date));
+        return <div className={`calendar-column ${date === today ? "today" : ""} ${date === anchor ? "selected" : ""}`} key={date}>
+        {positionedAppointments.map(({ item, lane, laneCount }) => {
+          const start = manilaMinutes(item.starts_at); const end = manilaMinutes(item.ends_at); const piercer = one(item.staff_profiles); const station = one(item.stations);
+          const accessibleLabel = `${formatTime(item.starts_at)} to ${formatTime(item.ends_at)}, ${clientName(item)}, ${servicesLabel(item)}, ${piercer?.display_name ?? "Unassigned"}, ${station?.name ?? "No station"}`;
+          return <button type="button" key={item.id} className={`calendar-event ${item.status}`} style={{
+            top: Math.max(0, (start - gridStartHour * 60) * hourHeight / 60),
+            height: Math.max(34, (end - start) * hourHeight / 60),
+            "--event-color": piercer?.color ?? "#e86f2c",
+            "--event-lane": lane,
+            "--event-lanes": laneCount,
+          } as React.CSSProperties} onClick={() => onSelectAppointment(item)} aria-label={accessibleLabel} title={accessibleLabel}>
+            <strong>{formatTime(item.starts_at)} · {clientName(item)}</strong>
+            <small>{piercer?.display_name ?? "Unassigned"} · {station?.name ?? "No station"}</small>
+            <i>{servicesLabel(item)}</i>
+          </button>;
+        })}
+      </div>;})}
+      {showNow && <div className="calendar-now-line" style={{ top: 64 + (currentMinutes - gridStartHour * 60) * hourHeight / 60 }} aria-hidden="true"><span/></div>}
+    </div>
+  </div>;
+}
+
+function DayCalendar({ date, appointments, onSelectAppointment }: { date: string; appointments: RawAppointment[]; onSelectAppointment: (appointment: RawAppointment) => void }) {
+  const items = appointments.filter((item) => manilaDate(item.starts_at) === date).sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime());
+  return <div className="day-calendar">
+    <aside className={`day-date-block ${date === manilaDate(new Date()) ? "today" : ""}`}>
+      <span>{dayNames[weekday(date)]}</span><strong>{date.slice(8)}</strong><small>{formatMonth(date)}</small>
+    </aside>
+    <div className="day-calendar-content">
+      <header className="day-list-heading"><div><h3>{formatLongDate(date)}</h3><p>Daily appointment list · Asia/Manila</p></div><span>{items.length} appointment{items.length === 1 ? "" : "s"}</span></header>
+      {items.length ? <div className="day-appointment-list">{items.map((item) => {
+        const piercer = one(item.staff_profiles); const station = one(item.stations);
+        return <button type="button" className="day-appointment-row" key={item.id} onClick={() => onSelectAppointment(item)} style={{ "--event-color": piercer?.color ?? "#e86f2c" } as React.CSSProperties}>
+          <span className="day-appointment-time"><strong>{formatTime(item.starts_at)}</strong><small>{formatTime(item.ends_at)}</small></span>
+          <span className="client-avatar">{initials(clientName(item))}</span>
+          <span className="day-appointment-client"><strong>{clientName(item)}</strong><small>{servicesLabel(item)} · {item.reference}</small></span>
+          <span className="day-appointment-piercer"><i/><span>{piercer?.display_name ?? "Unassigned"}<small>{station?.name ?? "No station"}</small></span></span>
+          <span className={`status-pill ${item.status}`}>{item.status.replace("_", " ")}</span>
+          <ChevronRight className="day-row-chevron" aria-hidden="true"/>
+        </button>;
+      })}</div> : <div className="day-calendar-empty"><Clock3/><h3>No appointments this day</h3><p>The selected date is clear for the current filters.</p></div>}
+    </div>
   </div>;
 }
 
@@ -201,9 +247,14 @@ export function Dialog({ title, detail, onClose, children }: { title: string; de
 function one<T>(value: T | T[] | null) { return Array.isArray(value) ? value[0] : value; }
 function byPosition(a: { position: number }, b: { position: number }) { return a.position - b.position; }
 function isPiercer(person: StaffRecord) { return person.role === "piercer" && person.active; }
+function isVisibleAppointment(item: RawAppointment) { return !["cancelled", "rejected"].includes(item.status); }
 function clientName(item: RawAppointment) { const customer = one(item.customers); return customer ? `${customer.first_name} ${customer.last_name}` : "Client"; }
+function servicesLabel(item: RawAppointment) { return [...item.booking_services].sort(byPosition).map((service) => service.name).join(" + ") || "No services"; }
+function initials(value: string) { return value.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "PC"; }
+function weekday(date: string) { return new Date(`${date}T12:00:00Z`).getUTCDay(); }
+function shiftDate(date: string, days: number) { const value = new Date(`${date}T12:00:00Z`); value.setUTCDate(value.getUTCDate() + days); return value.toISOString().slice(0, 10); }
+function weekDates(anchor: string) { const start = shiftDate(anchor, -weekday(anchor)); return Array.from({ length: 7 }, (_, index) => shiftDate(start, index)); }
 function formatMonth(date: string) { return new Intl.DateTimeFormat("en-PH", { month: "short", timeZone: "UTC" }).format(new Date(`${date}T12:00:00Z`)); }
-function formatShortDate(date: string) { return new Intl.DateTimeFormat("en-PH", { month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(`${date}T12:00:00Z`)); }
 function formatLongDate(date: string) { return new Intl.DateTimeFormat("en-PH", { weekday: "long", month: "long", day: "numeric", year: "numeric", timeZone: "UTC" }).format(new Date(`${date}T12:00:00Z`)); }
 function formatHour(hour: number) { return new Intl.DateTimeFormat("en-PH", { hour: "numeric", timeZone: "UTC" }).format(new Date(Date.UTC(2020, 0, 1, hour))); }
 function formatTime(value: string) { return new Intl.DateTimeFormat("en-PH", { hour: "numeric", minute: "2-digit", timeZone: "Asia/Manila" }).format(new Date(value)); }

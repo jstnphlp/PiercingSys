@@ -30,4 +30,21 @@ button { color: inherit; }
 .field textarea { min-height: 84px; resize: vertical; }
 .form-error { padding: 11px 13px; border-radius: 10px; background: #f9e6df; color: var(--danger); font-size: 12px; line-height: 1.5; }
 .status-note { color: var(--muted); font-size: 12px; }
+.sr-only { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; margin: -1px !important; overflow: hidden !important; clip: rect(0, 0, 0, 0) !important; white-space: nowrap !important; border: 0 !important; }
+.skeleton { position: relative; display: block; max-width: 100%; overflow: hidden; border-radius: 8px; background: #e5d6bc; color: transparent; isolation: isolate; }
+.skeleton::after { content: ""; position: absolute; inset: 0; transform: translateX(-110%); background: linear-gradient(100deg, transparent 15%, #fff8 42%, #fffbd 50%, #fff8 58%, transparent 85%); animation: skeleton-shimmer 1.8s ease-in-out infinite; }
+@keyframes skeleton-shimmer { to { transform: translateX(110%); } }
+.calendar-grid-skeleton { --skeleton-days: 7; min-width: 1080px; height: 896px; overflow: hidden; background: #fff8e7; }
+.calendar-grid-skeleton.day { --skeleton-days: 1; min-width: 540px; }
+.calendar-skeleton-head { height: 64px; display: grid; grid-template-columns: 72px repeat(var(--skeleton-days), minmax(138px, 1fr)); background: #f0d09d; border-bottom: 1.5px solid #3e2923; }
+.calendar-skeleton-corner { width: 30px; height: 15px; margin: auto; }
+.calendar-skeleton-date { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; border-left: 1px solid #c99572; }
+.calendar-skeleton-body { height: 832px; display: grid; grid-template-columns: 72px repeat(var(--skeleton-days), minmax(138px, 1fr)); }
+.calendar-skeleton-times { display: flex; flex-direction: column; align-items: flex-end; justify-content: space-around; padding: 0 9px; border-right: 1.5px solid #3e2923; background: #f7e4bd; }
+.calendar-skeleton-column { position: relative; border-left: 1px solid #d2a281; background: repeating-linear-gradient(to bottom, transparent 0, transparent 63px, #d6ab8b 64px), #fff9eb; }
+.calendar-grid-skeleton.public { min-width: 890px; height: 783px; }
+.calendar-grid-skeleton.public .calendar-skeleton-head { height: 55px; grid-template-columns: 64px repeat(7, minmax(118px, 1fr)); }
+.calendar-grid-skeleton.public .calendar-skeleton-body { height: 728px; grid-template-columns: 64px repeat(7, minmax(118px, 1fr)); }
+.calendar-grid-skeleton.public .calendar-skeleton-column { background-size: auto 56px; }
+@media (prefers-reduced-motion: reduce) { .skeleton::after { animation: none; display: none; } }
 @media (max-width: 640px) { .pc-brand strong { font-size: 18px; } }
