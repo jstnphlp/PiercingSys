@@ -64,6 +64,34 @@ describe("schedule administration", () => {
     expect((await readJson(await createStation(jsonRequest("http://localhost/api/stations", { name: "Chair 1" })))).status).toBe(201);
   });
 
+  it("creates one dated availability row for every day in an inclusive range", async () => {
+    getStaffSession.mockResolvedValue(sessions.manager);
+    const insert = createQuery({ data: [{ id: "one" }, { id: "two" }, { id: "three" }], error: null });
+    createSupabaseServerClient.mockResolvedValue({ from: vi.fn(() => insert) });
+    const result = await readJson(await createAvailability(jsonRequest("http://localhost/api/availability", {
+      staffId: IDS.piercer,
+      dateFrom: "2026-09-01",
+      dateTo: "2026-09-03",
+      startsAt: "10:00",
+      endsAt: "18:00",
+    })));
+    expect(result.status).toBe(201);
+    expect(insert.insert).toHaveBeenCalledWith([
+      { staff_id: IDS.piercer, weekday: 2, availability_date: "2026-09-01", starts_at: "10:00", ends_at: "18:00" },
+      { staff_id: IDS.piercer, weekday: 3, availability_date: "2026-09-02", starts_at: "10:00", ends_at: "18:00" },
+      { staff_id: IDS.piercer, weekday: 4, availability_date: "2026-09-03", starts_at: "10:00", ends_at: "18:00" },
+    ]);
+  });
+
+  it("rejects inverted or excessively long date ranges", async () => {
+    getStaffSession.mockResolvedValue(sessions.manager);
+    for (const [dateFrom, dateTo] of [["2026-09-03", "2026-09-01"], ["2026-09-01", "2026-12-01"]]) {
+      expect((await readJson(await createAvailability(jsonRequest("http://localhost/api/availability", {
+        staffId: IDS.piercer, dateFrom, dateTo, startsAt: "10:00", endsAt: "18:00",
+      })))).status).toBe(422);
+    }
+  });
+
   it("deletes an availability block", async () => {
     getStaffSession.mockResolvedValue(sessions.owner);
     const mutation = createQuery({ data: { ok: true }, error: null });
