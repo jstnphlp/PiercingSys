@@ -73,7 +73,7 @@ function viewContent(
   if (view === "overview") return <Overview data={data} role={role} />;
   if (view === "calendar")
     return <CalendarWorkspace role={role} userId={session.userId} services={data.services} staff={data.staff} assignments={data.serviceAssignments} stations={data.stations} customers={data.customers} />;
-  if (view === "clients") return <Clients data={data} />;
+  if (view === "clients") return <Clients data={data} role={role} />;
   if (view === "sales") return <Sales data={data} />;
   if (view === "reports") return <Reports data={data} period={reportPeriod} />;
   return <StudioSettings data={data} role={role} />;
@@ -192,10 +192,19 @@ function Overview({
   );
 }
 
-function Clients({ data }: { data: Awaited<ReturnType<typeof getStaffData>> }) {
+function Clients({
+  data,
+  role,
+}: {
+  data: Awaited<ReturnType<typeof getStaffData>>;
+  role: string;
+}) {
   return (
     <div className="feature-view">
-      <ClientRecords customers={data.customers} />
+      <ClientRecords
+        customers={data.customers}
+        canCreate={role === "owner" || role === "manager"}
+      />
     </div>
   );
 }
