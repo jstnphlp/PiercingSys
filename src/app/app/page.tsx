@@ -38,7 +38,7 @@ import {
 import { CalendarWorkspace } from "./calendar-workspace";
 import { ClientRecords } from "./client-records";
 import { ScheduleSettings } from "./schedule-settings";
-import { ReportPeriodControls } from "./report-period-controls";
+import { ReportsView } from "./reports-view";
 import { StaffViewSkeleton } from "./staff-skeletons";
 import { resolveStaffView, type StaffView } from "./view-config";
 
@@ -299,10 +299,6 @@ const reportPresets: Array<{ value: ReportPreset; label: string }> = [
 ];
 
 function Reports({ data, period }: { data: Awaited<ReturnType<typeof getStaffData>>; period: ReportPeriod }) {
-  const revenue = data.completedRevenueCents;
-  const completedCount = data.completedSaleCount;
-  const completeBookings = data.bookingStatusCounts.completed ?? 0;
-  const methodTotals = new Map(Object.entries(data.paymentMethodTotals));
   const presetLinks = reportPresets.map((item) => {
     const resolved = resolveReportPeriod({ period: item.value });
     return {
@@ -312,80 +308,16 @@ function Reports({ data, period }: { data: Awaited<ReturnType<typeof getStaffDat
         : `/app?view=reports&period=${item.value}&from=${resolved.from}&to=${resolved.to}`,
     };
   });
-  return (
-    <div className="feature-view">
-      <ReportPeriodControls
-        key={`${period.preset}-${period.from}-${period.to}`}
-        activePreset={period.preset}
-        from={period.from}
-        to={period.to}
-        presets={presetLinks}
-      />
-      <div className="metric-grid compact">
-        <Metric
-          icon={<CircleDollarSign />}
-          label="Revenue"
-          value={formatPhp(revenue)}
-          note={`${period.from} to ${period.to}`}
-        />
-        <Metric
-          icon={<ShoppingBag />}
-          label="Transactions"
-          value={String(completedCount)}
-          note="Completed"
-        />
-        <Metric
-          icon={<CalendarDays />}
-          label="Procedures"
-          value={String(completeBookings)}
-          note={`${data.bookingStatusCounts.no_show ?? 0} no-shows`}
-        />
-      </div>
-      <div className="two-panel">
-        <section className="panel">
-          <PanelHead title="Payment methods" detail="Collected amounts" />
-          {methodTotals.size ? (
-            <div className="report-list">
-              {[...methodTotals].map(([method, amount]) => (
-                <div key={method}>
-                  <span>{method.replace("_", " ")}</span>
-                  <strong>{formatPhp(amount)}</strong>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <Empty
-              icon={<CircleDollarSign />}
-              title="No report data"
-              text="Complete a sale to populate this report."
-            />
-          )}
-        </section>
-        <section className="panel">
-          <PanelHead
-            title="Appointment outcomes"
-            detail="Selected report period"
-          />
-          <div className="report-list">
-            {["requested", "confirmed", "completed", "cancelled", "no_show", "rejected"].map(
-              (status) => (
-                <div key={status}>
-                  <span>{status.replace("_", " ")}</span>
-                  <strong>
-                    {data.bookingStatusCounts[status] ?? 0}
-                  </strong>
-                </div>
-              ),
-            )}
-          </div>
-        </section>
-      </div>
-      <p className="report-note">
-        Operational reporting only; this is not a tax invoice or official
-        accounting ledger.
-      </p>
-    </div>
-  );
+  return <ReportsView
+    initialPeriod={period}
+    presets={presetLinks}
+    initialSummary={{
+      revenue_cents: data.completedRevenueCents,
+      completed_sales: data.completedSaleCount,
+      booking_statuses: data.bookingStatusCounts,
+      methods: data.paymentMethodTotals,
+    }}
+  />;
 }
 
 function StudioSettings({
