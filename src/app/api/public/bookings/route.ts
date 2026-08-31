@@ -26,7 +26,7 @@ export async function POST(request: Request) {
   });
   if (!parsed.success) return Response.json(validationError(parsed.error), { status: 422 });
   const input = parsed.data;
-  const { data, error } = await admin.rpc("create_public_booking", {
+  const { data, error } = await admin.rpc("create_public_booking_with_result", {
     p_service_ids: input.serviceIds,
     p_starts_at: input.startsAt,
     p_preferred_piercer_id: input.preferredPiercerId ?? null,
@@ -44,10 +44,12 @@ export async function POST(request: Request) {
   }
   const booking = Array.isArray(data) ? data[0] : data;
   if (!booking) return Response.json({ error: { code: "BOOKING_FAILED", message: "The booking was not created." } }, { status: 500 });
-  const photoPayload = photo
-    ? { bytes: await photo.arrayBuffer(), type: photo.type, size: photo.size }
-    : null;
-  const { data: delivery } = await admin.from("notification_deliveries").select("id").eq("booking_id", booking.id).eq("kind", "confirmation").maybeSingle();
-  queueBookingSideEffects({ bookingId: booking.id, deliveryId: delivery?.id, photo: photoPayload });
+  if (booking.was_created !== false) {
+    const photoPayload = photo
+      ? { bytes: await photo.arrayBuffer(), type: photo.type, size: photo.size }
+      : null;
+    const { data: delivery } = await admin.from("notification_deliveries").select("id").eq("booking_id", booking.id).eq("kind", "confirmation").maybeSingle();
+    queueBookingSideEffects({ bookingId: booking.id, deliveryId: delivery?.id, photo: photoPayload });
+  }
   return Response.json({ data: { id: booking.id, reference: booking.reference, status: "confirmed", startsAt: booking.starts_at, endsAt: booking.ends_at } }, { status: 201 });
 }

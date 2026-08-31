@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(53);
+select plan(55);
 
 select has_table('public', 'studio_settings', 'singleton studio settings exists');
 select has_table('public', 'staff_profiles', 'staff profiles replace memberships');
@@ -8,6 +8,7 @@ select hasnt_table('public', 'shops', 'multi-tenant shops are removed');
 select results_eq('select name from public.studio_settings where id = 1', array['Piercing Corner'::text], 'studio is seeded without fictitious details');
 select col_is_pk('public', 'studio_settings', 'id', 'studio settings is a singleton primary key');
 select has_function('public', 'create_public_booking', array['uuid[]','timestamp with time zone','uuid','text','text','text','text','text'], 'atomic multi-service public booking exists');
+select has_function('public', 'create_public_booking_with_result', array['uuid[]','timestamp with time zone','uuid','text','text','text','text','text','text'], 'public booking reports whether an idempotent request created the booking');
 select has_function('public', 'create_staff_booking', array['uuid[]','timestamp with time zone','uuid','uuid','uuid','text','text','text','text','text','boolean'], 'atomic staff booking exists');
 select has_function('public', 'reschedule_booking', array['uuid','timestamp with time zone','uuid','uuid'], 'schedule-aware rescheduling exists');
 select has_function('public', 'complete_booking_and_create_sale', array['uuid'], 'appointment completion creates a sale atomically');
@@ -114,8 +115,8 @@ select is(
   'walk-in sale is stored as completed'
 );
 
-select lives_ok(
-  $$select public.create_public_booking(
+select results_eq(
+  $$select was_created from public.create_public_booking_with_result(
     array['20000000-0000-0000-0000-000000000001'::uuid],
     (select s.starts_at from public.available_slots(
       array['20000000-0000-0000-0000-000000000001'::uuid],
@@ -128,23 +129,32 @@ select lives_ok(
     'Idem', 'Client', 'idempotent@example.com', '09171111111', '',
     'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
   )$$,
-  'public booking accepts an idempotency key'
+  array[true],
+  'the first idempotent public booking reports that it was created'
 );
-select is(
-  (select count(*) from public.create_public_booking(
+select results_eq(
+  $$select was_created from public.create_public_booking_with_result(
     array['20000000-0000-0000-0000-000000000001'::uuid],
     now() + interval '3 days',
     '10000000-0000-0000-0000-000000000002',
     'Idem', 'Client', 'idempotent@example.com', '09171111111', '',
     'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
-  )),
-  1::bigint,
-  'repeating the same idempotency key does not create a second booking'
+  )$$,
+  array[false],
+  'repeating the same idempotency key reports a replay'
 );
 select is(
   (select count(*) from public.bookings b join public.customers c on c.id = b.customer_id where c.email = 'idempotent@example.com'),
   1::bigint,
   'idempotent retries share one booking row'
+);
+select is(
+  (select count(*) from public.notification_deliveries d
+    join public.bookings b on b.id = d.booking_id
+    join public.customers c on c.id = b.customer_id
+   where c.email = 'idempotent@example.com' and d.kind = 'confirmation'),
+  1::bigint,
+  'idempotent retries share one confirmation delivery'
 );
 
 select throws_ok(

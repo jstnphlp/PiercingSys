@@ -55,6 +55,7 @@ export default async function BookingPage() {
               piercers={catalog.piercers}
               assignments={catalog.assignments}
               minimumAge={catalog.studio.minimumAge}
+              bookingHorizonDays={catalog.studio.bookingHorizonDays}
               preview={catalog.reason === "connection"}
             />
           ) : (

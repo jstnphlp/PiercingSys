@@ -189,6 +189,16 @@ export function manilaWeekDates(anchor: string) {
   return Array.from({ length: 7 }, (_, index) => shiftManilaDate(sunday, index));
 }
 
+export function canNavigateToNextBookingWeek(
+  anchor: string,
+  today: string,
+  bookingHorizonDays: number,
+) {
+  const nextWeekStart = manilaWeekDates(shiftManilaDate(anchor, 7))[0];
+  const bookingHorizonDate = shiftManilaDate(today, bookingHorizonDays);
+  return nextWeekStart <= bookingHorizonDate;
+}
+
 export function manilaDayBounds(date: Date | string = new Date()) {
   const day = manilaDate(date);
   const start = manilaDateTime(day, "00:00");

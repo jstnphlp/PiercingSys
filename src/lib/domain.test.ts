@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   calculateBalance,
+  canNavigateToNextBookingWeek,
   canTransition,
   combinedServiceDuration,
   combinedServicePriceBounds,
@@ -171,6 +172,14 @@ describe("Manila business dates", () => {
       "2026-09-04",
       "2026-09-05",
     ]);
+  });
+
+  it("allows the final week that overlaps the booking horizon", () => {
+    expect(canNavigateToNextBookingWeek("2026-10-19", "2026-08-31", 60)).toBe(true);
+  });
+
+  it("blocks the first week entirely beyond the booking horizon", () => {
+    expect(canNavigateToNextBookingWeek("2026-10-26", "2026-08-31", 60)).toBe(false);
   });
 });
 
