@@ -65,6 +65,13 @@ export async function GET(request: Request) {
     return Response.json({ error: { code: "REPORT_FAILED", message: error instanceof Error ? error.message : "Report data could not be loaded." } }, { status: 400 });
   }
 
+  if (sales.length === 0) {
+    return Response.json(
+      { error: { code: "NO_REPORT_DATA", message: "There are no sales to export for this period." } },
+      { status: 422 },
+    );
+  }
+
   const adjustedCents = (sale: ExportSale) => (sale.sale_adjustments ?? []).reduce((sum, item) => sum + item.amount_cents, 0);
   const paidCents = (sale: ExportSale) => (sale.payments ?? []).reduce((sum, item) => sum + item.amount_cents, 0);
   const completed = sales.filter((sale) => sale.status === "completed");

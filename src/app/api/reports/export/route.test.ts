@@ -92,16 +92,26 @@ describe("GET /api/reports/export", () => {
     expect(sales.getCell("E3").value).toBe("void");
   });
 
-  it("keeps a filterable Sales header for an empty period", async () => {
+  it("rejects exports for a period with no records", async () => {
     getStaffSession.mockResolvedValue(sessions.manager);
     createSupabaseServerClient.mockResolvedValue({ from: vi.fn(() => createQuery({ data: [], error: null })) });
     const response = await GET(new Request("http://localhost/api/reports/export?from=2026-09-01&to=2026-09-01"));
-    const { workbook, archive } = await loadWorkbook(response);
-    expect(workbook.getWorksheet("Summary")!.getCell("B4").value).toBe(0);
-    const sales = workbook.getWorksheet("Sales")!;
-    expect(sales.getRow(1).values).toContain("Business date/time");
-    expect(sales.getTable("SalesReport")).toBeTruthy();
-    expect(await archive.file("xl/tables/table1.xml")!.async("string")).toContain('ref="A1:K2"');
-    expect(sales.autoFilter).toBeUndefined();
+    const { status, body } = await readJson(response);
+    expect(status).toBe(422);
+    expect(body).toMatchObject({ error: { code: "NO_REPORT_DATA" } });
+  });
+
+  it("rejects an appointment-only period with no sales", async () => {
+    getStaffSession.mockResolvedValue(sessions.manager);
+    createSupabaseServerClient.mockResolvedValue({
+      from: vi.fn((table: string) => createQuery({
+        data: table === "bookings" ? [{ status: "confirmed" }] : [],
+        error: null,
+      })),
+    });
+    const response = await GET(new Request("http://localhost/api/reports/export?from=2026-09-01&to=2026-09-01"));
+    const { status, body } = await readJson(response);
+    expect(status).toBe(422);
+    expect(body).toMatchObject({ error: { code: "NO_REPORT_DATA", message: "There are no sales to export for this period." } });
   });
 });

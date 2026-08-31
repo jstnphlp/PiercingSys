@@ -164,6 +164,8 @@ const emptyData = {
   paymentMethodTotals: {} as Record<string, number>,
   completedRevenueCents: 0,
   completedSaleCount: 0,
+  reportSaleCount: 0,
+  reportBookingCount: 0,
   error: null as string | null,
 };
 
@@ -402,6 +404,8 @@ export async function getStaffData(
   const report = (reportResult.data ?? null) as {
     revenue_cents?: number;
     completed_sales?: number;
+    sale_count?: number;
+    booking_count?: number;
     booking_statuses?: Record<string, number>;
     methods?: Record<string, number>;
   } | null;
@@ -441,6 +445,8 @@ export async function getStaffData(
     paymentMethodTotals: report?.methods ?? {},
     completedRevenueCents: Number(report?.revenue_cents ?? 0),
     completedSaleCount: Number(report?.completed_sales ?? 0),
+    reportSaleCount: Number(report?.sale_count ?? 0),
+    reportBookingCount: Number(report?.booking_count ?? 0),
     error: queryErrors.length
       ? queryErrors.map((error) => error.message).join(" ")
       : null,

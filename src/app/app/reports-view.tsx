@@ -10,6 +10,8 @@ import { ReportPeriodControls, type PresetLink } from "./report-period-controls"
 export type ReportSummary = {
   revenue_cents?: number;
   completed_sales?: number;
+  sale_count?: number;
+  booking_count?: number;
   booking_statuses?: Record<string, number>;
   methods?: Record<string, number>;
 };
@@ -68,6 +70,7 @@ export function ReportsView({ initialPeriod, initialSummary, presets }: {
     if (requestId.current !== currentRequest) return;
     setPending(false);
     if (queryError) {
+      setSummary({ sale_count: 0, booking_count: 0 });
       setError(queryError.message);
       return;
     }
@@ -80,6 +83,7 @@ export function ReportsView({ initialPeriod, initialSummary, presets }: {
   const completedCount = Number(summary.completed_sales ?? 0);
   const bookingStatuses = summary.booking_statuses ?? {};
   const methodTotals = Object.entries(summary.methods ?? {});
+  const canExport = !pending && Number(summary.sale_count ?? 0) > 0;
 
   return (
     <div className="feature-view">
@@ -89,6 +93,7 @@ export function ReportsView({ initialPeriod, initialSummary, presets }: {
         to={period.to}
         presets={presets}
         pending={pending}
+        canExport={canExport}
         onSelect={(selection) => void selectPeriod(selection)}
       />
       {error && <p className="form-error" role="alert">{error}</p>}

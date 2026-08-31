@@ -420,6 +420,16 @@ body:has(.staff-shell)::-webkit-scrollbar {
   white-space: nowrap;
 }
 
+.report-controls .report-export:disabled {
+  border-color: #9a7c6d;
+  background: #dfd1b9;
+  color: #8b7469;
+  box-shadow: 2px 2px 0 #9a7c6d;
+  cursor: not-allowed;
+  opacity: .72;
+  transform: none;
+}
+
 @media (max-width: 1180px) {
   .report-controls { grid-template-columns: 1fr auto; }
   .report-presets { grid-column: 1 / -1; }

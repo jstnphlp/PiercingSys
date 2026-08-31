@@ -314,6 +314,8 @@ function Reports({ data, period }: { data: Awaited<ReturnType<typeof getStaffDat
     initialSummary={{
       revenue_cents: data.completedRevenueCents,
       completed_sales: data.completedSaleCount,
+      sale_count: data.reportSaleCount,
+      booking_count: data.reportBookingCount,
       booking_statuses: data.bookingStatusCounts,
       methods: data.paymentMethodTotals,
     }}

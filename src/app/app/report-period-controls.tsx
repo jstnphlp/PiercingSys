@@ -16,6 +16,7 @@ export function ReportPeriodControls({
   to,
   presets,
   pending,
+  canExport,
   onSelect,
 }: {
   activePreset: ReportPreset;
@@ -23,6 +24,7 @@ export function ReportPeriodControls({
   to: string;
   presets: PresetLink[];
   pending: boolean;
+  canExport: boolean;
   onSelect: (selection: { preset: ReportPreset; from: string; to: string; href: string }) => void;
 }) {
   const [customFrom, setCustomFrom] = useState(from);
@@ -66,9 +68,15 @@ export function ReportPeriodControls({
         <label>To<input required type="date" name="to" value={customTo} onChange={(event) => setCustomTo(event.target.value)} /></label>
         <button className="btn btn-secondary" type="submit" disabled={pending}>Apply</button>
       </form>
-      <a className="btn btn-secondary report-export" href={`/api/reports/export?from=${from}&to=${to}`}>
-        <Download size={16} /> Export Excel
-      </a>
+      {canExport ? (
+        <a className="btn btn-secondary report-export" href={`/api/reports/export?from=${from}&to=${to}`}>
+          <Download size={16} /> Export Excel
+        </a>
+      ) : (
+        <button className="btn btn-secondary report-export" type="button" disabled title="No sales in this period">
+          <Download size={16} /> Export Excel
+        </button>
+      )}
     </section>
   );
 }
