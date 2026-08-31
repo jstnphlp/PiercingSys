@@ -2,7 +2,7 @@
 
 import { Check, ChevronLeft, ChevronRight, Clock3, Plus, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { combinedServiceDuration, manilaDate, type BookingStatus, type Service } from "@/lib/domain";
+import { combinedServiceDuration, manilaDate, manilaWeekDates, manilaWeekday, shiftManilaDate, type BookingStatus, type Service } from "@/lib/domain";
 import type { CustomerRecord, StaffRecord } from "@/lib/data/staff";
 
 type Station = { id: string; name: string };
@@ -41,7 +41,7 @@ export function CalendarWorkspace(props: Props) {
   const [error, setError] = useState("");
   const [newOpen, setNewOpen] = useState(false);
   const [selected, setSelected] = useState<RawAppointment | null>(null);
-  const days = useMemo(() => mode === "week" ? weekDates(anchor) : [anchor], [anchor, mode]);
+  const days = useMemo(() => mode === "week" ? manilaWeekDates(anchor) : [anchor], [anchor, mode]);
 
   async function load() {
     setLoading(true); setError("");
@@ -70,9 +70,9 @@ export function CalendarWorkspace(props: Props) {
       <button className="btn btn-primary" onClick={() => setNewOpen(true)}><Plus size={16}/> New appointment</button>
     </div>
     <div className="calendar-toolbar" aria-label="Calendar controls">
-      <button className="btn btn-secondary icon-button" aria-label={`Previous ${mode}`} onClick={() => setAnchor(shiftDate(anchor, mode === "week" ? -7 : -1))}><ChevronLeft/></button>
+      <button className="btn btn-secondary icon-button" aria-label={`Previous ${mode}`} onClick={() => setAnchor(shiftManilaDate(anchor, mode === "week" ? -7 : -1))}><ChevronLeft/></button>
       <button className="btn btn-secondary" onClick={() => setAnchor(manilaDate(new Date()))}>Today</button>
-      <button className="btn btn-secondary icon-button" aria-label={`Next ${mode}`} onClick={() => setAnchor(shiftDate(anchor, mode === "week" ? 7 : 1))}><ChevronRight/></button>
+      <button className="btn btn-secondary icon-button" aria-label={`Next ${mode}`} onClick={() => setAnchor(shiftManilaDate(anchor, mode === "week" ? 7 : 1))}><ChevronRight/></button>
       <select aria-label="Filter by piercer" value={piercerId} disabled={props.role === "piercer"} onChange={(event) => setPiercerId(event.target.value)}>
         <option value="">All piercers</option>{props.staff.filter(isPiercer).map((person) => <option key={person.id} value={person.id}>{person.displayName}</option>)}
       </select>
@@ -90,7 +90,7 @@ export function CalendarWorkspace(props: Props) {
         <div className="calendar-grid" style={{ "--calendar-days": days.length } as React.CSSProperties}>
           <div className="calendar-corner"><Clock3/></div>
           {days.map((date) => <div className={`calendar-date ${date === manilaDate(new Date()) ? "today" : ""}`} key={date}>
-            <span>{dayNames[weekday(date)]}</span><strong>{date.slice(8)}</strong><small>{formatMonth(date)}</small>
+            <span>{dayNames[manilaWeekday(date)]}</span><strong>{date.slice(8)}</strong><small>{formatMonth(date)}</small>
           </div>)}
           <div className="calendar-times">{Array.from({ length: gridEndHour - gridStartHour + 1 }, (_, index) => <span key={index} style={{ top: index * hourHeight }}>{formatHour(gridStartHour + index)}</span>)}</div>
           {days.map((date) => <div className={`calendar-column ${date === manilaDate(new Date()) ? "today" : ""}`} key={date}>
@@ -202,9 +202,6 @@ function one<T>(value: T | T[] | null) { return Array.isArray(value) ? value[0] 
 function byPosition(a: { position: number }, b: { position: number }) { return a.position - b.position; }
 function isPiercer(person: StaffRecord) { return person.role === "piercer" && person.active; }
 function clientName(item: RawAppointment) { const customer = one(item.customers); return customer ? `${customer.first_name} ${customer.last_name}` : "Client"; }
-function weekday(date: string) { return new Date(`${date}T12:00:00Z`).getUTCDay(); }
-function shiftDate(date: string, days: number) { const value = new Date(`${date}T12:00:00Z`); value.setUTCDate(value.getUTCDate() + days); return value.toISOString().slice(0, 10); }
-function weekDates(anchor: string) { const start = shiftDate(anchor, -weekday(anchor)); return Array.from({ length: 7 }, (_, index) => shiftDate(start, index)); }
 function formatMonth(date: string) { return new Intl.DateTimeFormat("en-PH", { month: "short", timeZone: "UTC" }).format(new Date(`${date}T12:00:00Z`)); }
 function formatShortDate(date: string) { return new Intl.DateTimeFormat("en-PH", { month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(`${date}T12:00:00Z`)); }
 function formatLongDate(date: string) { return new Intl.DateTimeFormat("en-PH", { weekday: "long", month: "long", day: "numeric", year: "numeric", timeZone: "UTC" }).format(new Date(`${date}T12:00:00Z`)); }

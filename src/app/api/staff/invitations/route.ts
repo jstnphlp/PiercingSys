@@ -14,30 +14,26 @@ export async function POST(request: Request) {
   const admin = createSupabaseAdminClient();
   if (!admin) return Response.json({ error: { code: "NOT_CONFIGURED", message: "Server credentials are missing." } }, { status: 503 });
   const { data, error } = await admin.auth.admin.inviteUserByEmail(parsed.data.email);
-  let invitedUser = data.user;
-  if (!invitedUser && error) {
+  let invitedUserId = data?.user?.id ?? null;
+  if (!invitedUserId && error) {
     // Supabase rejects invitations for an email that already has an Auth
     // account. Reuse that account so the owner can still add it to the team.
-    const alreadyRegistered = /already registered|already exists|user.+exist/i.test(error.message);
+    const alreadyRegistered = /already (been )?registered|already exists|user.+exist/i.test(error.message);
     if (alreadyRegistered) {
-      for (let page = 1; !invitedUser; page += 1) {
-        const users = await admin.auth.admin.listUsers({ page, perPage: 100 });
-        if (users.error) break;
-        invitedUser = users.data.users.find((user) => user.email?.toLowerCase() === parsed.data.email.toLowerCase()) ?? null;
-        if (users.data.users.length < 100) break;
-      }
+      const existing = await admin.rpc("auth_user_id_by_email", { p_email: parsed.data.email });
+      if (typeof existing.data === "string") invitedUserId = existing.data;
     }
-    if (!invitedUser) {
+    if (!invitedUserId) {
       const rateLimited = /rate limit|too many requests|email.+limit/i.test(error.message);
       return Response.json({ error: { code: rateLimited ? "INVITE_RATE_LIMITED" : "INVITE_FAILED", message: rateLimited
         ? "Supabase email rate limit exceeded. Wait for the quota to reset or configure a custom SMTP provider in Authentication → SMTP."
         : error.message || "Supabase could not send the invitation. Check Authentication → SMTP settings and try again." } }, { status: rateLimited ? 429 : 503 });
     }
   }
-  if (!invitedUser) return Response.json({ error: { code: "INVITE_FAILED", message: "Supabase could not create the invited user." } }, { status: 503 });
-  const profile = await admin.from("staff_profiles").upsert({ user_id: invitedUser.id, display_name: parsed.data.displayName, role: parsed.data.role, active: true });
+  if (!invitedUserId) return Response.json({ error: { code: "INVITE_FAILED", message: "Supabase could not create the invited user." } }, { status: 503 });
+  const profile = await admin.from("staff_profiles").upsert({ user_id: invitedUserId, display_name: parsed.data.displayName, role: parsed.data.role, active: true });
   if (profile.error) return Response.json({ error: { code: "PROFILE_FAILED", message: profile.error.message } }, { status: 400 });
-  await admin.from("audit_events").insert({ actor_id: session.userId, event_type: "staff.invited", entity_type: "staff_profile", entity_id: invitedUser.id, metadata: { role: parsed.data.role } });
+  await admin.from("audit_events").insert({ actor_id: session.userId, event_type: "staff.invited", entity_type: "staff_profile", entity_id: invitedUserId, metadata: { role: parsed.data.role } });
   revalidateTag("public-catalog", { expire: 0 });
-  return Response.json({ data: { userId: invitedUser.id, invited: Boolean(data.user) } }, { status: 201 });
+  return Response.json({ data: { userId: invitedUserId, invited: Boolean(data?.user) } }, { status: 201 });
 }

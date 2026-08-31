@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { connection } from "next/server";
 import {
   BarChart3,
   CalendarDays,
@@ -70,7 +69,6 @@ export default async function AppPage({
 }: {
   searchParams: Promise<{ view?: string }>;
 }) {
-  await connection();
   const params = await searchParams;
   const requested = params.view as View | undefined;
   const requestedScope: StaffDataScope =
@@ -214,7 +212,7 @@ function Overview({
         <Metric
           icon={<UsersRound />}
           label="Clients"
-          value={String(data.customers.length)}
+          value={String(data.customerCount)}
           note="Stored records"
         />
         {role !== "piercer" && (
@@ -292,7 +290,7 @@ function Clients({ data }: { data: Awaited<ReturnType<typeof getStaffData>> }) {
         title="Client records"
         detail="Contact details and appointment history visible under your role permissions."
       />
-      <ClientRecords customers={data.customers} bookings={data.bookings} />
+      <ClientRecords customers={data.customers} />
     </div>
   );
 }
@@ -392,24 +390,10 @@ function Sales({ data }: { data: Awaited<ReturnType<typeof getStaffData>> }) {
 }
 
 function Reports({ data }: { data: Awaited<ReturnType<typeof getStaffData>> }) {
-  const completed = data.sales.filter((item) => item.status === "completed");
-  const revenue = completed.reduce(
-    (sum, item) => sum + item.totalCents - item.adjustmentCents,
-    0,
-  );
-  const completeBookings = data.bookings.filter(
-    (item) => item.status === "completed",
-  ).length;
-  const methodTotals = new Map<string, number>();
-  data.sales.forEach((sale) =>
-    sale.methods.forEach((method) =>
-      methodTotals.set(
-        method,
-        (methodTotals.get(method) ?? 0) +
-          sale.paidCents / Math.max(1, sale.methods.length),
-      ),
-    ),
-  );
+  const revenue = data.completedRevenueCents;
+  const completedCount = data.completedSaleCount;
+  const completeBookings = data.bookingStatusCounts.completed ?? 0;
+  const methodTotals = new Map(Object.entries(data.paymentMethodTotals));
   const today = manilaDate(new Date());
   const first = `${today.slice(0, 8)}01`;
   return (
@@ -436,14 +420,14 @@ function Reports({ data }: { data: Awaited<ReturnType<typeof getStaffData>> }) {
         <Metric
           icon={<ShoppingBag />}
           label="Transactions"
-          value={String(completed.length)}
+          value={String(completedCount)}
           note="Completed"
         />
         <Metric
           icon={<CalendarDays />}
           label="Procedures"
           value={String(completeBookings)}
-          note={`${data.bookings.filter((item) => item.status === "no_show").length} no-shows`}
+          note={`${data.bookingStatusCounts.no_show ?? 0} no-shows`}
         />
       </div>
       <div className="two-panel">
@@ -477,10 +461,7 @@ function Reports({ data }: { data: Awaited<ReturnType<typeof getStaffData>> }) {
                 <div key={status}>
                   <span>{status.replace("_", " ")}</span>
                   <strong>
-                    {
-                      data.bookings.filter((item) => item.status === status)
-                        .length
-                    }
+                    {data.bookingStatusCounts[status] ?? 0}
                   </strong>
                 </div>
               ),

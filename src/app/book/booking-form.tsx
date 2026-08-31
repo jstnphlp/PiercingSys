@@ -17,6 +17,9 @@ import { useMemo, useState } from "react";
 import {
   combinedServiceDuration,
   formatServicePrice,
+  manilaDate,
+  manilaWeekDates,
+  shiftManilaDate,
   type AvailableSlot,
   type PublicBookingResult,
   type Service,
@@ -27,7 +30,6 @@ type Props = {
   piercers: Array<{ id: string; name: string }>;
   assignments: Array<{ serviceId: string; staffId: string }>;
   minimumAge: number;
-  minDate: string;
   preview?: boolean;
 };
 type ApiError = { error?: { message?: string } };
@@ -37,9 +39,9 @@ export function BookingForm({
   piercers,
   assignments,
   minimumAge,
-  minDate,
   preview = false,
 }: Props) {
+  const minDate = manilaDate(new Date());
   const displayServices = useMemo<Service[]>(
     () =>
       services.length || !preview
@@ -73,6 +75,7 @@ export function BookingForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<PublicBookingResult | null>(null);
+  const [idempotencyKey] = useState(() => crypto.randomUUID());
   const selectedServices = useMemo(
     () => serviceIds
       .map((id) => displayServices.find((item) => item.id === id))
@@ -90,7 +93,7 @@ export function BookingForm({
     service.category === serviceCategory &&
     `${service.name} ${service.description ?? ""} ${service.bodyArea ?? ""}`.toLowerCase().includes(serviceSearch.trim().toLowerCase()),
   ), [displayServices, serviceCategory, serviceSearch]);
-  const visibleDates = useMemo(() => weekDates(date), [date]);
+  const visibleDates = useMemo(() => manilaWeekDates(date), [date]);
 
   async function loadSlots(
     nextServiceIds = serviceIds,
@@ -98,7 +101,7 @@ export function BookingForm({
     nextPiercerId = piercerId,
   ) {
     if (!nextServiceIds.length || !nextDate) return;
-    const dates = weekDates(nextDate);
+    const dates = manilaWeekDates(nextDate);
     setLoadingSlots(true);
     setSlot(null);
     setError("");
@@ -118,16 +121,13 @@ export function BookingForm({
       return;
     }
     try {
-      const results = await Promise.all(dates.map(async (calendarDate) => {
-        const query = new URLSearchParams({ date: calendarDate });
-        nextServiceIds.forEach((id) => query.append("serviceIds", id));
-        if (nextPiercerId) query.set("piercerId", nextPiercerId);
-        const response = await fetch(`/api/public/availability?${query}`);
-        const body = await response.json();
-        if (!response.ok) throw new Error(body.error?.message);
-        return body.data as AvailableSlot[];
-      }));
-      setSlots(results.flat());
+      const query = new URLSearchParams({ from: dates[0], to: dates.at(-1)! });
+      nextServiceIds.forEach((id) => query.append("serviceIds", id));
+      if (nextPiercerId) query.set("piercerId", nextPiercerId);
+      const response = await fetch(`/api/public/availability?${query}`);
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error?.message);
+      setSlots((body.data as AvailableSlot[]) ?? []);
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -158,6 +158,7 @@ export function BookingForm({
     serviceIds.forEach((id) => form.append("serviceIds", id));
     form.set("startsAt", slot.startsAt);
     form.set("preferredPiercerId", piercerId);
+    form.set("idempotencyKey", idempotencyKey);
     const response = await fetch("/api/public/bookings", {
       method: "POST",
       body: form,
@@ -283,9 +284,9 @@ export function BookingForm({
             {selectedServices.map((service) => service.name).join(" + ")} {preview ? "· preview openings" : `· ${durationMinutes} minutes total`}
           </p>
           <div className="public-calendar-toolbar">
-            <button type="button" aria-label="Previous week" disabled={shiftDate(visibleDates.at(-1)!, -7) < minDate} onClick={() => { const next = shiftDate(date, -7); setDate(next); void loadSlots(serviceIds, next, piercerId); }}><ChevronLeft/></button>
+            <button type="button" aria-label="Previous week" disabled={shiftManilaDate(visibleDates.at(-1)!, -7) < minDate} onClick={() => { const next = shiftManilaDate(date, -7); setDate(next); void loadSlots(serviceIds, next, piercerId); }}><ChevronLeft/></button>
             <button type="button" onClick={() => { setDate(minDate); void loadSlots(serviceIds, minDate, piercerId); }}>Today</button>
-            <button type="button" aria-label="Next week" onClick={() => { const next = shiftDate(date, 7); setDate(next); void loadSlots(serviceIds, next, piercerId); }}><ChevronRight/></button>
+            <button type="button" aria-label="Next week" onClick={() => { const next = shiftManilaDate(date, 7); setDate(next); void loadSlots(serviceIds, next, piercerId); }}><ChevronRight/></button>
             <strong>{formatWeekRange(visibleDates)}</strong>
             <label><span>Piercer</span><select value={piercerId} onChange={(event) => { const value = event.target.value; setPiercerId(value); void loadSlots(serviceIds, date, value); }}><option value="">Any qualified piercer</option>{eligiblePiercers.map((person) => <option value={person.id} key={person.id}>{person.name}</option>)}</select></label>
           </div>
@@ -433,16 +434,6 @@ const publicCalendarStartHour = 8;
 const publicCalendarEndHour = 21;
 const publicCalendarHourHeight = 56;
 
-function shiftDate(date: string, days: number) {
-  const value = new Date(`${date}T12:00:00Z`);
-  value.setUTCDate(value.getUTCDate() + days);
-  return value.toISOString().slice(0, 10);
-}
-function weekday(date: string) { return new Date(`${date}T12:00:00Z`).getUTCDay(); }
-function weekDates(anchor: string) {
-  const sunday = shiftDate(anchor, -weekday(anchor));
-  return Array.from({ length: 7 }, (_, index) => shiftDate(sunday, index));
-}
 function formatWeekRange(dates: string[]) {
   const format = (date: string) => new Intl.DateTimeFormat("en-PH", { month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(`${date}T12:00:00Z`));
   return `${format(dates[0])}–${format(dates.at(-1)!)} `;

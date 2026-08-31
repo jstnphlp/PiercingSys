@@ -1,0 +1,91 @@
+- generic [active] [ref=e1]:
+  - main [ref=e3]:
+    - generic [ref=e4]:
+      - paragraph [ref=e16]: PIERCING CORNER · PARAÑAQUE
+      - heading [level=1] [ref=e17]:
+        - text: A little cornerfor your
+        - emphasis [ref=e18]: spark.
+      - paragraph [ref=e19]: Choose your piercing, find a real opening, and leave with an appointment already confirmed.
+      - generic [ref=e20]:
+        - generic [ref=e21]: Parañaque
+        - generic [ref=e25]: Asia/Manila appointments
+      - img "Piercing Corner ear illustration" [ref=e29]
+    - generic [ref=e30]:
+      - text: ✦
+      - generic [ref=e31]:
+        - list "Booking progress" [ref=e32]:
+          - listitem [ref=e33]:
+            - generic [ref=e35]: Service
+          - listitem [ref=e36]:
+            - generic [ref=e37]: "2"
+            - generic [ref=e38]: Schedule
+          - listitem [ref=e39]:
+            - generic [ref=e40]: "3"
+            - generic [ref=e41]: Details
+        - generic [ref=e194]:
+          - paragraph [ref=e195]: STEP 2 OF 3
+          - heading "Pick your moment." [level=2] [ref=e196]
+          - paragraph [ref=e197]: Lobe · 60 minutes total
+          - generic [ref=e198]:
+            - button "Previous week" [disabled] [ref=e199]
+            - button "Today" [ref=e202]
+            - button "Next week" [ref=e203]
+            - strong [ref=e206]: Aug 30–Sep 5
+            - generic [ref=e207]:
+              - generic [ref=e208]: Piercer
+              - combobox "Piercer" [ref=e209]:
+                - option "Any qualified piercer" [selected]
+                - option "Dennis"
+          - generic [ref=e210]:
+            - generic [ref=e212]:
+              - generic [ref=e216]:
+                - generic [ref=e217]: SUN
+                - strong [ref=e218]: "30"
+                - generic [ref=e219]: Aug
+              - generic [ref=e220]:
+                - generic [ref=e221]: MON
+                - strong [ref=e222]: "31"
+                - generic [ref=e223]: Aug
+              - generic [ref=e224]:
+                - generic [ref=e225]: TUE
+                - strong [ref=e226]: "01"
+                - generic [ref=e227]: Sep
+              - generic [ref=e228]:
+                - generic [ref=e229]: WED
+                - strong [ref=e230]: "02"
+                - generic [ref=e231]: Sep
+              - generic [ref=e232]:
+                - generic [ref=e233]: THU
+                - strong [ref=e234]: "03"
+                - generic [ref=e235]: Sep
+              - generic [ref=e236]:
+                - generic [ref=e237]: FRI
+                - strong [ref=e238]: "04"
+                - generic [ref=e239]: Sep
+              - generic [ref=e240]:
+                - generic [ref=e241]: SAT
+                - strong [ref=e242]: "05"
+                - generic [ref=e243]: Sep
+              - generic [ref=e244]:
+                - generic [ref=e245]: 8 AM
+                - generic [ref=e246]: 9 AM
+                - generic [ref=e247]: 10 AM
+                - generic [ref=e248]: 11 AM
+                - generic [ref=e249]: 12 PM
+                - generic [ref=e250]: 1 PM
+                - generic [ref=e251]: 2 PM
+                - generic [ref=e252]: 3 PM
+                - generic [ref=e253]: 4 PM
+                - generic [ref=e254]: 5 PM
+                - generic [ref=e255]: 6 PM
+                - generic [ref=e256]: 7 PM
+                - generic [ref=e257]: 8 PM
+                - generic [ref=e258]: 9 PM
+            - generic [ref=e266]: No openings this week. Try the next week or another piercer.
+          - generic [ref=e267]:
+            - button "Back" [ref=e268] [cursor=pointer]
+            - button "Your details" [disabled] [ref=e271]
+      - link "Open Piercing Corner on Instagram" [ref=e181] [cursor=pointer]:
+        - /url: https://www.instagram.com/piercing.corner/
+      - text: ☾
+  - alert [ref=e185]

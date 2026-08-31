@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { getStaffSession, hasRole } from "@/lib/auth";
-import { isValidServiceSalePrice } from "@/lib/domain";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { validationError } from "@/lib/validation";
 
@@ -60,164 +59,54 @@ export async function POST(request: Request) {
     return Response.json(validationError(parsed.error), { status: 422 });
   }
   const supabase = await createSupabaseServerClient();
-  const serviceItems = parsed.data.items.filter((item) => item.type === "service");
-  if (serviceItems.some((item) => !item.sourceId)) {
-    return Response.json(
-      {
-        error: {
-          code: "SERVICE_REQUIRED",
-          message: "Service sale items must reference a configured service.",
-        },
-      },
-      { status: 422 },
-    );
+  const { data, error } = await supabase!.rpc("create_sale", {
+    p_customer_id: parsed.data.customerId ?? null,
+    p_booking_id: parsed.data.bookingId ?? null,
+    p_discount_cents: parsed.data.discountCents,
+    p_items: parsed.data.items,
+    p_payments: parsed.data.payments,
+    p_complete: parsed.data.complete,
+  });
+  if (error) {
+    const message = error.message;
+    const code = message.includes("not_authorized")
+      ? "FORBIDDEN"
+      : message.includes("balance_due")
+        ? "BALANCE_DUE"
+        : message.includes("invalid_service_price")
+          ? "INVALID_SERVICE_PRICE"
+          : message.includes("service_required") || message.includes("service_unavailable")
+            ? "SERVICE_REQUIRED"
+            : message.includes("pricing_required")
+              ? "PRICING_REQUIRED"
+              : "CREATE_FAILED";
+    const status = code === "FORBIDDEN" ? 403 : code === "CREATE_FAILED" ? 400 : 422;
+    const text =
+      code === "FORBIDDEN"
+        ? "Sales are limited to management."
+        : code === "BALANCE_DUE"
+          ? "A completed sale must be paid in full."
+          : code === "INVALID_SERVICE_PRICE"
+            ? "The recorded service price must match its fixed price or fall within its configured range."
+            : code === "SERVICE_REQUIRED"
+              ? "Service sale items must reference a configured service."
+              : message.replaceAll("_", " ");
+    return Response.json({ error: { code, message: text } }, { status });
   }
-  if (serviceItems.length) {
-    const serviceIds = [...new Set(serviceItems.map((item) => item.sourceId!))];
-    const catalog = await supabase!
-      .from("services")
-      .select("id,price_cents,min_price_cents,max_price_cents,is_active")
-      .in("id", serviceIds)
-      .eq("is_active", true);
-    if (catalog.error) {
-      return Response.json(
-        {
-          error: { code: "CATALOG_FAILED", message: catalog.error.message },
-        },
-        { status: 400 },
-      );
-    }
-    const byId = new Map((catalog.data ?? []).map((item) => [item.id, item]));
-    const invalid = serviceItems.find((item) => {
-      const service = byId.get(item.sourceId!);
-      return (
-        !service ||
-        !isValidServiceSalePrice(
-          {
-            priceCents: service.price_cents,
-            minPriceCents: service.min_price_cents,
-            maxPriceCents: service.max_price_cents,
-          },
-          item.unitPriceCents,
-        )
-      );
-    });
-    if (invalid) {
-      return Response.json(
-        {
-          error: {
-            code: "INVALID_SERVICE_PRICE",
-            message:
-              "The recorded service price must match its fixed price or fall within its configured range.",
-          },
-        },
-        { status: 422 },
-      );
-    }
-  }
-  const subtotal = parsed.data.items.reduce(
-    (sum, item) =>
-      sum + item.quantity * item.unitPriceCents - item.discountCents,
-    0,
-  );
-  const total = Math.max(0, subtotal - parsed.data.discountCents);
-  const paid = parsed.data.payments.reduce(
-    (sum, item) => sum + item.amountCents,
-    0,
-  );
-  if (parsed.data.complete && paid < total) {
+  const sale = Array.isArray(data) ? data[0] : data;
+  if (!sale) {
     return Response.json(
-      {
-        error: {
-          code: "BALANCE_DUE",
-          message: "A completed sale must be paid in full.",
-        },
-      },
-      { status: 422 },
-    );
-  }
-  const saleResult = await supabase!
-    .from("sales")
-    .insert({
-      customer_id: parsed.data.customerId ?? null,
-      booking_id: parsed.data.bookingId ?? null,
-      subtotal_cents: subtotal,
-      discount_cents: parsed.data.discountCents,
-      total_cents: total,
-    })
-    .select("id,reference")
-    .single();
-  if (saleResult.error || !saleResult.data) {
-    return Response.json(
-      {
-        error: {
-          code: "CREATE_FAILED",
-          message: saleResult.error?.message ?? "Sale could not be created.",
-        },
-      },
+      { error: { code: "CREATE_FAILED", message: "Sale could not be created." } },
       { status: 400 },
     );
-  }
-  const saleId = saleResult.data.id;
-  const items = await supabase!.from("sale_items").insert(
-    parsed.data.items.map((item) => ({
-      sale_id: saleId,
-      item_type: item.type,
-      source_id: item.sourceId ?? null,
-      description: item.description,
-      quantity: item.quantity,
-      unit_price_cents: item.unitPriceCents,
-      discount_cents: item.discountCents,
-    })),
-  );
-  if (items.error) {
-    return Response.json(
-      { error: { code: "ITEMS_FAILED", message: items.error.message } },
-      { status: 400 },
-    );
-  }
-  if (parsed.data.payments.length) {
-    const payments = await supabase!.from("payments").insert(
-      parsed.data.payments.map((item) => ({
-        sale_id: saleId,
-        method: item.method,
-        amount_cents: item.amountCents,
-        reference: item.reference ?? null,
-        received_by: session.userId,
-      })),
-    );
-    if (payments.error) {
-      return Response.json(
-        { error: { code: "PAYMENT_FAILED", message: payments.error.message } },
-        { status: 400 },
-      );
-    }
-  }
-  if (parsed.data.complete) {
-    const completion = await supabase!
-      .from("sales")
-      .update({
-        status: "completed",
-        completed_at: new Date().toISOString(),
-        completed_by: session.userId,
-      })
-      .eq("id", saleId);
-    if (completion.error) {
-      return Response.json(
-        {
-          error: { code: "COMPLETION_FAILED", message: completion.error.message },
-        },
-        { status: 400 },
-      );
-    }
   }
   return Response.json(
     {
       data: {
-        id: saleId,
-        reference: saleResult.data.reference,
-        totalCents: total,
-        balanceCents: Math.max(0, total - paid),
+        id: sale.id,
+        reference: sale.reference,
+        totalCents: sale.total_cents,
+        balanceCents: sale.balance_cents,
       },
     },
     { status: 201 },
