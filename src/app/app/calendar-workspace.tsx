@@ -67,14 +67,7 @@ export function CalendarWorkspace(props: Props) {
     return () => window.clearInterval(timer);
   }, []);
 
-  const title = mode === "week"
-    ? `${formatShortDate(days[0])}–${formatShortDate(days.at(-1)!)}`
-    : formatLongDate(anchor);
   return <div className="feature-view calendar-workspace">
-    <div className="page-intro">
-      <div><h2>Studio calendar</h2><p>{title} · Asia/Manila</p></div>
-      <button className="btn btn-primary" onClick={() => setNewOpen(true)}><Plus size={16}/> New appointment</button>
-    </div>
     <div className="calendar-toolbar" aria-label="Calendar controls">
       <button className="btn btn-secondary icon-button" aria-label={`Previous ${mode}`} onClick={() => setAnchor(shiftDate(anchor, mode === "week" ? -7 : -1))}><ChevronLeft/></button>
       <button className="btn btn-secondary" onClick={() => setAnchor(manilaDate(new Date()))}>Today</button>
@@ -89,6 +82,7 @@ export function CalendarWorkspace(props: Props) {
         <button className={mode === "week" ? "active" : ""} aria-pressed={mode === "week"} onClick={() => setMode("week")}>Week</button>
         <button className={mode === "day" ? "active" : ""} aria-pressed={mode === "day"} onClick={() => setMode("day")}>Day</button>
       </div>
+      <button className="btn btn-primary calendar-create-button" onClick={() => setNewOpen(true)}><Plus size={16}/> New appointment</button>
     </div>
     {error && <p className="form-error" role="alert">{error}</p>}
     <section className="panel operation-calendar" aria-busy={loading}>
@@ -254,7 +248,6 @@ function weekday(date: string) { return new Date(`${date}T12:00:00Z`).getUTCDay(
 function shiftDate(date: string, days: number) { const value = new Date(`${date}T12:00:00Z`); value.setUTCDate(value.getUTCDate() + days); return value.toISOString().slice(0, 10); }
 function weekDates(anchor: string) { const start = shiftDate(anchor, -weekday(anchor)); return Array.from({ length: 7 }, (_, index) => shiftDate(start, index)); }
 function formatMonth(date: string) { return new Intl.DateTimeFormat("en-PH", { month: "short", timeZone: "UTC" }).format(new Date(`${date}T12:00:00Z`)); }
-function formatShortDate(date: string) { return new Intl.DateTimeFormat("en-PH", { month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(`${date}T12:00:00Z`)); }
 function formatLongDate(date: string) { return new Intl.DateTimeFormat("en-PH", { weekday: "long", month: "long", day: "numeric", year: "numeric", timeZone: "UTC" }).format(new Date(`${date}T12:00:00Z`)); }
 function formatHour(hour: number) { return new Intl.DateTimeFormat("en-PH", { hour: "numeric", timeZone: "UTC" }).format(new Date(Date.UTC(2020, 0, 1, hour))); }
 function formatTime(value: string) { return new Intl.DateTimeFormat("en-PH", { hour: "numeric", minute: "2-digit", timeZone: "Asia/Manila" }).format(new Date(value)); }

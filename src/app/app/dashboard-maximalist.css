@@ -319,6 +319,7 @@ body:has(.staff-shell)::-webkit-scrollbar {
 }
 
 .feature-view { gap: 20px; }
+.view-actions{display:flex;justify-content:flex-end}
 
 .page-intro {
   position: relative;
@@ -780,6 +781,7 @@ body:has(.staff-shell)::-webkit-scrollbar {
 /* DentalSys-inspired week calendar, translated into the Piercing Corner palette */
 .calendar-workspace .calendar-toolbar{min-height:58px;padding:9px 10px;border:2px solid var(--dash-ink);border-radius:17px 13px 18px 14px;background:#f1d39c;box-shadow:3px 3px 0 var(--dash-ink)}
 .calendar-workspace .calendar-toolbar .btn{min-height:38px;border:1.5px solid var(--dash-ink);border-radius:10px 8px 11px 9px;background:#fff7e3;box-shadow:1px 2px 0 var(--dash-ink)}
+.calendar-workspace .calendar-toolbar .calendar-create-button{background:#e86f2c;color:#fff8e8}
 .calendar-workspace .calendar-toolbar select{height:38px;border:1.5px solid var(--dash-ink);border-radius:10px 8px 11px 9px;background:#fff7e3;box-shadow:1px 2px 0 var(--dash-ink)}
 .calendar-workspace .calendar-toggle{border:1.5px solid var(--dash-ink);border-radius:12px 9px 13px 10px;background:#d8aa82;box-shadow:1px 2px 0 var(--dash-ink)}
 .calendar-workspace .calendar-toggle button{border-radius:8px;color:#654a41}

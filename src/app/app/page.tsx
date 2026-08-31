@@ -189,13 +189,6 @@ function Overview({
   ).length;
   return (
     <div className="feature-view">
-      <PageIntro
-        title="Daily overview"
-        detail={new Intl.DateTimeFormat("en-PH", {
-          dateStyle: "full",
-          timeZone: "Asia/Manila",
-        }).format(new Date())}
-      />
       <div className="metric-grid">
         <Metric
           icon={<CalendarDays />}
@@ -288,10 +281,6 @@ function Overview({
 function Clients({ data }: { data: Awaited<ReturnType<typeof getStaffData>> }) {
   return (
     <div className="feature-view">
-      <PageIntro
-        title="Client records"
-        detail="Contact details and appointment history visible under your role permissions."
-      />
       <ClientRecords customers={data.customers} bookings={data.bookings} />
     </div>
   );
@@ -309,10 +298,6 @@ function Sales({ data }: { data: Awaited<ReturnType<typeof getStaffData>> }) {
     );
   return (
     <div className="feature-view">
-      <PageIntro
-        title="Sales & payments"
-        detail="Record deposits and full payments in centavo-based PHP values."
-      />
       <div className="metric-grid compact">
         <Metric
           icon={<CircleDollarSign />}
@@ -414,18 +399,7 @@ function Reports({ data }: { data: Awaited<ReturnType<typeof getStaffData>> }) {
   const first = `${today.slice(0, 8)}01`;
   return (
     <div className="feature-view">
-      <PageIntro
-        title="Operational reports"
-        detail="Stored sales and appointment outcomes, grouped on Manila business dates."
-        action={
-          <a
-            className="btn btn-secondary"
-            href={`/api/reports/export?from=${first}&to=${today}`}
-          >
-            <Download size={16} /> Export CSV
-          </a>
-        }
-      />
+      <div className="view-actions"><a className="btn btn-secondary" href={`/api/reports/export?from=${first}&to=${today}`}><Download size={16} /> Export CSV</a></div>
       <div className="metric-grid compact">
         <Metric
           icon={<CircleDollarSign />}
@@ -505,10 +479,6 @@ function StudioSettings({
 }) {
   return (
     <div className="feature-view">
-      <PageIntro
-        title="Studio settings"
-        detail="Piercing Corner is a single-studio system; there is no workspace or studio switcher."
-      />
       <div className="settings-stack">
         <SettingsForm studio={data.studio} />
         <ScheduleSettings studio={data.studio} staff={data.staff} availability={data.availability} closures={data.closures} />
@@ -675,25 +645,6 @@ function Metric({
         <p>{note}</p>
       </div>
     </section>
-  );
-}
-function PageIntro({
-  title,
-  detail,
-  action,
-}: {
-  title: string;
-  detail: string;
-  action?: React.ReactNode;
-}) {
-  return (
-    <div className="page-intro">
-      <div>
-        <h2>{title}</h2>
-        <p>{detail}</p>
-      </div>
-      {action}
-    </div>
   );
 }
 function PanelHead({ title, detail }: { title: string; detail: string }) {
