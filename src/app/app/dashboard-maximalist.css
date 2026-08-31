@@ -320,6 +320,7 @@ body:has(.staff-shell)::-webkit-scrollbar {
 
 .feature-view { gap: 20px; }
 .view-actions{display:flex;justify-content:flex-end}
+.report-controls{border:2px solid var(--dash-ink);box-shadow:3px 3px 0 var(--dash-ink);background:#fff8e9}.report-presets a,.report-range-form input{border-color:var(--dash-ink)}.report-presets a.active{background:var(--dash-ink)}
 
 .page-intro {
   position: relative;

@@ -49,7 +49,7 @@ function SalesSkeleton() {
 }
 
 function ReportsSkeleton() {
-  return <><div className="skeleton-view-actions"><Skeleton width={118} height={38}/></div><div className="metric-grid compact">{Array.from({ length: 3 }, (_, index) => <MetricSkeleton compact key={index}/>)}</div><div className="two-panel">{Array.from({ length: 2 }, (_, panel) => <section className="panel skeleton-panel" key={panel}><PanelHeadingSkeleton/>{Array.from({ length: 5 }, (_, index) => <RowSkeleton key={index} columns={2}/>)}</section>)}</div></>;
+  return <><div className="skeleton-report-controls"><Skeleton width="48%" height={38}/><Skeleton width="36%" height={38}/><Skeleton width={132} height={38}/></div><div className="metric-grid compact">{Array.from({ length: 3 }, (_, index) => <MetricSkeleton compact key={index}/>)}</div><div className="two-panel">{Array.from({ length: 2 }, (_, panel) => <section className="panel skeleton-panel" key={panel}><PanelHeadingSkeleton/>{Array.from({ length: 5 }, (_, index) => <RowSkeleton key={index} columns={2}/>)}</section>)}</div></>;
 }
 
 function SettingsSkeleton() {

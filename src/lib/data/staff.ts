@@ -167,7 +167,10 @@ const emptyData = {
   error: null as string | null,
 };
 
-export async function getStaffData(scope: StaffDataScope = "all") {
+export async function getStaffData(
+  scope: StaffDataScope = "all",
+  reportRange?: { startUtc: string; endUtc: string },
+) {
   const supabase = await createSupabaseServerClient();
   if (!supabase)
     return {
@@ -271,7 +274,12 @@ export async function getStaffData(scope: StaffDataScope = "all") {
           .limit(100)
       : emptyMany,
     includes("reports")
-      ? supabase.rpc("studio_report")
+      ? reportRange
+        ? supabase.rpc("studio_report", {
+            p_start: reportRange.startUtc,
+            p_end: reportRange.endUtc,
+          })
+        : supabase.rpc("studio_report")
       : emptySingle,
   ]);
   const settingsRow = settingsResult.data;
