@@ -86,6 +86,7 @@ export type AvailabilityRecord = {
   weekday: number;
   startsAt: string;
   endsAt: string;
+  availabilityDate: string | null;
 };
 
 export const bookingDetailSelect =
@@ -260,7 +261,7 @@ export async function getStaffData(scope: StaffDataScope = "all") {
           .order("name")
       : emptyMany,
     includes("settings")
-      ? supabase.from("staff_availability").select("id,staff_id,weekday,starts_at,ends_at").order("weekday").order("starts_at")
+      ? supabase.from("staff_availability").select("id,staff_id,weekday,starts_at,ends_at,availability_date").order("weekday").order("starts_at")
       : emptyMany,
     includes("settings")
       ? supabase
@@ -388,6 +389,7 @@ export async function getStaffData(scope: StaffDataScope = "all") {
     weekday: row.weekday,
     startsAt: row.starts_at,
     endsAt: row.ends_at,
+    availabilityDate: row.availability_date,
   }));
   const report = (reportResult.data ?? null) as {
     revenue_cents?: number;
