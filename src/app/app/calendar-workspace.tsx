@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { combinedServiceDuration, manilaDate, type BookingStatus, type Service } from "@/lib/domain";
 import type { CustomerRecord, StaffRecord } from "@/lib/data/staff";
 import { layoutOverlappingAppointments } from "./calendar-layout";
+import { CalendarGridSkeleton } from "./staff-skeletons";
 
 type Station = { id: string; name: string };
 type RawAppointment = {
@@ -87,9 +88,9 @@ export function CalendarWorkspace(props: Props) {
     </div>
     {error && <p className="form-error" role="alert">{error}</p>}
     <section className="panel operation-calendar" aria-busy={loading}>
-      {mode === "week" ? <WeekCalendar days={days} anchor={anchor} appointments={visibleAppointments} now={now} onSelectDate={(date) => { setAnchor(date); setMode("day"); }} onSelectAppointment={setSelected}/>
-        : <DayCalendar date={anchor} appointments={visibleAppointments} onSelectAppointment={setSelected}/>}
-      {loading && <div className="calendar-loading" role="status">Loading live appointments…</div>}
+      {loading ? <><span className="sr-only" role="status">Loading live appointments</span><div className="calendar-scroll"><CalendarGridSkeleton day={mode === "day"}/></div></>
+        : mode === "week" ? <WeekCalendar days={days} anchor={anchor} appointments={visibleAppointments} now={now} onSelectDate={(date) => { setAnchor(date); setMode("day"); }} onSelectAppointment={setSelected}/>
+          : <DayCalendar date={anchor} appointments={visibleAppointments} onSelectAppointment={setSelected}/>}
     </section>
     {newOpen && <AppointmentFormDialog {...props} initialDate={anchor} onClose={() => setNewOpen(false)} onSaved={async () => { setNewOpen(false); await load(); }}/>} 
     {selected && <AppointmentDialog appointment={selected} {...props} onClose={() => setSelected(null)} onSaved={async () => { setSelected(null); await load(); }}/>} 

@@ -1,22 +1,16 @@
 import type { Metadata } from "next";
-import Image from "next/image";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
+import { Suspense } from "react";
 import {
-  BarChart3,
   CalendarDays,
   CircleDollarSign,
   Clock3,
   Download,
-  ExternalLink,
-  LayoutDashboard,
-  Settings,
   ShoppingBag,
   Sparkles,
   UsersRound,
 } from "lucide-react";
-import { signOut } from "@/app/login/actions";
 import { getStaffSession } from "@/lib/auth";
 import {
   calculateBalance,
@@ -44,114 +38,31 @@ import {
 import { CalendarWorkspace } from "./calendar-workspace";
 import { ClientRecords } from "./client-records";
 import { ScheduleSettings } from "./schedule-settings";
-import "./dashboard.css";
-import "./dashboard-maximalist.css";
+import { StaffViewSkeleton } from "./staff-skeletons";
+import { resolveStaffView, type StaffView } from "./view-config";
 
 export const metadata: Metadata = { title: "Studio operations" };
-type View =
-  | "overview"
-  | "calendar"
-  | "clients"
-  | "sales"
-  | "reports"
-  | "settings";
-const managementViews: View[] = [
-  "overview",
-  "calendar",
-  "clients",
-  "sales",
-  "reports",
-  "settings",
-];
-const piercerViews: View[] = ["overview", "calendar", "clients"];
 
 export default async function AppPage({
   searchParams,
 }: {
   searchParams: Promise<{ view?: string }>;
 }) {
-  await connection();
   const params = await searchParams;
-  const requested = params.view as View | undefined;
-  const requestedScope: StaffDataScope =
-    requested && managementViews.includes(requested) ? requested : "overview";
-  const [session, scopedData] = await Promise.all([
-    getStaffSession(),
-    getStaffData(requestedScope),
-  ]);
+  const session = await getStaffSession();
   if (!session) redirect("/login");
-  const allowed = session.role === "piercer" ? piercerViews : managementViews;
-  const view =
-    requested && allowed.includes(requested) ? requested : "overview";
-  const data = view === requestedScope ? scopedData : await getStaffData(view);
-  return (
-    <div className="staff-shell">
-      <aside className="staff-sidebar">
-        <Link href="/app" className="staff-brand">
-          <Image src="/logo.png" alt="" width={48} height={48} priority />
-          <span>
-            <strong>Piercing Corner</strong>
-            <small>STUDIO DESK</small>
-          </span>
-        </Link>
-        <p className="nav-label">Workspace</p>
-        <nav>
-          {allowed.map((item) => (
-            <Link
-              key={item}
-              href={item === "overview" ? "/app" : `/app?view=${item}`}
-              className={view === item ? "active" : ""}
-            >
-              {navIcon(item)}
-              <span>{item[0].toUpperCase() + item.slice(1)}</span>
-            </Link>
-          ))}
-        </nav>
-        <div className="staff-account">
-          <span className="avatar">{initials(session.displayName)}</span>
-          <span>
-            <strong>{session.displayName}</strong>
-            <small>{session.role}</small>
-          </span>
-          <form action={signOut}>
-            <button>Sign out</button>
-          </form>
-        </div>
-      </aside>
-      <main className="staff-main">
-        <header className="staff-topbar">
-          <div>
-            <p className="eyebrow">
-              PIERCING CORNER · {session.role.toUpperCase()}
-            </p>
-            <h1>
-              {view === "overview"
-                ? "Today at the corner"
-                : view[0].toUpperCase() + view.slice(1)}
-            </h1>
-          </div>
-          <div className="top-actions">
-            <Link href="/book" target="_blank" className="btn btn-secondary">
-              <ExternalLink size={15} /> Public booking
-            </Link>
-          </div>
-        </header>
-        <div className="staff-content">
-          <div className="dashboard-content">
-            {data.error ? (
-              <StateCard title="Data could not be loaded" detail={data.error} />
-            ) : (
-              viewContent(view, data, session)
-            )}
-          </div>
-        </div>
-      </main>
-    </div>
-  );
+  const view = resolveStaffView(params.view, session.role);
+  return <Suspense key={view} fallback={<StaffViewSkeleton view={view} label={`Loading ${view}`}/>}><StaffViewData view={view} session={session}/></Suspense>;
+}
+
+async function StaffViewData({ view, session }: { view: StaffView; session: NonNullable<Awaited<ReturnType<typeof getStaffSession>>> }) {
+  await connection();
+  const data = await getStaffData(view as StaffDataScope);
+  return data.error ? <StateCard title="Data could not be loaded" detail={data.error}/> : viewContent(view, data, session);
 }
 
 function viewContent(
-  view: View,
+  view: StaffView,
   data: Awaited<ReturnType<typeof getStaffData>>,
   session: { role: string; userId: string },
 ) {
@@ -728,19 +639,4 @@ function initials(value: string) {
       .join("")
       .toUpperCase() || "PC"
   );
-}
-function navIcon(view: View) {
-  const Icon =
-    view === "overview"
-      ? LayoutDashboard
-      : view === "calendar"
-        ? CalendarDays
-        : view === "clients"
-          ? UsersRound
-          : view === "sales"
-            ? ShoppingBag
-            : view === "reports"
-              ? BarChart3
-              : Settings;
-  return <Icon />;
 }
