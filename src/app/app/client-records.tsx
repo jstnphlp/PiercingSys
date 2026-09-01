@@ -1,27 +1,65 @@
 "use client";
 
 import { CalendarDays, Mail, Phone, Plus, X } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import useSWR from "swr";
 import type { BookingRecord, CustomerRecord } from "@/lib/data/staff";
+import type { PageMeta } from "@/lib/pagination";
+import { requestWorkspaceRefresh } from "./workspace-refresh";
 
 export function ClientRecords({ customers, canCreate }: { customers: CustomerRecord[]; canCreate: boolean }) {
+  const urlParams = useSearchParams();
   const [selected, setSelected] = useState<CustomerRecord | null>(null);
   const [creating, setCreating] = useState(false);
+  const initialSearch = urlParams.get("q") ?? "";
+  const initialPage = Math.max(1, Number(urlParams.get("page") ?? 1) || 1);
+  const [search, setSearch] = useState(initialSearch);
+  const [debouncedSearch, setDebouncedSearch] = useState(initialSearch);
+  const [page, setPage] = useState(initialPage);
+  useEffect(() => {
+    const timer = window.setTimeout(() => { setDebouncedSearch(search.trim()); setPage(1); }, 300);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (debouncedSearch) url.searchParams.set("q", debouncedSearch); else url.searchParams.delete("q");
+    if (page > 1) url.searchParams.set("page", String(page)); else url.searchParams.delete("page");
+    window.history.replaceState(null, "", url);
+  }, [debouncedSearch, page]);
+  const key = `/api/customers?q=${encodeURIComponent(debouncedSearch)}&page=${page}&pageSize=25`;
+  const { data: response, error, isLoading, isValidating, mutate } = useSWR<{ data: CustomerRecord[]; page: PageMeta }>(key, {
+    fallbackData: page === 1 && !debouncedSearch ? {
+      data: customers,
+      page: { number: 1, size: 25, total: customers.length, totalPages: 1 },
+    } : undefined,
+  });
+  const visibleCustomers = response?.data ?? [];
+  const meta = response?.page;
   return <>
     {canCreate && <button className="btn btn-primary page-add" type="button" onClick={() => setCreating(true)}><Plus size={16}/> Add client</button>}
-    {customers.length ? <section className="panel table-panel"><table><thead><tr><th>Client</th><th>Contact</th><th>Appointments</th><th>Last activity</th></tr></thead><tbody>{customers.map((customer) => {
+    <div className="list-toolbar">
+      <label className="field">Search clients<input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Name, email, or phone" /></label>
+      {isValidating && !isLoading && <span className="status-note">Refreshing…</span>}
+    </div>
+    {error && <section className="panel state-card"><CalendarDays/><h2>Clients could not be loaded</h2><p>{error.message}</p><button className="btn btn-secondary" onClick={() => void mutate()}>Retry</button></section>}
+    {!error && isLoading && <section className="panel state-card"><CalendarDays/><h2>Loading clients…</h2><p>Fetching the requested page.</p></section>}
+    {!error && !isLoading && visibleCustomers.length ? <section className="panel table-panel"><table><thead><tr><th>Client</th><th>Contact</th><th>Appointments</th><th>Last activity</th></tr></thead><tbody>{visibleCustomers.map((customer) => {
       return <tr key={customer.id} className="clickable-row" tabIndex={0} onClick={() => setSelected(customer)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelected(customer); } }}>
         <td><strong>{customer.name}</strong></td><td><span>{customer.email}</span><small>{customer.phone}</small></td><td>{customer.appointmentCount ?? 0}</td><td>{formatDate(customer.lastActivityAt ?? customer.createdAt)}</td>
       </tr>;
-    })}</tbody></table></section> : <section className="panel state-card"><CalendarDays/><h2>No clients yet</h2><p>Add a client manually or create one automatically with their first confirmed booking.</p></section>}
-    {creating && <AddClientDialog onClose={() => setCreating(false)}/>}
+    })}</tbody></table><PageControls meta={meta} onPage={setPage}/></section> : !error && !isLoading ? <section className="panel state-card"><CalendarDays/><h2>No clients found</h2><p>{debouncedSearch ? "Try a different search." : "Add a client manually or create one with their first confirmed booking."}</p></section> : null}
+    {creating && <AddClientDialog onClose={() => setCreating(false)} onCreated={() => { setCreating(false); requestWorkspaceRefresh(); void mutate(); }}/>}
     {selected && <ClientDialog key={selected.id} customer={selected} onClose={() => setSelected(null)}/>}
   </>;
 }
 
-function AddClientDialog({ onClose }: { onClose: () => void }) {
-  const router = useRouter();
+function PageControls({ meta, onPage }: { meta?: PageMeta; onPage: (page: number) => void }) {
+  if (!meta || meta.totalPages <= 1) return null;
+  return <nav className="pagination" aria-label="Client pages"><button className="btn btn-secondary" disabled={meta.number <= 1} onClick={() => onPage(meta.number - 1)}>Previous</button><span>Page {meta.number} of {meta.totalPages} · {meta.total} clients</span><button className="btn btn-secondary" disabled={meta.number >= meta.totalPages} onClick={() => onPage(meta.number + 1)}>Next</button></nav>;
+}
+
+function AddClientDialog({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const firstInput = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -59,8 +97,7 @@ function AddClientDialog({ onClose }: { onClose: () => void }) {
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error?.message ?? "The client could not be saved.");
-      onClose();
-      router.refresh();
+      onCreated();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "The client could not be saved.");
       setBusy(false);

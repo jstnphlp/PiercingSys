@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { manilaDate, type StudioSettings } from "@/lib/domain";
 import type { AvailabilityRecord, ClosureRecord, StaffRecord } from "@/lib/data/staff";
 import { Dialog } from "./calendar-workspace";
+import { requestWorkspaceRefresh } from "./workspace-refresh";
 
 const startHour = 8, endHour = 21, hourHeight = 54;
 const names = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
@@ -38,8 +39,8 @@ function ScheduleEditor({ value, staff, onClose }: { value: Editor; staff: Staff
       payload = { staffId, startsAt: String(form.get("start") ?? ""), endsAt: String(form.get("end") ?? ""), ...(value.id ? value.availabilityDate ? { availabilityDate: dateFrom } : { weekday: value.weekday } : { dateFrom, dateTo: dateMode === "range" ? dateTo : dateFrom }) };
     }
     else { url = value.id ? `/api/closures/${value.id}` : "/api/closures"; payload = { startsAt: `${form.get("date")}T${form.get("start")}:00+08:00`, endsAt: `${form.get("date")}T${form.get("end")}:00+08:00`, reason: form.get("reason") || null }; }
-    const response = await fetch(url, { method, headers: { "content-type": "application/json" }, body: JSON.stringify(payload) }); const body = await response.json(); setBusy(false); if (!response.ok) { setError(firstApiError(body) ?? "Schedule could not be saved."); return; } window.location.reload(); }
-  async function remove() { setBusy(true); const url = kind === "hours" ? `/api/settings/business-hours/${value.weekday}` : kind === "availability" ? `/api/availability/${value.id}` : `/api/closures/${value.id}`; const response = await fetch(url, { method: "DELETE" }); const body = await response.json(); setBusy(false); if (!response.ok) { setError(body.error?.message ?? "Schedule block could not be deleted."); return; } window.location.reload(); }
+    const response = await fetch(url, { method, headers: { "content-type": "application/json" }, body: JSON.stringify(payload) }); const body = await response.json(); setBusy(false); if (!response.ok) { setError(firstApiError(body) ?? "Schedule could not be saved."); return; } requestWorkspaceRefresh(); onClose(); }
+  async function remove() { setBusy(true); const url = kind === "hours" ? `/api/settings/business-hours/${value.weekday}` : kind === "availability" ? `/api/availability/${value.id}` : `/api/closures/${value.id}`; const response = await fetch(url, { method: "DELETE" }); const body = await response.json(); setBusy(false); if (!response.ok) { setError(body.error?.message ?? "Schedule block could not be deleted."); return; } requestWorkspaceRefresh(); onClose(); }
   return <Dialog title={value.id || kind === "hours" ? "Edit schedule block" : "Add schedule block"} detail={kind === "hours" ? `This changes ${names[value.weekday]} studio hours every week.` : kind === "availability" ? value.id && !value.availabilityDate ? `This is an existing weekly block for every ${names[value.weekday]}.` : "Choose one date or add the same availability across a date range." : "This closure applies only to the selected date."} onClose={onClose}><form className="operation-form" onSubmit={submit}>
     {!value.id && value.kind !== "hours" && <div className="segmented"><button type="button" className={kind === "availability" ? "active" : ""} onClick={() => setKind("availability")}>Staff availability</button><button type="button" className={kind === "closure" ? "active" : ""} onClick={() => setKind("closure")}>Dated closure</button></div>}
     {kind === "availability" && <label className="field">Staff<select name="staffId" value={staffId} onChange={(event) => setStaffId(event.target.value)} required>{availableStaff.map((person) => <option key={person.id} value={person.id}>{person.displayName}</option>)}</select></label>}

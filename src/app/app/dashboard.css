@@ -65,3 +65,9 @@
 .route-loading { min-height: 220px; display: grid; place-items: center; color: #76584d; font-weight: 800; }
 @media (max-width: 450px) { .metric-grid, .metric-grid.compact { grid-template-columns: 1fr; }.metric-card { min-height: 85px; }.hours-grid > div { grid-template-columns: 1fr 1fr; }.hours-grid > div label { grid-column: 1 / 3; }.hours-grid > div span { display: none; } }
 @media (max-width: 760px) { .report-range-form { width: 100%; flex-wrap: wrap; }.report-range-form label { flex: 1 1 125px; }.report-range-form input { width: 100%; }.report-export { width: 100%; justify-content: center; }.skeleton-report-controls { flex-wrap: wrap; } }
+.list-toolbar { display: flex; align-items: end; justify-content: space-between; gap: 12px; margin: 12px 0; }
+.list-toolbar .field { width: min(360px, 100%); }
+.pagination { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 14px; border-top: 1px solid var(--line); }
+.pagination span { color: var(--muted); font-size: 10px; font-weight: 700; }
+.customer-select { display: grid; gap: 6px; }
+.customer-select input, .customer-select select { width: 100%; }

@@ -1,11 +1,12 @@
 "use client";
 
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { CalendarDays, CircleDollarSign, ShoppingBag } from "lucide-react";
 import { formatPhp } from "@/lib/domain";
 import { validateReportRange, type ReportPeriod, type ReportPreset } from "@/lib/report-period";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { ReportPeriodControls, type PresetLink } from "./report-period-controls";
+import { WORKSPACE_REFRESH_EVENT } from "./workspace-refresh";
 
 export type ReportSummary = {
   revenue_cents?: number;
@@ -36,6 +37,24 @@ export function ReportsView({ initialPeriod, initialSummary, presets }: {
   const [error, setError] = useState<string | null>(null);
   const requestId = useRef(0);
   const cache = useRef(new Map([[`${initialPeriod.from}:${initialPeriod.to}`, initialSummary]]));
+
+  useEffect(() => {
+    if (!supabase) return;
+    let cancelled = false;
+    async function refresh() {
+      const { data, error: queryError } = await supabase!.rpc("studio_report", {
+        p_start: period.startUtc,
+        p_end: period.endUtc,
+      });
+      if (cancelled || queryError) return;
+      const nextSummary = (data ?? {}) as ReportSummary;
+      cache.current.set(`${period.from}:${period.to}`, nextSummary);
+      setSummary(nextSummary);
+    }
+    function onRefresh() { void refresh(); }
+    window.addEventListener(WORKSPACE_REFRESH_EVENT, onRefresh);
+    return () => { cancelled = true; window.removeEventListener(WORKSPACE_REFRESH_EVENT, onRefresh); };
+  }, [period, supabase]);
 
   async function selectPeriod(selection: { preset: ReportPreset; from: string; to: string; href: string }) {
     const validated = validateReportRange(selection.from, selection.to);

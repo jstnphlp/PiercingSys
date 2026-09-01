@@ -6,13 +6,11 @@ import {
   CalendarDays,
   CircleDollarSign,
   Clock3,
-  ShoppingBag,
   Sparkles,
   UsersRound,
 } from "lucide-react";
 import { getStaffSession } from "@/lib/auth";
 import {
-  calculateBalance,
   formatPhp,
   formatServicePrice,
   manilaDate,
@@ -26,9 +24,6 @@ import { resolveReportPeriod, type ReportPeriod, type ReportPreset } from "@/lib
 import {
   BookingActions,
   InviteForm,
-  SaleAdjustment,
-  DraftSaleActions,
-  SaleForm,
   ServiceAssignmentForm,
   ServiceForm,
   SettingsForm,
@@ -39,6 +34,7 @@ import { CalendarWorkspace } from "./calendar-workspace";
 import { ClientRecords } from "./client-records";
 import { ScheduleSettings } from "./schedule-settings";
 import { ReportsView } from "./reports-view";
+import { SalesView } from "./sales-view";
 import { StaffViewSkeleton } from "./staff-skeletons";
 import { resolveStaffView, type StaffView } from "./view-config";
 
@@ -72,7 +68,7 @@ function viewContent(
   const role = session.role;
   if (view === "overview") return <Overview data={data} role={role} />;
   if (view === "calendar")
-    return <CalendarWorkspace role={role} userId={session.userId} services={data.services} staff={data.staff} assignments={data.serviceAssignments} stations={data.stations} customers={data.customers} />;
+    return <CalendarWorkspace role={role} userId={session.userId} services={data.services} staff={data.staff} assignments={data.serviceAssignments} stations={data.stations} />;
   if (view === "clients") return <Clients data={data} role={role} />;
   if (view === "sales") return <Sales data={data} />;
   if (view === "reports") return <Reports data={data} period={reportPeriod} />;
@@ -210,93 +206,7 @@ function Clients({
 }
 
 function Sales({ data }: { data: Awaited<ReturnType<typeof getStaffData>> }) {
-  const total = data.sales
-    .filter((item) => item.status === "completed")
-    .reduce((sum, item) => sum + item.totalCents - item.adjustmentCents, 0);
-  const outstanding = data.sales
-    .filter((item) => item.status === "draft")
-    .reduce(
-      (sum, item) => sum + calculateBalance(item.totalCents, [item.paidCents]),
-      0,
-    );
-  return (
-    <div className="feature-view">
-      <div className="metric-grid compact">
-        <Metric
-          icon={<CircleDollarSign />}
-          label="Completed revenue"
-          value={formatPhp(total)}
-          note="All stored sales"
-        />
-        <Metric
-          icon={<ShoppingBag />}
-          label="Transactions"
-          value={String(data.sales.length)}
-          note="Draft and completed"
-        />
-        <Metric
-          icon={<Clock3 />}
-          label="Outstanding"
-          value={formatPhp(outstanding)}
-          note="Balance still due"
-        />
-      </div>
-      <SaleForm customers={data.customers} services={data.services} />
-      {data.sales.length ? (
-        <section className="panel table-panel">
-          <table>
-            <thead>
-              <tr>
-                <th>Reference</th>
-                <th>Client</th>
-                <th>Total</th>
-                <th>Paid</th>
-                <th>Method</th>
-                <th>Status</th>
-                <th>Items</th>
-                <th>Adjustments</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.sales.map((sale) => (
-                <tr key={sale.id}>
-                  <td>
-                    <strong>{sale.reference}</strong>
-                    <small>{formatDate(sale.createdAt)}</small>
-                  </td>
-                  <td>{sale.customerName}</td>
-                  <td>{formatPhp(sale.totalCents)}</td>
-                  <td>{formatPhp(sale.paidCents)}</td>
-                  <td>{sale.methods.join(", ") || "—"}</td>
-                  <td>
-                    <Status value={sale.status} />
-                  </td>
-                  <td>{sale.items.map((item) => <small key={item.id}>{item.description} · {item.unitPriceCents === null ? "Pricing required" : formatPhp(item.unitPriceCents)}</small>)}</td>
-                  <td>
-                    {sale.adjustmentCents > 0 && (
-                      <small>{formatPhp(sale.adjustmentCents)} adjusted</small>
-                    )}
-                    {sale.status === "completed" && (
-                      <SaleAdjustment
-                        id={sale.id}
-                        remainingCents={sale.totalCents - sale.adjustmentCents}
-                      />
-                    )}
-                    {sale.status === "draft" && <DraftSaleActions sale={sale} />}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
-      ) : (
-        <StateCard
-          title="No sales recorded"
-          detail="Use the form above to record a studio sale or payment."
-        />
-      )}
-    </div>
-  );
+  return <SalesView initialSales={data.sales} services={data.services} />;
 }
 
 const reportPresets: Array<{ value: ReportPreset; label: string }> = [
@@ -570,12 +480,6 @@ function formatTime(value: string) {
   return new Intl.DateTimeFormat("en-PH", {
     hour: "numeric",
     minute: "2-digit",
-    timeZone: "Asia/Manila",
-  }).format(new Date(value));
-}
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en-PH", {
-    dateStyle: "medium",
     timeZone: "Asia/Manila",
   }).format(new Date(value));
 }

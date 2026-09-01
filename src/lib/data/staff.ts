@@ -89,12 +89,40 @@ export type AvailabilityRecord = {
   availabilityDate: string | null;
 };
 
+export const saleDetailSelect =
+  "id,reference,status,total_cents,created_at,booking_id,customer_id,customers(first_name,last_name),payments(method,amount_cents),sale_adjustments(kind,amount_cents),sale_items(id,description,unit_price_cents,min_price_cents,max_price_cents)";
+
 export const bookingDetailSelect =
   "id,reference,status,starts_at,ends_at,notes,customers(id,first_name,last_name,email,phone),booking_services(id,service_id,position,name,price_cents,min_price_cents,max_price_cents,price_unit,duration_minutes),staff_profiles!bookings_assigned_piercer_id_fkey(user_id,display_name,color),stations(name),sales(id,status)";
 
 type Relation = Record<string, unknown> | Array<Record<string, unknown>> | null;
 function one(value: Relation) {
   return Array.isArray(value) ? value[0] : value;
+}
+
+export function mapSaleRow(row: Record<string, unknown>): SaleRecord {
+  const customer = one(row.customers as Relation);
+  const payments = (row.payments ?? []) as Array<{ method: PaymentMethod; amount_cents: number }>;
+  const adjustments = (row.sale_adjustments ?? []) as Array<{ amount_cents: number }>;
+  return {
+    id: String(row.id),
+    reference: String(row.reference),
+    status: row.status as SaleStatus,
+    totalCents: Number(row.total_cents),
+    createdAt: String(row.created_at),
+    customerName: customer ? `${customer.first_name} ${customer.last_name}` : "Walk-in",
+    methods: payments.map((item) => item.method),
+    paidCents: payments.reduce((sum, item) => sum + item.amount_cents, 0),
+    adjustmentCents: adjustments.reduce((sum, item) => sum + item.amount_cents, 0),
+    bookingId: row.booking_id == null ? null : String(row.booking_id),
+    items: ((row.sale_items ?? []) as Array<Record<string, unknown>>).map((item) => ({
+      id: String(item.id),
+      description: String(item.description),
+      unitPriceCents: item.unit_price_cents == null ? null : Number(item.unit_price_cents),
+      minPriceCents: item.min_price_cents == null ? null : Number(item.min_price_cents),
+      maxPriceCents: item.max_price_cents == null ? null : Number(item.max_price_cents),
+    })),
+  };
 }
 
 export function mapBookingRow(row: Record<string, unknown>): BookingRecord {
@@ -215,13 +243,7 @@ export async function getStaffData(
           .order("starts_at")
           .limit(200)
       : emptyMany,
-    includes("calendar", "sales")
-      ? supabase
-          .from("customers")
-          .select("id,first_name,last_name,email,phone,created_at")
-          .order("created_at", { ascending: false })
-          .limit(500)
-      : emptyMany,
+    emptyMany,
     includes("overview")
       ? supabase.from("customers").select("id", { count: "exact", head: true })
       : emptySingle,
@@ -230,17 +252,15 @@ export async function getStaffData(
           .from("customer_directory")
           .select("id,first_name,last_name,email,phone,created_at,appointment_count,last_appointment_at")
           .order("created_at", { ascending: false })
-          .limit(500)
+          .limit(25)
       : emptyMany,
     includes("overview", "sales")
       ? supabase
           .from("sales")
-          .select(
-            "id,reference,status,total_cents,created_at,booking_id,customers(first_name,last_name),payments(method,amount_cents),sale_adjustments(kind,amount_cents),sale_items(id,description,unit_price_cents,min_price_cents,max_price_cents)",
-          )
+          .select(saleDetailSelect)
           .gte("created_at", scope === "overview" ? today.start : "1970-01-01T00:00:00.000Z")
           .order("created_at", { ascending: false })
-          .limit(scope === "overview" ? 100 : 300)
+          .limit(scope === "overview" ? 100 : 25)
       : emptyMany,
     includes("overview", "calendar", "settings")
       ? supabase
@@ -318,15 +338,6 @@ export async function getStaffData(
     isActive: row.is_active,
   }));
   const bookings: BookingRecord[] = (bookingsResult.data ?? []).map((row) => mapBookingRow(row as Record<string, unknown>));
-  const listedCustomers: CustomerRecord[] = (customersResult.data ?? []).map(
-    (row) => ({
-      id: row.id,
-      name: `${row.first_name} ${row.last_name}`,
-      email: row.email,
-      phone: row.phone,
-      createdAt: row.created_at,
-    }),
-  );
   const directoryCustomers: CustomerRecord[] = (directoryResult.data ?? []).map((row) => ({
     id: row.id,
     name: `${row.first_name} ${row.last_name}`,
@@ -336,40 +347,7 @@ export async function getStaffData(
     appointmentCount: Number(row.appointment_count ?? 0),
     lastActivityAt: row.last_appointment_at ?? null,
   }));
-  const sales: SaleRecord[] = (salesResult.data ?? []).map((row) => {
-    const customer = one(row.customers as Relation);
-    const payments = (row.payments ?? []) as Array<{
-      method: PaymentMethod;
-      amount_cents: number;
-    }>;
-    const adjustments = (row.sale_adjustments ?? []) as Array<{
-      amount_cents: number;
-    }>;
-    return {
-      id: row.id,
-      reference: row.reference,
-      status: row.status,
-      totalCents: row.total_cents,
-      createdAt: row.created_at,
-      customerName: customer
-        ? `${customer.first_name} ${customer.last_name}`
-        : "Walk-in",
-      methods: payments.map((item) => item.method),
-      paidCents: payments.reduce((sum, item) => sum + item.amount_cents, 0),
-      adjustmentCents: adjustments.reduce(
-        (sum, item) => sum + item.amount_cents,
-        0,
-      ),
-      bookingId: row.booking_id,
-      items: (row.sale_items ?? []).map((item) => ({
-        id: item.id,
-        description: item.description,
-        unitPriceCents: item.unit_price_cents,
-        minPriceCents: item.min_price_cents,
-        maxPriceCents: item.max_price_cents,
-      })),
-    };
-  });
+  const sales: SaleRecord[] = (salesResult.data ?? []).map((row) => mapSaleRow(row as Record<string, unknown>));
   const staff: StaffRecord[] = (staffResult.data ?? []).map((row) => ({
     id: row.user_id,
     displayName: row.display_name,
@@ -429,7 +407,7 @@ export async function getStaffData(
     studio,
     services,
     bookings,
-    customers: directoryCustomers.length ? directoryCustomers : listedCustomers,
+    customers: directoryCustomers,
     sales,
     staff,
     serviceAssignments: (assignmentResult.data ?? []).map((row) => ({
@@ -440,7 +418,7 @@ export async function getStaffData(
     stations: stationResult.data ?? [],
     closures,
     availability,
-    customerCount: customerCountResult.count ?? directoryCustomers.length ?? listedCustomers.length,
+    customerCount: customerCountResult.count ?? directoryCustomers.length,
     bookingStatusCounts: report?.booking_statuses ?? {},
     paymentMethodTotals: report?.methods ?? {},
     completedRevenueCents: Number(report?.revenue_cents ?? 0),
