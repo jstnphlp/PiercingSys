@@ -1,0 +1,122 @@
+- generic [ref=e1]:
+  - main [ref=e3]:
+    - generic [ref=e4]:
+      - paragraph [ref=e16]: PIERCING CORNER · PARAÑAQUE
+      - heading [level=1] [ref=e17]:
+        - text: A little cornerfor your
+        - emphasis [ref=e18]: spark.
+      - paragraph [ref=e19]: Choose your piercing, find a real opening, and leave with an appointment already confirmed.
+      - generic [ref=e20]:
+        - generic [ref=e21]: Parañaque
+        - generic [ref=e25]: Asia/Manila appointments
+      - img "Piercing Corner ear illustration" [ref=e29]
+    - generic [ref=e30]:
+      - text: ✦
+      - generic [ref=e31]:
+        - list "Booking progress" [ref=e32]:
+          - listitem [ref=e33]:
+            - generic [ref=e34]: "1"
+            - generic [ref=e35]: Service
+          - listitem [ref=e36]:
+            - generic [ref=e37]: "2"
+            - generic [ref=e38]: Schedule
+          - listitem [ref=e39]:
+            - generic [ref=e40]: "3"
+            - generic [ref=e41]: Details
+        - generic [ref=e42]:
+          - paragraph [ref=e43]: STEP 1 OF 3
+          - heading "What are we piercing?" [level=2] [ref=e44]
+          - paragraph [ref=e45]: Prices are in Philippine pesos and reflect the configured studio rate.
+          - generic [ref=e46]:
+            - generic [ref=e47]:
+              - textbox "Search services" [ref=e52]
+              - generic "Service category" [ref=e53]:
+                - button "Ear" [ref=e54] [cursor=pointer]
+                - button "Face & Body" [active] [pressed] [ref=e55] [cursor=pointer]
+                - button "Other Services" [ref=e56] [cursor=pointer]
+            - generic [ref=e58]:
+              - strong [ref=e59]: None selected
+              - generic [ref=e60]: Pick a service
+            - group "Face & Body Piercings services" [ref=e198]:
+              - checkbox "Nostril Face & Body ₱800 60 min" [ref=e199] [cursor=pointer]:
+                - generic [ref=e201]:
+                  - strong [ref=e202]: Nostril
+                  - generic [ref=e203]: Face & Body
+                - generic [ref=e204]:
+                  - strong [ref=e205]: ₱800
+                  - generic [ref=e206]: 60 min
+              - checkbox "Septum Face & Body ₱1,000 60 min" [ref=e207] [cursor=pointer]:
+                - generic [ref=e209]:
+                  - strong [ref=e210]: Septum
+                  - generic [ref=e211]: Face & Body
+                - generic [ref=e212]:
+                  - strong [ref=e213]: ₱1,000
+                  - generic [ref=e214]: 60 min
+              - checkbox "Eyebrow Face & Body ₱900 60 min" [ref=e215] [cursor=pointer]:
+                - generic [ref=e217]:
+                  - strong [ref=e218]: Eyebrow
+                  - generic [ref=e219]: Face & Body
+                - generic [ref=e220]:
+                  - strong [ref=e221]: ₱900
+                  - generic [ref=e222]: 60 min
+              - checkbox "Navel Face & Body ₱900 60 min" [ref=e223] [cursor=pointer]:
+                - generic [ref=e225]:
+                  - strong [ref=e226]: Navel
+                  - generic [ref=e227]: Face & Body
+                - generic [ref=e228]:
+                  - strong [ref=e229]: ₱900
+                  - generic [ref=e230]: 60 min
+              - checkbox "Bridge Face & Body ₱950 60 min" [ref=e231] [cursor=pointer]:
+                - generic [ref=e233]:
+                  - strong [ref=e234]: Bridge
+                  - generic [ref=e235]: Face & Body
+                - generic [ref=e236]:
+                  - strong [ref=e237]: ₱950
+                  - generic [ref=e238]: 60 min
+              - checkbox "Surface Face & Body ₱2,800 60 min" [ref=e239] [cursor=pointer]:
+                - generic [ref=e241]:
+                  - strong [ref=e242]: Surface
+                  - generic [ref=e243]: Face & Body
+                - generic [ref=e244]:
+                  - strong [ref=e245]: ₱2,800
+                  - generic [ref=e246]: 60 min
+              - checkbox "Lip Piercing Face & Body ₱950 60 min" [ref=e247] [cursor=pointer]:
+                - generic [ref=e249]:
+                  - strong [ref=e250]: Lip Piercing
+                  - generic [ref=e251]: Face & Body
+                - generic [ref=e252]:
+                  - strong [ref=e253]: ₱950
+                  - generic [ref=e254]: 60 min
+              - checkbox "Oral Piercing Face & Body ₱1,200 60 min" [ref=e255] [cursor=pointer]:
+                - generic [ref=e257]:
+                  - strong [ref=e258]: Oral Piercing
+                  - generic [ref=e259]: Face & Body
+                - generic [ref=e260]:
+                  - strong [ref=e261]: ₱1,200
+                  - generic [ref=e262]: 60 min
+              - checkbox "Nipple Face & Body ₱1,000 60 min" [ref=e263] [cursor=pointer]:
+                - generic [ref=e265]:
+                  - strong [ref=e266]: Nipple
+                  - generic [ref=e267]: Face & Body
+                - generic [ref=e268]:
+                  - strong [ref=e269]: ₱1,000
+                  - generic [ref=e270]: 60 min
+              - checkbox "Dermal Face & Body ₱2,800 60 min" [ref=e271] [cursor=pointer]:
+                - generic [ref=e273]:
+                  - strong [ref=e274]: Dermal
+                  - generic [ref=e275]: Face & Body
+                - generic [ref=e276]:
+                  - strong [ref=e277]: ₱2,800
+                  - generic [ref=e278]: 60 min
+              - checkbox "Genital Face & Body ₱3,000 60 min" [ref=e279] [cursor=pointer]:
+                - generic [ref=e281]:
+                  - strong [ref=e282]: Genital
+                  - generic [ref=e283]: Face & Body
+                - generic [ref=e284]:
+                  - strong [ref=e285]: ₱3,000
+                  - generic [ref=e286]: 60 min
+          - button "Choose a service" [disabled] [ref=e183]
+      - link "Open Piercing Corner on Instagram" [ref=e184] [cursor=pointer]:
+        - /url: https://www.instagram.com/piercing.corner/
+  - button "Open Next.js Dev Tools" [ref=e193] [cursor=pointer]
+  - alert [ref=e197]

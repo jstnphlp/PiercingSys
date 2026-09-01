@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import { AtSign, Clock3, MapPin, MoonStar, Sparkles } from "lucide-react";
+import { Brand } from "@/components/brand";
 import { getPublicCatalog } from "@/lib/data/public";
 import { BookingForm } from "./booking-form";
 import "./booking.css";
@@ -12,16 +12,32 @@ export default async function BookingPage() {
   const catalog = await getPublicCatalog();
   return (
     <div className="booking-page">
+      <header className="booking-header">
+        <Brand />
+        <div className="booking-header-actions">
+          <span>Online appointment booking</span>
+          <a
+            className="instagram-link"
+            href={instagramUrl}
+            target="_blank"
+            rel="noreferrer"
+            aria-label="Open Piercing Corner on Instagram"
+            title="@piercing.corner"
+          >
+            <AtSign size={16} />
+          </a>
+        </div>
+      </header>
       <main className="booking-layout">
-        <section className="booking-story">
+        <section className="booking-story" aria-labelledby="booking-heading">
           <div className="motif motif-one">
             <Sparkles />
           </div>
           <div className="motif motif-two">
             <MoonStar />
           </div>
-          <p className="eyebrow">PIERCING CORNER · PARAÑAQUE</p>
-          <h1>
+          <p className="eyebrow">APPOINTMENTS AT PIERCING CORNER</p>
+          <h1 id="booking-heading">
             A little corner
             <br />
             for your <em>spark.</em>
@@ -30,23 +46,6 @@ export default async function BookingPage() {
             Choose your piercing, find a real opening, and leave with an
             appointment already confirmed.
           </p>
-          <div className="studio-facts">
-            <span>
-              <MapPin size={17} />{" "}
-              {catalog.studio.address ?? catalog.studio.location}
-            </span>
-            <span>
-              <Clock3 size={17} /> Asia/Manila appointments
-            </span>
-          </div>
-          <Image
-            className="story-logo"
-            src="/logo.png"
-            alt="Piercing Corner ear illustration"
-            width={220}
-            height={220}
-            priority
-          />
         </section>
         <section className="booking-panel">
           {catalog.ready || catalog.reason === "connection" ? (
@@ -61,17 +60,18 @@ export default async function BookingPage() {
           ) : (
             <SetupState instagramUrl={instagramUrl} />
           )}
-          <a
-            className="instagram-link instagram-inline"
-            href={instagramUrl}
-            target="_blank"
-            rel="noreferrer"
-            aria-label="Open Piercing Corner on Instagram"
-            title="@piercing.corner"
-          >
-            <AtSign size={15} />
-          </a>
         </section>
+        <aside className="booking-support" aria-label="Studio details">
+          <div className="studio-facts">
+            <span>
+              <MapPin size={17} />{" "}
+              {catalog.studio.address ?? catalog.studio.location}
+            </span>
+            <span>
+              <Clock3 size={17} /> Asia/Manila appointments
+            </span>
+          </div>
+        </aside>
       </main>
     </div>
   );

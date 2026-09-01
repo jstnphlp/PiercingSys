@@ -267,6 +267,7 @@ export function generateAvailableSlots(input: {
       for (let start = opens; start + durationMs <= closes; start += intervalMs) {
         const end = start + durationMs;
         if ((input.enforceBookingWindow ?? true) && start < leadCutoff.getTime()) continue;
+        if ((input.enforceBookingWindow ?? true) && start > horizon.getTime()) continue;
         if (closures.some((item) => start < item.end && end > item.start)) continue;
         if (occupied.some((item) => start < item.end && end > item.start)) continue;
         const existing = byStart.get(start);

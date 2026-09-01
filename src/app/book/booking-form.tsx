@@ -12,14 +12,18 @@ import {
   ShieldCheck,
   Sparkles,
   Upload,
+  UserRound,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import {
   canNavigateToNextBookingWeek,
   combinedServiceDuration,
+  combinedServicePriceBounds,
+  formatPhp,
   formatServicePrice,
   manilaDate,
   manilaWeekDates,
+  servicePriceBounds,
   shiftManilaDate,
   type AvailableSlot,
   type PublicBookingResult,
@@ -30,6 +34,7 @@ import {
   qualifiedPiercersForServices,
   toggleServiceSelection,
 } from "./booking-selection";
+import { removeOverlappingSlots } from "./booking-calendar";
 
 type Props = {
   services: Service[];
@@ -92,6 +97,20 @@ export function BookingForm({
     [serviceIds, displayServices],
   );
   const durationMinutes = combinedServiceDuration(selectedServices);
+  const priceBounds = combinedServicePriceBounds(selectedServices);
+  const selectedServicesHavePrices = selectedServices.every(
+    (service) => servicePriceBounds(service) !== null,
+  );
+  const selectedPriceLabel = preview
+    ? "Price TBD"
+    : !selectedServices.length || !selectedServicesHavePrices
+      ? "Price confirmed at studio"
+      : priceBounds.min === priceBounds.max
+        ? formatPhp(priceBounds.min)
+        : `${formatPhp(priceBounds.min)}–${formatPhp(priceBounds.max)}`;
+  const selectedPiercerName = piercerId
+    ? piercers.find((person) => person.id === piercerId)?.name ?? "Selected piercer"
+    : "Any qualified piercer";
   const eligiblePiercers = useMemo(
     () => qualifiedPiercersForServices(serviceIds, piercers, assignments),
     [assignments, piercers, serviceIds],
@@ -192,9 +211,7 @@ export function BookingForm({
       setError(body.error?.message ?? "We could not confirm your booking.");
       if (response.status === 409) {
         setStep(2);
-        setSlots((current) =>
-          current.filter((item) => item.startsAt !== slot.startsAt),
-        );
+        setSlots((current) => removeOverlappingSlots(current, slot));
         setSlot(null);
       }
       return;
@@ -255,7 +272,7 @@ export function BookingForm({
         ))}
       </ol>
       {step === 1 && (
-        <div className="booking-step">
+        <div className="booking-step booking-step-services">
           <p className="eyebrow">STEP 1 OF 3</p>
           <h2>What are we piercing?</h2>
           <p>
@@ -268,13 +285,49 @@ export function BookingForm({
                 {(["Ear Piercings", "Face & Body Piercings", "Other Services"] as Service["category"][]).map((category) => <button type="button" key={category} className={serviceCategory === category ? "active" : ""} aria-pressed={serviceCategory === category} onClick={() => setServiceCategory(category)}>{category.replace(" Piercings", "")}</button>)}
               </div>
             </div>
-            {selectedServices.length > 0 && <div className="selected-services" aria-live="polite"><span><strong>{selectedServices.length} selected</strong><small>{durationMinutes} minutes total</small></span>{selectedServices.map((service) => <button type="button" key={service.id} onClick={() => toggleService(service.id)} aria-label={`Remove ${service.name}`}>{service.name} <b>×</b></button>)}</div>}
+            <div
+              className={`selected-services ${selectedServices.length ? "has-selection" : "is-empty"}`}
+              aria-live="polite"
+            >
+              <span className="selected-services-summary">
+                <strong>
+                  {selectedServices.length
+                    ? `${selectedServices.length} selected`
+                    : "None selected"}
+                </strong>
+                <small>
+                  {selectedServices.length
+                    ? `${durationMinutes} min · ${selectedPriceLabel}`
+                    : "Pick a service"}
+                </small>
+              </span>
+              <div className="selected-service-chips">
+                {selectedServices.map((service) => (
+                  <button
+                    type="button"
+                    key={service.id}
+                    onClick={() => toggleService(service.id)}
+                    aria-label={`Remove ${service.name}`}
+                  >
+                    <span>
+                      <strong>{service.name}</strong>
+                      <small>
+                        {preview ? "Price TBD" : formatServicePrice(service)} · {preview ? "Duration TBD" : `${service.durationMinutes} min`}
+                      </small>
+                    </span>
+                    <b aria-hidden="true">×</b>
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="service-list compact" role="group" aria-label={`${serviceCategory} services`}>
               {filteredServices.map((service) => <button
                 type="button" role="checkbox" aria-checked={serviceIds.includes(service.id)} key={service.id}
                 className={serviceIds.includes(service.id) ? "selected" : ""}
                 onClick={() => toggleService(service.id)}>
-                <span className="service-radio">{serviceIds.includes(service.id) && <i />}</span>
+                <span className="service-radio">
+                  {serviceIds.includes(service.id) && <Check size={12} aria-hidden="true" />}
+                </span>
                 <span><strong>{service.name}</strong><small>{service.bodyArea || service.description || "Piercing service"}</small></span>
                 <span><strong>{preview ? "Price TBD" : formatServicePrice(service)}</strong><small>{preview ? "Duration TBD" : `${service.durationMinutes} min`}</small></span>
               </button>)}
@@ -300,7 +353,11 @@ export function BookingForm({
               void loadSlots();
             }}
           >
-            Find an opening <ArrowRight size={16} />
+            {!serviceIds.length
+              ? "Choose a service"
+              : incompatibleServices
+                ? "Adjust your selection"
+                : <>Find an opening <ArrowRight size={16} /></>}
           </button>
         </div>
       )}
@@ -324,12 +381,36 @@ export function BookingForm({
               {visibleDates.map((calendarDate) => <div key={calendarDate} className={`public-calendar-date ${calendarDate === minDate ? "today" : ""} ${calendarDate < minDate ? "past" : ""}`}><span>{formatWeekday(calendarDate)}</span><strong>{calendarDate.slice(8)}</strong><small>{formatMonth(calendarDate)}</small></div>)}
               <div className="public-calendar-times">{Array.from({ length: publicCalendarEndHour - publicCalendarStartHour + 1 }, (_, index) => <span key={index} style={{ top: index * publicCalendarHourHeight }}>{formatHour(publicCalendarStartHour + index)}</span>)}</div>
               {visibleDates.map((calendarDate) => <div className={`public-calendar-column ${calendarDate < minDate ? "past" : ""}`} key={calendarDate}>
-                {slots.filter((item) => manilaSlotDate(item.startsAt) === calendarDate).map((item) => <button type="button" key={item.startsAt} className={`public-slot ${slot?.startsAt === item.startsAt ? "selected" : ""}`} style={{ top: slotTop(item.startsAt) }} onClick={() => { setSlot(item); setDate(calendarDate); }}><Clock3/><strong>{formatSlotTime(item.startsAt)}</strong><small>Available</small></button>)}
+                {slots.filter((item) => manilaSlotDate(item.startsAt) === calendarDate).map((item) => {
+                  const isSelected = slot?.startsAt === item.startsAt;
+                  return <button
+                    type="button"
+                    key={item.startsAt}
+                    className={`public-slot ${isSelected ? "selected" : ""}`}
+                    style={{ top: slotTop(item.startsAt) }}
+                    aria-pressed={isSelected}
+                    onClick={() => { setSlot(item); setDate(calendarDate); }}
+                  >
+                    {isSelected ? <Check /> : <Clock3 />}
+                    <strong>{formatSlotTime(item.startsAt)}</strong>
+                    <small>{isSelected ? "Selected" : "Available"}</small>
+                  </button>;
+                })}
               </div>)}
             </div></div>
             {loadingSlots && <div className="public-calendar-loading"><Sparkles className="spin"/> Calculating the week’s openings…</div>}
             {!loadingSlots && !slots.length && <div className="public-calendar-empty">No openings this week. Try the next week or another piercer.</div>}
           </div>
+          {slot && (
+            <div className="selected-slot-summary" role="status">
+              <span><Check size={15} /></span>
+              <div>
+                <small>SELECTED OPENING</small>
+                <strong>{formatAppointmentDate(slot.startsAt)}</strong>
+              </div>
+              <p>Choose another time above to change it.</p>
+            </div>
+          )}
           {error && (
             <p className="form-error" role="alert">
               {error}
@@ -344,101 +425,146 @@ export function BookingForm({
               disabled={!slot}
               onClick={() => setStep(3)}
             >
-              Your details <ArrowRight size={16} />
+              {slot ? <>Your details <ArrowRight size={16} /></> : "Choose an opening"}
             </button>
           </div>
         </div>
       )}
       {step === 3 && (
-        <form className="booking-step" onSubmit={submit}>
+        <form className="booking-step booking-step-details" onSubmit={submit}>
           <p className="eyebrow">STEP 3 OF 3</p>
-          <h2>Tell us about you.</h2>
+          <h2>Review and confirm.</h2>
           <p>
-            We’ll check that your selected opening is still available when you
-            confirm your appointment.
+            Check your appointment, then add your contact details to finish.
           </p>
-          <div className="detail-grid">
-            <label className="field">
-              First name
-              <input
-                name="firstName"
-                required
-                maxLength={80}
-                autoComplete="given-name"
-              />
-            </label>
-            <label className="field">
-              Last name
-              <input
-                name="lastName"
-                required
-                maxLength={80}
-                autoComplete="family-name"
-              />
-            </label>
-            <label className="field">
-              Email
-              <input
-                name="email"
-                required
-                type="email"
-                maxLength={254}
-                autoComplete="email"
-              />
-            </label>
-            <label className="field">
-              Mobile number
-              <input
-                name="phone"
-                required
-                type="tel"
-                maxLength={30}
-                autoComplete="tel"
-              />
-            </label>
+          <div className="booking-details-layout">
+            <section className="booking-review" aria-labelledby="booking-review-title">
+              <header className="booking-review-header">
+                <span><ShieldCheck size={19} /></span>
+                <div>
+                  <small>YOUR APPOINTMENT</small>
+                  <h3 id="booking-review-title">Booking summary</h3>
+                </div>
+                <button type="button" onClick={() => setStep(2)}>Edit</button>
+              </header>
+              <ul className="booking-review-services" aria-label="Selected services">
+                {selectedServices.map((service) => (
+                  <li key={service.id}>
+                    <span className="review-service-check"><Check size={12} /></span>
+                    <span>
+                      <strong>{service.name}</strong>
+                      <small>{service.bodyArea || service.category} · {preview ? "Duration TBD" : `${service.durationMinutes} min`}</small>
+                    </span>
+                    <strong>{preview ? "Price TBD" : formatServicePrice(service)}</strong>
+                  </li>
+                ))}
+              </ul>
+              <dl className="booking-review-meta">
+                <div>
+                  <CalendarDays />
+                  <dt>Schedule</dt>
+                  <dd>{slot ? formatAppointmentDate(slot.startsAt) : "No opening selected"}</dd>
+                </div>
+                <div>
+                  <Clock3 />
+                  <dt>Duration</dt>
+                  <dd>{preview ? "Duration TBD" : `${durationMinutes} minutes`}</dd>
+                </div>
+                <div>
+                  <UserRound />
+                  <dt>Piercer</dt>
+                  <dd>{selectedPiercerName}</dd>
+                </div>
+              </dl>
+              <div className="booking-review-total">
+                <span>
+                  <small>ESTIMATED TOTAL</small>
+                  <strong>{selectedPriceLabel}</strong>
+                </span>
+                <small>
+                  {preview
+                    ? "Add real service prices in Settings."
+                    : selectedServicesHavePrices
+                      ? "Based on the selected services."
+                      : "Final price is confirmed by the studio."}
+                </small>
+              </div>
+            </section>
+            <section className="customer-details" aria-labelledby="customer-details-title">
+              <div className="customer-details-heading">
+                <p className="eyebrow">YOUR DETAILS</p>
+                <h3 id="customer-details-title">How can we reach you?</h3>
+              </div>
+              <div className="detail-grid">
+                <label className="field">
+                  First name
+                  <input
+                    name="firstName"
+                    required
+                    maxLength={80}
+                    autoComplete="given-name"
+                  />
+                </label>
+                <label className="field">
+                  Last name
+                  <input
+                    name="lastName"
+                    required
+                    maxLength={80}
+                    autoComplete="family-name"
+                  />
+                </label>
+                <label className="field">
+                  Email
+                  <input
+                    name="email"
+                    required
+                    type="email"
+                    maxLength={254}
+                    autoComplete="email"
+                  />
+                </label>
+                <label className="field">
+                  Mobile number
+                  <input
+                    name="phone"
+                    required
+                    type="tel"
+                    maxLength={30}
+                    autoComplete="tel"
+                  />
+                </label>
+              </div>
+              <label className="field notes-field">
+                Notes (optional)
+                <textarea
+                  name="notes"
+                  maxLength={2000}
+                  placeholder="Placement ideas, allergies, access needs, or questions"
+                />
+              </label>
+              <label className="upload-field">
+                <Upload size={18} />
+                <span>
+                  <strong>Reference photo (optional)</strong>
+                  <small>JPG or PNG · up to 5 MB</small>
+                </span>
+                <input name="photo" type="file" accept="image/jpeg,image/png" />
+              </label>
+              <label className="check-field">
+                <input name="ageConfirmed" type="checkbox" required />
+                <span>
+                  <Check size={12} />
+                </span>
+                I confirm that I am at least {minimumAge} years old.
+              </label>
+            </section>
           </div>
-          <label className="field notes-field">
-            Notes (optional)
-            <textarea
-              name="notes"
-              maxLength={2000}
-              placeholder="Placement ideas, allergies, access needs, or questions"
-            />
-          </label>
-          <label className="upload-field">
-            <Upload size={18} />
-            <span>
-              <strong>Reference photo (optional)</strong>
-              <small>JPG or PNG · up to 5 MB</small>
-            </span>
-            <input name="photo" type="file" accept="image/jpeg,image/png" />
-          </label>
-          <label className="check-field">
-            <input name="ageConfirmed" type="checkbox" required />
-            <span>
-              <Check size={12} />
-            </span>
-            I confirm that I am at least {minimumAge} years old.
-          </label>
           {error && (
             <p className="form-error" role="alert">
               {error}
             </p>
           )}
-          <div className="selection-summary">
-            <ShieldCheck size={16} />
-            <span>
-              <strong>{selectedServices.map((service) => service.name).join(" + ")}</strong>
-              <small>
-                {slot &&
-                  new Intl.DateTimeFormat("en-PH", {
-                    dateStyle: "medium",
-                    timeStyle: "short",
-                    timeZone: "Asia/Manila",
-                  }).format(new Date(slot.startsAt))}
-              </small>
-            </span>
-          </div>
           <div className="button-row">
             <button
               type="button"
@@ -470,6 +596,7 @@ function formatWeekday(date: string) { return new Intl.DateTimeFormat("en-PH", {
 function formatMonth(date: string) { return new Intl.DateTimeFormat("en-PH", { month: "short", timeZone: "UTC" }).format(new Date(`${date}T12:00:00Z`)); }
 function formatHour(hour: number) { return new Intl.DateTimeFormat("en-PH", { hour: "numeric", timeZone: "UTC" }).format(new Date(Date.UTC(2020, 0, 1, hour))); }
 function formatSlotTime(value: string) { return new Intl.DateTimeFormat("en-PH", { hour: "numeric", minute: "2-digit", timeZone: "Asia/Manila" }).format(new Date(value)); }
+function formatAppointmentDate(value: string) { return new Intl.DateTimeFormat("en-PH", { dateStyle: "full", timeStyle: "short", timeZone: "Asia/Manila" }).format(new Date(value)); }
 function manilaSlotDate(value: string) { return new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", day: "2-digit", timeZone: "Asia/Manila" }).format(new Date(value)); }
 function slotTop(value: string) {
   const parts = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Asia/Manila" }).format(new Date(value)).split(":").map(Number);

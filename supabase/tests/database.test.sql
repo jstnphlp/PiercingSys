@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(55);
+select plan(58);
 
 select has_table('public', 'studio_settings', 'singleton studio settings exists');
 select has_table('public', 'staff_profiles', 'staff profiles replace memberships');
@@ -16,6 +16,13 @@ select has_function('public', 'complete_draft_sale', array['uuid'], 'draft compl
 select has_function('public', 'current_staff_role', array[]::text[], 'role helper exists');
 select policies_are('public', 'sales', array['management_manage_sales'], 'sales are management-only under RLS');
 select policies_are('public', 'bookings', array['management_manage_bookings','permitted_booking_read','piercer_update_own_bookings'], 'booking policies cover management and assigned piercers');
+select ok(
+  exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'bookings'
+  ),
+  'booking changes are published to the staff calendar'
+);
 select has_table('public', 'booking_services', 'ordered appointment service snapshots exist');
 select hasnt_column('public', 'bookings', 'service_id', 'legacy single-service booking column was removed after backfill');
 select columns_are('public', 'booking_services', array['id','booking_id','service_id','position','name','duration_minutes','price_cents','min_price_cents','max_price_cents','price_unit','created_at'], 'booking services keep complete ordered snapshots');
@@ -156,6 +163,38 @@ select is(
   1::bigint,
   'idempotent retries share one confirmation delivery'
 );
+select ok(
+  not exists (
+    select 1 from public.available_slots(
+      array['20000000-0000-0000-0000-000000000001'::uuid],
+      (select (b.starts_at at time zone 'Asia/Manila')::date from public.bookings b
+        join public.customers c on c.id = b.customer_id where c.email = 'idempotent@example.com'),
+      (select (b.starts_at at time zone 'Asia/Manila')::date from public.bookings b
+        join public.customers c on c.id = b.customer_id where c.email = 'idempotent@example.com'),
+      '10000000-0000-0000-0000-000000000002',
+      false
+    ) slot
+    where slot.starts_at = (select b.starts_at from public.bookings b
+      join public.customers c on c.id = b.customer_id where c.email = 'idempotent@example.com')
+  ),
+  'a confirmed booking is removed from that piercer public availability'
+);
+
+update public.studio_settings set booking_horizon_days = 1 where id = 1;
+select ok(
+  not exists (
+    select 1 from public.available_slots(
+      array['20000000-0000-0000-0000-000000000001'::uuid],
+      (now() at time zone 'Asia/Manila')::date + 1,
+      (now() at time zone 'Asia/Manila')::date + 1,
+      '10000000-0000-0000-0000-000000000002',
+      true
+    ) slot
+    where slot.starts_at > now() + interval '1 day'
+  ),
+  'public availability does not advertise starts after the exact horizon cutoff'
+);
+update public.studio_settings set booking_horizon_days = 60 where id = 1;
 
 select throws_ok(
   $$select public.create_public_booking(

@@ -1,0 +1,91 @@
+- generic [active] [ref=f1e1]:
+  - main [ref=f1e3]:
+    - generic [ref=f1e4]:
+      - paragraph [ref=f1e16]: PIERCING CORNER · PARAÑAQUE
+      - heading [level=1] [ref=f1e17]:
+        - text: A little cornerfor your
+        - emphasis [ref=f1e18]: spark.
+      - paragraph [ref=f1e19]: Choose your piercing, find a real opening, and leave with an appointment already confirmed.
+      - generic [ref=f1e20]:
+        - generic [ref=f1e21]: Parañaque
+        - generic [ref=f1e25]: Asia/Manila appointments
+      - img "Piercing Corner ear illustration" [ref=f1e29]
+    - generic [ref=f1e30]:
+      - text: ✦
+      - generic [ref=f1e31]:
+        - list "Booking progress" [ref=f1e32]:
+          - listitem [ref=f1e33]:
+            - generic [ref=f1e34]: "1"
+            - generic [ref=f1e35]: Service
+          - listitem [ref=f1e36]:
+            - generic [ref=f1e37]: "2"
+            - generic [ref=f1e38]: Schedule
+          - listitem [ref=f1e39]:
+            - generic [ref=f1e40]: "3"
+            - generic [ref=f1e41]: Details
+        - generic [ref=f1e545]:
+          - paragraph [ref=f1e546]: STEP 1 OF 3
+          - heading "What are we piercing?" [level=2] [ref=f1e547]
+          - paragraph [ref=f1e548]: Prices are in Philippine pesos and reflect the configured studio rate.
+          - generic [ref=f1e549]:
+            - generic [ref=f1e550]:
+              - textbox "Search services" [ref=f1e555]
+              - generic "Service category" [ref=f1e556]:
+                - button "Ear" [ref=f1e557] [cursor=pointer]
+                - button "Face & Body" [ref=f1e558] [cursor=pointer]
+                - button "Other Services" [pressed] [ref=f1e559] [cursor=pointer]
+            - generic [ref=f1e560]:
+              - generic [ref=f1e561]:
+                - strong [ref=f1e562]: 1 selected
+                - generic [ref=f1e563]: 60 min total
+              - button "Remove Nostril" [ref=f1e565] [cursor=pointer]:
+                - generic [ref=f1e566]: Nostril
+                - generic [ref=f1e567]: ×
+            - group "Other Services services" [ref=f1e568]:
+              - checkbox "Curation / Earscape Piercing service ₱100–₱500 60 min" [ref=f1e569] [cursor=pointer]:
+                - generic [ref=f1e571]:
+                  - strong [ref=f1e572]: Curation / Earscape
+                  - generic [ref=f1e573]: Piercing service
+                - generic [ref=f1e574]:
+                  - strong [ref=f1e575]: ₱100–₱500
+                  - generic [ref=f1e576]: 60 min
+              - checkbox "Removal / Replacement / Downsize / Cleaning Piercing service ₱100–₱500 30 min" [ref=f1e577] [cursor=pointer]:
+                - generic [ref=f1e579]:
+                  - strong [ref=f1e580]: Removal / Replacement / Downsize / Cleaning
+                  - generic [ref=f1e581]: Piercing service
+                - generic [ref=f1e582]:
+                  - strong [ref=f1e583]: ₱100–₱500
+                  - generic [ref=f1e584]: 30 min
+              - checkbox "Bump Treatment Piercing service ₱200–₱500 30 min" [ref=f1e585] [cursor=pointer]:
+                - generic [ref=f1e587]:
+                  - strong [ref=f1e588]: Bump Treatment
+                  - generic [ref=f1e589]: Piercing service
+                - generic [ref=f1e590]:
+                  - strong [ref=f1e591]: ₱200–₱500
+                  - generic [ref=f1e592]: 30 min
+              - checkbox "Authentic No-Pull Disc Piercing service ₱250 15 min" [ref=f1e593] [cursor=pointer]:
+                - generic [ref=f1e595]:
+                  - strong [ref=f1e596]: Authentic No-Pull Disc
+                  - generic [ref=f1e597]: Piercing service
+                - generic [ref=f1e598]:
+                  - strong [ref=f1e599]: ₱250
+                  - generic [ref=f1e600]: 15 min
+              - checkbox "Titanium Anodizing Piercing service ₱200–₱250 per process 30 min" [ref=f1e601] [cursor=pointer]:
+                - generic [ref=f1e603]:
+                  - strong [ref=f1e604]: Titanium Anodizing
+                  - generic [ref=f1e605]: Piercing service
+                - generic [ref=f1e606]:
+                  - strong [ref=f1e607]: ₱200–₱250 per process
+                  - generic [ref=f1e608]: 30 min
+              - 'checkbox "Ultrasonic Jewelry Cleaning Supported materials: Surgical Steel Titanium Real Gold (yellow or white) Diamonds 925 Silver ₱200–₱350 per process 30 min" [ref=f1e609] [cursor=pointer]':
+                - generic [ref=f1e611]:
+                  - strong [ref=f1e612]: Ultrasonic Jewelry Cleaning
+                  - generic [ref=f1e613]: "Supported materials: Surgical Steel Titanium Real Gold (yellow or white) Diamonds 925 Silver"
+                - generic [ref=f1e614]:
+                  - strong [ref=f1e615]: ₱200–₱350 per process
+                  - generic [ref=f1e616]: 30 min
+          - button "Find an opening" [ref=f1e617] [cursor=pointer]
+      - link "Open Piercing Corner on Instagram" [ref=f1e184] [cursor=pointer]:
+        - /url: https://www.instagram.com/piercing.corner/
+  - button "Open Next.js Dev Tools" [ref=f1e193] [cursor=pointer]
+  - alert [ref=f1e197]

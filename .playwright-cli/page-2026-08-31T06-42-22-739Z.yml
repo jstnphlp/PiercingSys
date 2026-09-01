@@ -1,0 +1,90 @@
+- generic [active] [ref=f1e1]:
+  - main [ref=f1e3]:
+    - generic [ref=f1e4]:
+      - paragraph [ref=f1e16]: PIERCING CORNER · PARAÑAQUE
+      - heading [level=1] [ref=f1e17]:
+        - text: A little cornerfor your
+        - emphasis [ref=f1e18]: spark.
+      - paragraph [ref=f1e19]: Choose your piercing, find a real opening, and leave with an appointment already confirmed.
+      - generic [ref=f1e20]:
+        - generic [ref=f1e21]: Parañaque
+        - generic [ref=f1e25]: Asia/Manila appointments
+      - img "Piercing Corner ear illustration" [ref=f1e29]
+    - generic [ref=f1e30]:
+      - text: ✦
+      - generic [ref=f1e31]:
+        - list "Booking progress" [ref=f1e32]:
+          - listitem [ref=f1e33]:
+            - generic [ref=f1e35]: Service
+          - listitem [ref=f1e36]:
+            - generic [ref=f1e37]: "2"
+            - generic [ref=f1e38]: Schedule
+          - listitem [ref=f1e39]:
+            - generic [ref=f1e40]: "3"
+            - generic [ref=f1e41]: Details
+        - generic [ref=f1e467]:
+          - paragraph [ref=f1e468]: STEP 2 OF 3
+          - heading "Pick your moment." [level=2] [ref=f1e469]
+          - paragraph [ref=f1e470]: Nostril · 60 minutes total
+          - generic [ref=f1e471]:
+            - button "Previous week" [disabled] [ref=f1e472]
+            - button "Today" [ref=f1e475] [cursor=pointer]
+            - button "Next week" [ref=f1e476] [cursor=pointer]
+            - strong [ref=f1e479]: Aug 30–Sep 5
+            - generic [ref=f1e480]:
+              - generic [ref=f1e481]: Piercer
+              - combobox "Piercer" [ref=f1e482]:
+                - option "Any qualified piercer" [selected]
+          - generic [ref=f1e483]:
+            - generic [ref=f1e485]:
+              - generic [ref=f1e489]:
+                - generic [ref=f1e490]: SUN
+                - strong [ref=f1e491]: "30"
+                - generic [ref=f1e492]: Aug
+              - generic [ref=f1e493]:
+                - generic [ref=f1e494]: MON
+                - strong [ref=f1e495]: "31"
+                - generic [ref=f1e496]: Aug
+              - generic [ref=f1e497]:
+                - generic [ref=f1e498]: TUE
+                - strong [ref=f1e499]: "01"
+                - generic [ref=f1e500]: Sep
+              - generic [ref=f1e501]:
+                - generic [ref=f1e502]: WED
+                - strong [ref=f1e503]: "02"
+                - generic [ref=f1e504]: Sep
+              - generic [ref=f1e505]:
+                - generic [ref=f1e506]: THU
+                - strong [ref=f1e507]: "03"
+                - generic [ref=f1e508]: Sep
+              - generic [ref=f1e509]:
+                - generic [ref=f1e510]: FRI
+                - strong [ref=f1e511]: "04"
+                - generic [ref=f1e512]: Sep
+              - generic [ref=f1e513]:
+                - generic [ref=f1e514]: SAT
+                - strong [ref=f1e515]: "05"
+                - generic [ref=f1e516]: Sep
+              - generic [ref=f1e517]:
+                - generic [ref=f1e518]: 8 AM
+                - generic [ref=f1e519]: 9 AM
+                - generic [ref=f1e520]: 10 AM
+                - generic [ref=f1e521]: 11 AM
+                - generic [ref=f1e522]: 12 PM
+                - generic [ref=f1e523]: 1 PM
+                - generic [ref=f1e524]: 2 PM
+                - generic [ref=f1e525]: 3 PM
+                - generic [ref=f1e526]: 4 PM
+                - generic [ref=f1e527]: 5 PM
+                - generic [ref=f1e528]: 6 PM
+                - generic [ref=f1e529]: 7 PM
+                - generic [ref=f1e530]: 8 PM
+                - generic [ref=f1e531]: 9 PM
+            - generic [ref=f1e539]: No openings this week. Try the next week or another piercer.
+          - generic [ref=f1e540]:
+            - button "Back" [ref=f1e541] [cursor=pointer]
+            - button "Choose an opening" [disabled] [ref=f1e544]
+      - link "Open Piercing Corner on Instagram" [ref=f1e184] [cursor=pointer]:
+        - /url: https://www.instagram.com/piercing.corner/
+  - button "Open Next.js Dev Tools" [ref=f1e193] [cursor=pointer]
+  - alert [ref=f1e197]

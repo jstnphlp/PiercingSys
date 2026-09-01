@@ -156,6 +156,7 @@ describe("POST /api/public/bookings", () => {
     const { status, body } = await readJson(await POST(bookingForm()));
     expect(status).toBe(409);
     expect(body).toMatchObject({ error: { code: "SLOT_UNAVAILABLE" } });
+    expect(queueBookingSideEffects).not.toHaveBeenCalled();
   });
 
   it("maps an unconfigured studio to HTTP 503", async () => {

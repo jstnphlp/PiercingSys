@@ -1,9 +1,11 @@
 "use client";
 
 import { Check, ChevronLeft, ChevronRight, Clock3, Plus, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { combinedServiceDuration, manilaDate, manilaWeekDates, manilaWeekday, shiftManilaDate, type BookingStatus, type Service } from "@/lib/domain";
 import type { CustomerRecord, StaffRecord } from "@/lib/data/staff";
+import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { layoutOverlappingAppointments } from "./calendar-layout";
 
 type Station = { id: string; name: string };
 type RawAppointment = {
@@ -43,8 +45,8 @@ export function CalendarWorkspace(props: Props) {
   const [selected, setSelected] = useState<RawAppointment | null>(null);
   const days = useMemo(() => mode === "week" ? manilaWeekDates(anchor) : [anchor], [anchor, mode]);
 
-  async function load() {
-    setLoading(true); setError("");
+  const load = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
+    if (!silent) setLoading(true); setError("");
     const query = new URLSearchParams({ from: days[0], to: days.at(-1)! });
     if (piercerId) query.set("piercerId", piercerId);
     if (stationId) query.set("stationId", stationId);
@@ -54,12 +56,28 @@ export function CalendarWorkspace(props: Props) {
       if (!response.ok) throw new Error(body.error?.message ?? "Calendar could not be loaded.");
       setAppointments(body.data ?? []);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Calendar could not be loaded."); }
-    finally { setLoading(false); }
-  }
+    finally { if (!silent) setLoading(false); }
+  }, [days, piercerId, stationId]);
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 0);
     return () => window.clearTimeout(timer);
-  }, [anchor, mode, piercerId, stationId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [load]);
+  useEffect(() => {
+    const refreshVisibleCalendar = () => {
+      if (document.visibilityState === "visible") void load({ silent: true });
+    };
+    window.addEventListener("focus", refreshVisibleCalendar);
+    document.addEventListener("visibilitychange", refreshVisibleCalendar);
+    const supabase = createSupabaseBrowserClient();
+    const channel = supabase?.channel("staff-calendar-bookings")
+      .on("postgres_changes", { event: "*", schema: "public", table: "bookings" }, () => void load({ silent: true }))
+      .subscribe();
+    return () => {
+      window.removeEventListener("focus", refreshVisibleCalendar);
+      document.removeEventListener("visibilitychange", refreshVisibleCalendar);
+      if (supabase && channel) void supabase.removeChannel(channel);
+    };
+  }, [load]);
 
   const title = mode === "week"
     ? `${formatShortDate(days[0])}–${formatShortDate(days.at(-1)!)}`
@@ -85,7 +103,7 @@ export function CalendarWorkspace(props: Props) {
       </div>
     </div>
     {error && <p className="form-error" role="alert">{error}</p>}
-    <section className="panel operation-calendar" aria-busy={loading}>
+    <section className="panel operation-calendar" aria-busy={loading} aria-live="polite">
       <div className={`calendar-scroll ${mode}`}>
         <div className="calendar-grid" style={{ "--calendar-days": days.length } as React.CSSProperties}>
           <div className="calendar-corner"><Clock3/></div>
@@ -93,20 +111,29 @@ export function CalendarWorkspace(props: Props) {
             <span>{dayNames[manilaWeekday(date)]}</span><strong>{date.slice(8)}</strong><small>{formatMonth(date)}</small>
           </div>)}
           <div className="calendar-times">{Array.from({ length: gridEndHour - gridStartHour + 1 }, (_, index) => <span key={index} style={{ top: index * hourHeight }}>{formatHour(gridStartHour + index)}</span>)}</div>
-          {days.map((date) => <div className={`calendar-column ${date === manilaDate(new Date()) ? "today" : ""}`} key={date}>
-            {appointments.filter((item) => manilaDate(item.starts_at) === date && !["cancelled", "rejected"].includes(item.status)).map((item) => {
+          {days.map((date) => {
+            const visibleAppointments = appointments.filter((item) => manilaDate(item.starts_at) === date && !["cancelled", "rejected"].includes(item.status));
+            const layouts = layoutOverlappingAppointments(visibleAppointments.map((item) => ({ id: item.id, startsAt: item.starts_at, endsAt: item.ends_at })));
+            return <div className={`calendar-column ${date === manilaDate(new Date()) ? "today" : ""}`} key={date}>
+            {visibleAppointments.map((item) => {
               const start = manilaMinutes(item.starts_at); const end = manilaMinutes(item.ends_at); const piercer = one(item.staff_profiles);
+              const layout = layouts.get(item.id) ?? { column: 0, columns: 1 };
+              const serviceNames = item.booking_services.sort(byPosition).map((service) => service.name).join(" + ");
+              const detail = `${formatTime(item.starts_at)} · ${clientName(item)} · ${serviceNames} · ${piercer?.display_name ?? "Unassigned"}`;
               return <button key={item.id} className={`calendar-event ${item.status}`} style={{
                 top: Math.max(0, (start - gridStartHour * 60) * hourHeight / 60),
                 height: Math.max(34, (end - start) * hourHeight / 60),
+                left: `calc(5px + (100% - 10px) * ${layout.column} / ${layout.columns})`,
+                right: "auto",
+                width: `calc((100% - 10px) / ${layout.columns} - ${layout.columns > 1 ? 3 : 0}px)`,
                 "--event-color": piercer?.color ?? "#e86f2c",
-              } as React.CSSProperties} onClick={() => setSelected(item)}>
+              } as React.CSSProperties} title={detail} aria-label={detail} onClick={() => setSelected(item)}>
                 <strong>{formatTime(item.starts_at)} · {clientName(item)}</strong>
-                <small>{item.booking_services.sort(byPosition).map((service) => service.name).join(" + ")}</small>
+                <small>{serviceNames}</small>
                 <i>{piercer?.display_name ?? "Unassigned"}</i>
               </button>;
             })}
-          </div>)}
+          </div>;})}
         </div>
       </div>
       {loading && <div className="calendar-loading" role="status">Loading live appointments…</div>}

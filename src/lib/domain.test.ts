@@ -214,6 +214,25 @@ describe("available slots", () => {
     expect(generateAvailableSlots({ ...base, now: new Date("2026-09-01T01:30:00.000Z") })).toEqual([]);
     expect(generateAvailableSlots({ ...base, bookingHorizonDays: 1 })).toEqual([]);
   });
+
+  it("does not advertise starts later than the exact horizon cutoff", () => {
+    const cutoff = new Date("2026-09-01T05:00:00.000Z");
+    const slots = generateAvailableSlots({
+      ...base,
+      date: "2026-09-01",
+      serviceDurationMinutes: 60,
+      minimumLeadHours: 0,
+      bookingHorizonDays: 1,
+      businessHours: { "2": { open: "10:00", close: "18:00" } },
+      availability: [{ staffId: "p1", weekday: 2, startsAt: "10:00", endsAt: "18:00" }],
+      preferredPiercerId: "p1",
+      now: new Date("2026-08-31T05:00:00.000Z"),
+    });
+
+    expect(slots.length).toBeGreaterThan(0);
+    expect(slots.every((slot) => new Date(slot.startsAt) <= cutoff)).toBe(true);
+    expect(slots.at(-1)?.startsAt).toBe(cutoff.toISOString());
+  });
   it("can validate staff scheduling without public lead-time or horizon rules", () => {
     expect(generateAvailableSlots({ ...base, bookingHorizonDays: 1, enforceBookingWindow: false })).not.toEqual([]);
   });
@@ -330,6 +349,32 @@ describe("available slots", () => {
       }],
     });
     expect(after[0]?.startsAt).toBe("2026-09-01T02:30:00.000Z");
+  });
+
+  it("keeps a start available through another qualified piercer", () => {
+    const slots = generateAvailableSlots({
+      ...base,
+      bookings: [{
+        piercerId: "p1",
+        startsAt: "2026-09-01T02:00:00.000Z",
+        endsAt: "2026-09-01T02:45:00.000Z",
+        status: "confirmed",
+      }],
+    });
+
+    expect(slots.find((slot) => slot.startsAt === "2026-09-01T02:00:00.000Z")?.piercerIds).toEqual(["p2"]);
+  });
+
+  it("removes a start when every qualified piercer is occupied", () => {
+    const occupied = ["p1", "p2"].map((piercerId) => ({
+      piercerId,
+      startsAt: "2026-09-01T02:00:00.000Z",
+      endsAt: "2026-09-01T02:45:00.000Z",
+      status: "confirmed" as const,
+    }));
+
+    expect(generateAvailableSlots({ ...base, bookings: occupied })
+      .some((slot) => slot.startsAt === "2026-09-01T02:00:00.000Z")).toBe(false);
   });
 });
 

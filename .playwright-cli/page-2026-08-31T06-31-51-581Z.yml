@@ -1,0 +1,122 @@
+- generic [ref=e1]:
+  - main [ref=e3]:
+    - generic [ref=e4]:
+      - paragraph [ref=e16]: PIERCING CORNER · PARAÑAQUE
+      - heading [level=1] [ref=e17]:
+        - text: A little cornerfor your
+        - emphasis [ref=e18]: spark.
+      - paragraph [ref=e19]: Choose your piercing, find a real opening, and leave with an appointment already confirmed.
+      - generic [ref=e20]:
+        - generic [ref=e21]: Parañaque
+        - generic [ref=e25]: Asia/Manila appointments
+      - img "Piercing Corner ear illustration" [ref=e29]
+    - generic [ref=e30]:
+      - text: ✦
+      - generic [ref=e31]:
+        - list "Booking progress" [ref=e32]:
+          - listitem [ref=e33]:
+            - generic [ref=e34]: "1"
+            - generic [ref=e35]: Service
+          - listitem [ref=e36]:
+            - generic [ref=e37]: "2"
+            - generic [ref=e38]: Schedule
+          - listitem [ref=e39]:
+            - generic [ref=e40]: "3"
+            - generic [ref=e41]: Details
+        - generic [ref=e42]:
+          - paragraph [ref=e43]: STEP 1 OF 3
+          - heading "What are we piercing?" [level=2] [ref=e44]
+          - paragraph [ref=e45]: Prices are in Philippine pesos and reflect the configured studio rate.
+          - generic [ref=e46]:
+            - generic [ref=e47]:
+              - textbox "Search services" [ref=e52]
+              - generic "Service category" [ref=e53]:
+                - button "Ear" [ref=e54] [cursor=pointer]
+                - button "Face & Body" [active] [pressed] [ref=e55] [cursor=pointer]
+                - button "Other Services" [ref=e56] [cursor=pointer]
+            - generic [ref=e58]:
+              - strong [ref=e59]: No services selected
+              - generic [ref=e60]: Choose from the list below
+            - group "Face & Body Piercings services" [ref=e197]:
+              - checkbox "Nostril Face & Body ₱800 60 min" [ref=e198] [cursor=pointer]:
+                - generic [ref=e200]:
+                  - strong [ref=e201]: Nostril
+                  - generic [ref=e202]: Face & Body
+                - generic [ref=e203]:
+                  - strong [ref=e204]: ₱800
+                  - generic [ref=e205]: 60 min
+              - checkbox "Septum Face & Body ₱1,000 60 min" [ref=e206] [cursor=pointer]:
+                - generic [ref=e208]:
+                  - strong [ref=e209]: Septum
+                  - generic [ref=e210]: Face & Body
+                - generic [ref=e211]:
+                  - strong [ref=e212]: ₱1,000
+                  - generic [ref=e213]: 60 min
+              - checkbox "Eyebrow Face & Body ₱900 60 min" [ref=e214] [cursor=pointer]:
+                - generic [ref=e216]:
+                  - strong [ref=e217]: Eyebrow
+                  - generic [ref=e218]: Face & Body
+                - generic [ref=e219]:
+                  - strong [ref=e220]: ₱900
+                  - generic [ref=e221]: 60 min
+              - checkbox "Navel Face & Body ₱900 60 min" [ref=e222] [cursor=pointer]:
+                - generic [ref=e224]:
+                  - strong [ref=e225]: Navel
+                  - generic [ref=e226]: Face & Body
+                - generic [ref=e227]:
+                  - strong [ref=e228]: ₱900
+                  - generic [ref=e229]: 60 min
+              - checkbox "Bridge Face & Body ₱950 60 min" [ref=e230] [cursor=pointer]:
+                - generic [ref=e232]:
+                  - strong [ref=e233]: Bridge
+                  - generic [ref=e234]: Face & Body
+                - generic [ref=e235]:
+                  - strong [ref=e236]: ₱950
+                  - generic [ref=e237]: 60 min
+              - checkbox "Surface Face & Body ₱2,800 60 min" [ref=e238] [cursor=pointer]:
+                - generic [ref=e240]:
+                  - strong [ref=e241]: Surface
+                  - generic [ref=e242]: Face & Body
+                - generic [ref=e243]:
+                  - strong [ref=e244]: ₱2,800
+                  - generic [ref=e245]: 60 min
+              - checkbox "Lip Piercing Face & Body ₱950 60 min" [ref=e246] [cursor=pointer]:
+                - generic [ref=e248]:
+                  - strong [ref=e249]: Lip Piercing
+                  - generic [ref=e250]: Face & Body
+                - generic [ref=e251]:
+                  - strong [ref=e252]: ₱950
+                  - generic [ref=e253]: 60 min
+              - checkbox "Oral Piercing Face & Body ₱1,200 60 min" [ref=e254] [cursor=pointer]:
+                - generic [ref=e256]:
+                  - strong [ref=e257]: Oral Piercing
+                  - generic [ref=e258]: Face & Body
+                - generic [ref=e259]:
+                  - strong [ref=e260]: ₱1,200
+                  - generic [ref=e261]: 60 min
+              - checkbox "Nipple Face & Body ₱1,000 60 min" [ref=e262] [cursor=pointer]:
+                - generic [ref=e264]:
+                  - strong [ref=e265]: Nipple
+                  - generic [ref=e266]: Face & Body
+                - generic [ref=e267]:
+                  - strong [ref=e268]: ₱1,000
+                  - generic [ref=e269]: 60 min
+              - checkbox "Dermal Face & Body ₱2,800 60 min" [ref=e270] [cursor=pointer]:
+                - generic [ref=e272]:
+                  - strong [ref=e273]: Dermal
+                  - generic [ref=e274]: Face & Body
+                - generic [ref=e275]:
+                  - strong [ref=e276]: ₱2,800
+                  - generic [ref=e277]: 60 min
+              - checkbox "Genital Face & Body ₱3,000 60 min" [ref=e278] [cursor=pointer]:
+                - generic [ref=e280]:
+                  - strong [ref=e281]: Genital
+                  - generic [ref=e282]: Face & Body
+                - generic [ref=e283]:
+                  - strong [ref=e284]: ₱3,000
+                  - generic [ref=e285]: 60 min
+          - button "Choose a service" [disabled] [ref=e183]
+      - link "Open Piercing Corner on Instagram" [ref=e184] [cursor=pointer]:
+        - /url: https://www.instagram.com/piercing.corner/
+  - button "Open Next.js Dev Tools" [ref=e193] [cursor=pointer]
+  - alert [ref=e286]
