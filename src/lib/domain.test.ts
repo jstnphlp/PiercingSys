@@ -337,6 +337,21 @@ describe("available slots", () => {
     expect(slots.map((slot) => slot.startsAt)).toEqual(["2026-09-01T02:00:00.000Z"]);
   });
 
+  it("uses dated availability only on its exact calendar date", () => {
+    const matching = generateAvailableSlots({
+      ...base,
+      preferredPiercerId: "p1",
+      availability: [{ staffId: "p1", weekday: 2, date: "2026-09-01", startsAt: "10:00", endsAt: "13:00" }],
+    });
+    const nonMatching = generateAvailableSlots({
+      ...base,
+      preferredPiercerId: "p1",
+      availability: [{ staffId: "p1", weekday: 2, date: "2026-09-08", startsAt: "10:00", endsAt: "13:00" }],
+    });
+    expect(matching.length).toBeGreaterThan(0);
+    expect(nonMatching).toEqual([]);
+  });
+
   it("allows a slot that starts exactly when an earlier booking ends", () => {
     const after = generateAvailableSlots({
       ...base,

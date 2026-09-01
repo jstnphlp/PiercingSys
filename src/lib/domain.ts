@@ -206,7 +206,7 @@ export function manilaDayBounds(date: Date | string = new Date()) {
 }
 
 type SlotStaff = { id: string; active: boolean };
-type Availability = { staffId: string; weekday: number; startsAt: string; endsAt: string };
+type Availability = { staffId: string; weekday: number; startsAt: string; endsAt: string; date?: string | null };
 type Occupied = { piercerId: string; startsAt: string; endsAt: string; status?: BookingStatus };
 type Closure = { startsAt: string; endsAt: string };
 
@@ -249,7 +249,7 @@ export function generateAvailableSlots(input: {
   }
   const blocksByStaff = new Map<string, Availability[]>();
   for (const block of input.availability) {
-    if (block.weekday !== weekday) continue;
+    if (block.date ? block.date !== input.date : block.weekday !== weekday) continue;
     const list = blocksByStaff.get(block.staffId) ?? [];
     list.push(block);
     blocksByStaff.set(block.staffId, list);

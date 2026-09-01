@@ -29,6 +29,7 @@ import {
   type PublicBookingResult,
   type Service,
 } from "@/lib/domain";
+import { CalendarGridSkeleton } from "@/app/app/staff-skeletons";
 import {
   isIncompatibleServiceSelection,
   qualifiedPiercersForServices,
@@ -376,7 +377,7 @@ export function BookingForm({
             <label><span>Piercer</span><select value={piercerId} onChange={(event) => { const value = event.target.value; setPiercerId(value); void loadSlots(serviceIds, date, value); }}><option value="">Any qualified piercer</option>{eligiblePiercers.map((person) => <option value={person.id} key={person.id}>{person.name}</option>)}</select></label>
           </div>
           <div className="public-calendar-shell" aria-live="polite" aria-busy={loadingSlots}>
-            <div className="public-calendar-scroll"><div className="public-calendar-grid">
+            {loadingSlots ? <><span className="sr-only" role="status">Calculating the week’s openings</span><div className="public-calendar-scroll"><CalendarGridSkeleton publicCalendar/></div></> : <div className="public-calendar-scroll"><div className="public-calendar-grid">
               <div className="public-calendar-corner"><CalendarDays/></div>
               {visibleDates.map((calendarDate) => <div key={calendarDate} className={`public-calendar-date ${calendarDate === minDate ? "today" : ""} ${calendarDate < minDate ? "past" : ""}`}><span>{formatWeekday(calendarDate)}</span><strong>{calendarDate.slice(8)}</strong><small>{formatMonth(calendarDate)}</small></div>)}
               <div className="public-calendar-times">{Array.from({ length: publicCalendarEndHour - publicCalendarStartHour + 1 }, (_, index) => <span key={index} style={{ top: index * publicCalendarHourHeight }}>{formatHour(publicCalendarStartHour + index)}</span>)}</div>
@@ -397,8 +398,7 @@ export function BookingForm({
                   </button>;
                 })}
               </div>)}
-            </div></div>
-            {loadingSlots && <div className="public-calendar-loading"><Sparkles className="spin"/> Calculating the week’s openings…</div>}
+            </div></div>}
             {!loadingSlots && !slots.length && <div className="public-calendar-empty">No openings this week. Try the next week or another piercer.</div>}
           </div>
           {slot && (

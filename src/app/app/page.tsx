@@ -1,26 +1,17 @@
 import type { Metadata } from "next";
-import Image from "next/image";
-import Link from "next/link";
 import { redirect } from "next/navigation";
+import { connection } from "next/server";
+import { Suspense } from "react";
 import {
-  BarChart3,
   CalendarDays,
   CircleDollarSign,
   Clock3,
-  Download,
-  ExternalLink,
-  LayoutDashboard,
-  Settings,
-  ShoppingBag,
   Sparkles,
   UsersRound,
 } from "lucide-react";
-import { signOut } from "@/app/login/actions";
 import { getStaffSession } from "@/lib/auth";
 import {
-  calculateBalance,
   formatPhp,
-  formatServicePrice,
   manilaDate,
 } from "@/lib/domain";
 import {
@@ -28,12 +19,10 @@ import {
   type BookingRecord,
   type StaffDataScope,
 } from "@/lib/data/staff";
+import { resolveReportPeriod, type ReportPeriod, type ReportPreset } from "@/lib/report-period";
 import {
   BookingActions,
   InviteForm,
-  SaleAdjustment,
-  DraftSaleActions,
-  SaleForm,
   ServiceAssignmentForm,
   ServiceForm,
   SettingsForm,
@@ -43,123 +32,46 @@ import {
 import { CalendarWorkspace } from "./calendar-workspace";
 import { ClientRecords } from "./client-records";
 import { ScheduleSettings } from "./schedule-settings";
-import "./dashboard.css";
-import "./dashboard-maximalist.css";
+import { ReportsView } from "./reports-view";
+import { SalesView } from "./sales-view";
+import { ServiceList } from "./service-list";
+import { StaffViewSkeleton } from "./staff-skeletons";
+import { resolveStaffView, type StaffView } from "./view-config";
 
 export const metadata: Metadata = { title: "Studio operations" };
-type View =
-  | "overview"
-  | "calendar"
-  | "clients"
-  | "sales"
-  | "reports"
-  | "settings";
-const managementViews: View[] = [
-  "overview",
-  "calendar",
-  "clients",
-  "sales",
-  "reports",
-  "settings",
-];
-const piercerViews: View[] = ["overview", "calendar", "clients"];
 
 export default async function AppPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string }>;
+  searchParams: Promise<{ view?: string; period?: string; from?: string; to?: string }>;
 }) {
   const params = await searchParams;
-  const requested = params.view as View | undefined;
-  const requestedScope: StaffDataScope =
-    requested && managementViews.includes(requested) ? requested : "overview";
-  const [session, scopedData] = await Promise.all([
-    getStaffSession(),
-    getStaffData(requestedScope),
-  ]);
+  const session = await getStaffSession();
   if (!session) redirect("/login");
-  const allowed = session.role === "piercer" ? piercerViews : managementViews;
-  const view =
-    requested && allowed.includes(requested) ? requested : "overview";
-  const data = view === requestedScope ? scopedData : await getStaffData(view);
-  return (
-    <div className="staff-shell">
-      <aside className="staff-sidebar">
-        <Link href="/app" className="staff-brand">
-          <Image src="/logo.png" alt="" width={48} height={48} priority />
-          <span>
-            <strong>Piercing Corner</strong>
-            <small>STUDIO DESK</small>
-          </span>
-        </Link>
-        <p className="nav-label">Workspace</p>
-        <nav>
-          {allowed.map((item) => (
-            <Link
-              key={item}
-              href={item === "overview" ? "/app" : `/app?view=${item}`}
-              className={view === item ? "active" : ""}
-            >
-              {navIcon(item)}
-              <span>{item[0].toUpperCase() + item.slice(1)}</span>
-            </Link>
-          ))}
-        </nav>
-        <div className="staff-account">
-          <span className="avatar">{initials(session.displayName)}</span>
-          <span>
-            <strong>{session.displayName}</strong>
-            <small>{session.role}</small>
-          </span>
-          <form action={signOut}>
-            <button>Sign out</button>
-          </form>
-        </div>
-      </aside>
-      <main className="staff-main">
-        <header className="staff-topbar">
-          <div>
-            <p className="eyebrow">
-              PIERCING CORNER · {session.role.toUpperCase()}
-            </p>
-            <h1>
-              {view === "overview"
-                ? "Today at the corner"
-                : view[0].toUpperCase() + view.slice(1)}
-            </h1>
-          </div>
-          <div className="top-actions">
-            <Link href="/book" target="_blank" className="btn btn-secondary">
-              <ExternalLink size={15} /> Public booking
-            </Link>
-          </div>
-        </header>
-        <div className="staff-content">
-          <div className="dashboard-content">
-            {data.error ? (
-              <StateCard title="Data could not be loaded" detail={data.error} />
-            ) : (
-              viewContent(view, data, session)
-            )}
-          </div>
-        </div>
-      </main>
-    </div>
-  );
+  const view = resolveStaffView(params.view, session.role);
+  const reportPeriod = resolveReportPeriod(params);
+  return <Suspense key={view} fallback={<StaffViewSkeleton view={view} label={`Loading ${view}`}/>}><StaffViewData view={view} session={session} reportPeriod={reportPeriod}/></Suspense>;
+}
+
+async function StaffViewData({ view, session, reportPeriod }: { view: StaffView; session: NonNullable<Awaited<ReturnType<typeof getStaffSession>>>; reportPeriod: ReportPeriod }) {
+  await connection();
+  const data = await getStaffData(view as StaffDataScope, view === "reports" ? reportPeriod : undefined);
+  return data.error ? <StateCard title="Data could not be loaded" detail={data.error}/> : viewContent(view, data, session, reportPeriod);
 }
 
 function viewContent(
-  view: View,
+  view: StaffView,
   data: Awaited<ReturnType<typeof getStaffData>>,
   session: { role: string; userId: string },
+  reportPeriod: ReportPeriod,
 ) {
   const role = session.role;
   if (view === "overview") return <Overview data={data} role={role} />;
   if (view === "calendar")
-    return <CalendarWorkspace role={role} userId={session.userId} services={data.services} staff={data.staff} assignments={data.serviceAssignments} stations={data.stations} customers={data.customers} />;
-  if (view === "clients") return <Clients data={data} />;
+    return <CalendarWorkspace role={role} userId={session.userId} services={data.services} staff={data.staff} assignments={data.serviceAssignments} stations={data.stations} />;
+  if (view === "clients") return <Clients data={data} role={role} />;
   if (view === "sales") return <Sales data={data} />;
-  if (view === "reports") return <Reports data={data} />;
+  if (view === "reports") return <Reports data={data} period={reportPeriod} />;
   return <StudioSettings data={data} role={role} />;
 }
 
@@ -187,13 +99,6 @@ function Overview({
   ).length;
   return (
     <div className="feature-view">
-      <PageIntro
-        title="Daily overview"
-        detail={new Intl.DateTimeFormat("en-PH", {
-          dateStyle: "full",
-          timeZone: "Asia/Manila",
-        }).format(new Date())}
-      />
       <div className="metric-grid">
         <Metric
           icon={<CalendarDays />}
@@ -224,7 +129,7 @@ function Overview({
           />
         )}
       </div>
-      <div className="two-panel">
+      <div className="two-panel overview-panels">
         <section className="panel">
           <PanelHead
             title="Today’s appointments"
@@ -283,198 +188,57 @@ function Overview({
   );
 }
 
-function Clients({ data }: { data: Awaited<ReturnType<typeof getStaffData>> }) {
+function Clients({
+  data,
+  role,
+}: {
+  data: Awaited<ReturnType<typeof getStaffData>>;
+  role: string;
+}) {
   return (
     <div className="feature-view">
-      <PageIntro
-        title="Client records"
-        detail="Contact details and appointment history visible under your role permissions."
+      <ClientRecords
+        customers={data.customers}
+        canCreate={role === "owner" || role === "manager"}
       />
-      <ClientRecords customers={data.customers} />
     </div>
   );
 }
 
 function Sales({ data }: { data: Awaited<ReturnType<typeof getStaffData>> }) {
-  const total = data.sales
-    .filter((item) => item.status === "completed")
-    .reduce((sum, item) => sum + item.totalCents - item.adjustmentCents, 0);
-  const outstanding = data.sales
-    .filter((item) => item.status === "draft")
-    .reduce(
-      (sum, item) => sum + calculateBalance(item.totalCents, [item.paidCents]),
-      0,
-    );
-  return (
-    <div className="feature-view">
-      <PageIntro
-        title="Sales & payments"
-        detail="Record deposits and full payments in centavo-based PHP values."
-      />
-      <div className="metric-grid compact">
-        <Metric
-          icon={<CircleDollarSign />}
-          label="Completed revenue"
-          value={formatPhp(total)}
-          note="All stored sales"
-        />
-        <Metric
-          icon={<ShoppingBag />}
-          label="Transactions"
-          value={String(data.sales.length)}
-          note="Draft and completed"
-        />
-        <Metric
-          icon={<Clock3 />}
-          label="Outstanding"
-          value={formatPhp(outstanding)}
-          note="Balance still due"
-        />
-      </div>
-      <SaleForm customers={data.customers} services={data.services} />
-      {data.sales.length ? (
-        <section className="panel table-panel">
-          <table>
-            <thead>
-              <tr>
-                <th>Reference</th>
-                <th>Client</th>
-                <th>Total</th>
-                <th>Paid</th>
-                <th>Method</th>
-                <th>Status</th>
-                <th>Items</th>
-                <th>Adjustments</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.sales.map((sale) => (
-                <tr key={sale.id}>
-                  <td>
-                    <strong>{sale.reference}</strong>
-                    <small>{formatDate(sale.createdAt)}</small>
-                  </td>
-                  <td>{sale.customerName}</td>
-                  <td>{formatPhp(sale.totalCents)}</td>
-                  <td>{formatPhp(sale.paidCents)}</td>
-                  <td>{sale.methods.join(", ") || "—"}</td>
-                  <td>
-                    <Status value={sale.status} />
-                  </td>
-                  <td>{sale.items.map((item) => <small key={item.id}>{item.description} · {item.unitPriceCents === null ? "Pricing required" : formatPhp(item.unitPriceCents)}</small>)}</td>
-                  <td>
-                    {sale.adjustmentCents > 0 && (
-                      <small>{formatPhp(sale.adjustmentCents)} adjusted</small>
-                    )}
-                    {sale.status === "completed" && (
-                      <SaleAdjustment
-                        id={sale.id}
-                        remainingCents={sale.totalCents - sale.adjustmentCents}
-                      />
-                    )}
-                    {sale.status === "draft" && <DraftSaleActions sale={sale} />}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
-      ) : (
-        <StateCard
-          title="No sales recorded"
-          detail="Use the form above to record a studio sale or payment."
-        />
-      )}
-    </div>
-  );
+  return <SalesView initialSales={data.sales} services={data.services} />;
 }
 
-function Reports({ data }: { data: Awaited<ReturnType<typeof getStaffData>> }) {
-  const revenue = data.completedRevenueCents;
-  const completedCount = data.completedSaleCount;
-  const completeBookings = data.bookingStatusCounts.completed ?? 0;
-  const methodTotals = new Map(Object.entries(data.paymentMethodTotals));
-  const today = manilaDate(new Date());
-  const first = `${today.slice(0, 8)}01`;
-  return (
-    <div className="feature-view">
-      <PageIntro
-        title="Operational reports"
-        detail="Stored sales and appointment outcomes, grouped on Manila business dates."
-        action={
-          <a
-            className="btn btn-secondary"
-            href={`/api/reports/export?from=${first}&to=${today}`}
-          >
-            <Download size={16} /> Export CSV
-          </a>
-        }
-      />
-      <div className="metric-grid compact">
-        <Metric
-          icon={<CircleDollarSign />}
-          label="Revenue"
-          value={formatPhp(revenue)}
-          note="Completed sales"
-        />
-        <Metric
-          icon={<ShoppingBag />}
-          label="Transactions"
-          value={String(completedCount)}
-          note="Completed"
-        />
-        <Metric
-          icon={<CalendarDays />}
-          label="Procedures"
-          value={String(completeBookings)}
-          note={`${data.bookingStatusCounts.no_show ?? 0} no-shows`}
-        />
-      </div>
-      <div className="two-panel">
-        <section className="panel">
-          <PanelHead title="Payment methods" detail="Collected amounts" />
-          {methodTotals.size ? (
-            <div className="report-list">
-              {[...methodTotals].map(([method, amount]) => (
-                <div key={method}>
-                  <span>{method.replace("_", " ")}</span>
-                  <strong>{formatPhp(amount)}</strong>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <Empty
-              icon={<CircleDollarSign />}
-              title="No report data"
-              text="Complete a sale to populate this report."
-            />
-          )}
-        </section>
-        <section className="panel">
-          <PanelHead
-            title="Appointment outcomes"
-            detail="Current stored records"
-          />
-          <div className="report-list">
-            {["confirmed", "completed", "cancelled", "no_show", "rejected"].map(
-              (status) => (
-                <div key={status}>
-                  <span>{status.replace("_", " ")}</span>
-                  <strong>
-                    {data.bookingStatusCounts[status] ?? 0}
-                  </strong>
-                </div>
-              ),
-            )}
-          </div>
-        </section>
-      </div>
-      <p className="report-note">
-        Operational reporting only; this is not a tax invoice or official
-        accounting ledger.
-      </p>
-    </div>
-  );
+const reportPresets: Array<{ value: ReportPreset; label: string }> = [
+  { value: "today", label: "Today" },
+  { value: "this-week", label: "This Week" },
+  { value: "this-month", label: "This Month" },
+  { value: "last-month", label: "Last Month" },
+  { value: "custom", label: "Custom Range" },
+];
+
+function Reports({ data, period }: { data: Awaited<ReturnType<typeof getStaffData>>; period: ReportPeriod }) {
+  const presetLinks = reportPresets.map((item) => {
+    const resolved = resolveReportPeriod({ period: item.value });
+    return {
+      ...item,
+      href: item.value === "custom"
+        ? `/app?view=reports&period=custom&from=${period.from}&to=${period.to}`
+        : `/app?view=reports&period=${item.value}&from=${resolved.from}&to=${resolved.to}`,
+    };
+  });
+  return <ReportsView
+    initialPeriod={period}
+    presets={presetLinks}
+    initialSummary={{
+      revenue_cents: data.completedRevenueCents,
+      completed_sales: data.completedSaleCount,
+      sale_count: data.reportSaleCount,
+      booking_count: data.reportBookingCount,
+      booking_statuses: data.bookingStatusCounts,
+      methods: data.paymentMethodTotals,
+    }}
+  />;
 }
 
 function StudioSettings({
@@ -486,10 +250,6 @@ function StudioSettings({
 }) {
   return (
     <div className="feature-view">
-      <PageIntro
-        title="Studio settings"
-        detail="Piercing Corner is a single-studio system; there is no workspace or studio switcher."
-      />
       <div className="settings-stack">
         <SettingsForm studio={data.studio} />
         <ScheduleSettings studio={data.studio} staff={data.staff} availability={data.availability} closures={data.closures} />
@@ -504,23 +264,7 @@ function StudioSettings({
             staff={data.staff}
             assignments={data.serviceAssignments}
           />
-          <div className="simple-list">
-            {data.services.map((service) => (
-              <div key={service.id}>
-                <span>
-                  <strong>{service.name}</strong>
-                  <small>
-                    {service.category} · {service.durationMinutes} minutes ·{" "}
-                    {service.isActive ? "Active" : "Inactive"}
-                  </small>
-                </span>
-                <b>{formatServicePrice(service)}</b>
-              </div>
-            ))}
-            {!data.services.length && (
-              <p className="status-note">No services configured.</p>
-            )}
-          </div>
+          <ServiceList services={data.services} />
         </section>
         <section className="panel setting-section">
           <PanelHead
@@ -658,25 +402,6 @@ function Metric({
     </section>
   );
 }
-function PageIntro({
-  title,
-  detail,
-  action,
-}: {
-  title: string;
-  detail: string;
-  action?: React.ReactNode;
-}) {
-  return (
-    <div className="page-intro">
-      <div>
-        <h2>{title}</h2>
-        <p>{detail}</p>
-      </div>
-      {action}
-    </div>
-  );
-}
 function PanelHead({ title, detail }: { title: string; detail: string }) {
   return (
     <div className="panel-head">
@@ -742,12 +467,6 @@ function formatTime(value: string) {
     timeZone: "Asia/Manila",
   }).format(new Date(value));
 }
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en-PH", {
-    dateStyle: "medium",
-    timeZone: "Asia/Manila",
-  }).format(new Date(value));
-}
 function initials(value: string) {
   return (
     value
@@ -758,19 +477,4 @@ function initials(value: string) {
       .join("")
       .toUpperCase() || "PC"
   );
-}
-function navIcon(view: View) {
-  const Icon =
-    view === "overview"
-      ? LayoutDashboard
-      : view === "calendar"
-        ? CalendarDays
-        : view === "clients"
-          ? UsersRound
-          : view === "sales"
-            ? ShoppingBag
-            : view === "reports"
-              ? BarChart3
-              : Settings;
-  return <Icon />;
 }

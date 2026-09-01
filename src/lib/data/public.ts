@@ -191,7 +191,7 @@ async function loadAvailableSlotsInProcess(
     admin.from("services").select("id,name,description,body_area,category,duration_minutes,price_cents,min_price_cents,max_price_cents,price_unit,is_active").in("id", serviceIds).eq("is_active", true),
     admin.from("service_staff").select("staff_id,service_id").in("service_id", serviceIds),
     admin.from("staff_profiles").select("user_id,active,role").eq("active", true).eq("role", "piercer"),
-    admin.from("staff_availability").select("staff_id,weekday,starts_at,ends_at").in("weekday", weekdays),
+    admin.from("staff_availability").select("staff_id,weekday,starts_at,ends_at,availability_date").in("weekday", weekdays),
     admin.from("bookings").select("assigned_piercer_id,starts_at,ends_at,status")
       .lt("starts_at", rangeEnd.toISOString()).gt("ends_at", rangeStart.toISOString())
       .not("status", "in", "(cancelled,rejected)"),
@@ -221,6 +221,7 @@ async function loadAvailableSlotsInProcess(
       weekday: row.weekday,
       startsAt: row.starts_at,
       endsAt: row.ends_at,
+      date: row.availability_date,
     })),
     bookings: (bookingsResult.data ?? [])
       .filter((row) => row.assigned_piercer_id)

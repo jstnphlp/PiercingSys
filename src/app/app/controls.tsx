@@ -10,7 +10,9 @@ import {
   type StaffRole,
   type StudioSettings,
 } from "@/lib/domain";
-import type { CustomerRecord, SaleRecord, StaffRecord } from "@/lib/data/staff";
+import type { SaleRecord, StaffRecord } from "@/lib/data/staff";
+import { CustomerSelect } from "./customer-select";
+import { requestWorkspaceRefresh } from "./workspace-refresh";
 
 function useMutation() {
   const [busy, setBusy] = useState(false);
@@ -59,7 +61,7 @@ export function BookingActions({
         body: JSON.stringify({ status: next }),
       })
     )
-      window.location.reload();
+      requestWorkspaceRefresh();
   }
   async function reschedule(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -72,7 +74,7 @@ export function BookingActions({
         body: JSON.stringify({ startsAt }),
       })
     )
-      window.location.reload();
+      requestWorkspaceRefresh();
   }
   return (
     <div className="booking-actions">
@@ -165,7 +167,7 @@ export function SettingsForm({ studio }: { studio: StudioSettings }) {
         body: JSON.stringify(payload),
       })
     )
-      window.location.reload();
+      requestWorkspaceRefresh();
   }
   return (
     <form className="panel setting-section settings-form" onSubmit={submit}>
@@ -304,7 +306,7 @@ export function ServiceForm({ staff }: { staff: StaffRecord[] }) {
         staffIds: form.getAll("staffIds").map(String),
       }),
     });
-    if (ok) window.location.reload();
+    if (ok) requestWorkspaceRefresh();
   }
   if (!open)
     return (
@@ -401,7 +403,7 @@ export function ServiceAssignmentForm({
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ staffIds: form.getAll("staffIds").map(String) }),
     });
-    if (ok) window.location.reload();
+    if (ok) requestWorkspaceRefresh();
   }
   if (!open) {
     return (
@@ -491,7 +493,7 @@ export function AvailabilityForm({ staff }: { staff: StaffRecord[] }) {
         endsAt: String(form.get("endsAt")),
       }),
     });
-    if (ok) window.location.reload();
+    if (ok) requestWorkspaceRefresh();
   }
   if (!open)
     return (
@@ -564,7 +566,7 @@ export function StationForm() {
         body: JSON.stringify({ name: String(form.get("name")) }),
       })
     )
-      window.location.reload();
+      requestWorkspaceRefresh();
   }
   if (!open)
     return (
@@ -613,7 +615,7 @@ export function InviteForm() {
         role: String(form.get("role")),
       }),
     });
-    if (ok) window.location.reload();
+    if (ok) requestWorkspaceRefresh();
   }
   if (!open)
     return (
@@ -674,7 +676,7 @@ export function StaffActions({
         body: JSON.stringify(payload),
       })
     )
-      window.location.reload();
+      requestWorkspaceRefresh();
   }
   if (currentRole !== "owner" || person.role === "owner") return null;
   return (
@@ -702,10 +704,8 @@ export function StaffActions({
 }
 
 export function SaleForm({
-  customers,
   services,
 }: {
-  customers: CustomerRecord[];
   services: Service[];
 }) {
   const mutation = useMutation();
@@ -746,7 +746,7 @@ export function SaleForm({
         complete: amount >= unitPriceCents,
       }),
     });
-    if (ok) window.location.reload();
+    if (ok) { setOpen(false); requestWorkspaceRefresh(); }
   }
   if (!open)
     return (
@@ -762,14 +762,7 @@ export function SaleForm({
     <form className="panel inline-form sale-form" onSubmit={submit}>
       <label className="field">
         Client
-        <select name="customerId">
-          <option value="">Walk-in</option>
-          {customers.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.name}
-            </option>
-          ))}
-        </select>
+        <CustomerSelect />
       </label>
       <label className="field">
         Service
@@ -861,7 +854,7 @@ export function SaleAdjustment({
         }),
       })
     )
-      window.location.reload();
+      requestWorkspaceRefresh();
   }
   if (!open)
     return (
@@ -909,14 +902,14 @@ export function DraftSaleActions({ sale }: { sale: SaleRecord }) {
   const unresolved = sale.items.filter((item) => item.unitPriceCents === null);
   async function resolve(event: React.FormEvent<HTMLFormElement>, itemId: string) {
     event.preventDefault(); const form = new FormData(event.currentTarget);
-    if (await mutation.run(`/api/sales/${sale.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "resolve_price", itemId, unitPriceCents: Math.round(Number(form.get("price")) * 100) }) })) window.location.reload();
+    if (await mutation.run(`/api/sales/${sale.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "resolve_price", itemId, unitPriceCents: Math.round(Number(form.get("price")) * 100) }) })) requestWorkspaceRefresh();
   }
   async function payment(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault(); const form = new FormData(event.currentTarget);
-    if (await mutation.run(`/api/sales/${sale.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "add_payment", method: form.get("method"), amountCents: Math.round(Number(form.get("amount")) * 100), reference: form.get("reference") || null }) })) window.location.reload();
+    if (await mutation.run(`/api/sales/${sale.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "add_payment", method: form.get("method"), amountCents: Math.round(Number(form.get("amount")) * 100), reference: form.get("reference") || null }) })) requestWorkspaceRefresh();
   }
   async function complete() {
-    if (await mutation.run(`/api/sales/${sale.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "complete" }) })) window.location.reload();
+    if (await mutation.run(`/api/sales/${sale.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "complete" }) })) requestWorkspaceRefresh();
   }
   return <div className="draft-sale-actions">
     {unresolved.map((item) => <form key={item.id} onSubmit={(event) => void resolve(event, item.id)}>
@@ -947,7 +940,7 @@ export function ClosureForm() {
         }),
       })
     )
-      window.location.reload();
+      requestWorkspaceRefresh();
   }
   if (!open)
     return (

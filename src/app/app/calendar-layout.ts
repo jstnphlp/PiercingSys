@@ -1,51 +1,57 @@
-export type CalendarAppointmentInterval = {
+export type CalendarInterval = {
   id: string;
-  startsAt: string;
-  endsAt: string;
+  starts_at: string;
+  ends_at: string;
 };
 
-export type CalendarAppointmentLayout = {
-  column: number;
-  columns: number;
+export type PositionedCalendarItem<T> = {
+  item: T;
+  lane: number;
+  laneCount: number;
 };
 
-export function layoutOverlappingAppointments(
-  appointments: CalendarAppointmentInterval[],
-) {
-  const sorted = appointments
-    .map((appointment) => ({
-      ...appointment,
-      start: new Date(appointment.startsAt).getTime(),
-      end: new Date(appointment.endsAt).getTime(),
-    }))
-    .sort((left, right) => left.start - right.start || left.end - right.end || left.id.localeCompare(right.id));
-  const layouts = new Map<string, CalendarAppointmentLayout>();
-  let cluster: typeof sorted = [];
-  let clusterEnd = Number.NEGATIVE_INFINITY;
+export function layoutOverlappingAppointments<T extends CalendarInterval>(items: T[]): PositionedCalendarItem<T>[] {
+  return layoutOverlappingItems(items, (item) => timestamp(item.starts_at), (item) => timestamp(item.ends_at));
+}
 
-  function placeCluster() {
+export function layoutOverlappingItems<T extends { id: string }>(items: T[], getStart: (item: T) => number, getEnd: (item: T) => number): PositionedCalendarItem<T>[] {
+  const sorted = [...items].sort((left, right) => {
+    const startDifference = getStart(left) - getStart(right);
+    if (startDifference) return startDifference;
+    const endDifference = getEnd(right) - getEnd(left);
+    return endDifference || left.id.localeCompare(right.id);
+  });
+  const groups: T[][] = [];
+  let group: T[] = [];
+  let groupEnd = Number.NEGATIVE_INFINITY;
+
+  for (const item of sorted) {
+    const start = getStart(item);
+    const end = getEnd(item);
+    if (group.length && start >= groupEnd) {
+      groups.push(group);
+      group = [];
+      groupEnd = Number.NEGATIVE_INFINITY;
+    }
+    group.push(item);
+    groupEnd = Math.max(groupEnd, end);
+  }
+  if (group.length) groups.push(group);
+
+  return groups.flatMap((overlapGroup) => {
     const laneEnds: number[] = [];
-    const placements: Array<{ id: string; column: number }> = [];
-    for (const appointment of cluster) {
-      let column = laneEnds.findIndex((end) => end <= appointment.start);
-      if (column === -1) column = laneEnds.length;
-      laneEnds[column] = appointment.end;
-      placements.push({ id: appointment.id, column });
-    }
-    for (const placement of placements) {
-      layouts.set(placement.id, { column: placement.column, columns: laneEnds.length });
-    }
-  }
+    const positioned = overlapGroup.map((item) => {
+      const start = getStart(item);
+      const availableLane = laneEnds.findIndex((end) => end <= start);
+      const lane = availableLane === -1 ? laneEnds.length : availableLane;
+      laneEnds[lane] = getEnd(item);
+      return { item, lane };
+    });
+    const laneCount = laneEnds.length;
+    return positioned.map((entry) => ({ ...entry, laneCount }));
+  });
+}
 
-  for (const appointment of sorted) {
-    if (cluster.length && appointment.start >= clusterEnd) {
-      placeCluster();
-      cluster = [];
-      clusterEnd = Number.NEGATIVE_INFINITY;
-    }
-    cluster.push(appointment);
-    clusterEnd = Math.max(clusterEnd, appointment.end);
-  }
-  if (cluster.length) placeCluster();
-  return layouts;
+function timestamp(value: string) {
+  return new Date(value).getTime();
 }
