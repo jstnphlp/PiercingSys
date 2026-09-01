@@ -7,7 +7,18 @@ import type { BookingRecord, CustomerRecord } from "@/lib/data/staff";
 export function ClientRecords({ customers }: { customers: CustomerRecord[] }) {
   const [selected, setSelected] = useState<CustomerRecord | null>(null);
   return <>
+<<<<<<< Updated upstream
     {customers.length ? <section className="panel table-panel"><table><thead><tr><th>Client</th><th>Contact</th><th>Appointments</th><th>Last activity</th></tr></thead><tbody>{customers.map((customer) => {
+=======
+    <div className="list-toolbar">
+      <label className="field">Search clients<input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Name, email, or phone" /></label>
+      {isValidating && !isLoading && <span className="status-note">Refreshing…</span>}
+      {canCreate && <button className="btn btn-primary page-add" type="button" onClick={() => setCreating(true)}><Plus size={16}/> Add client</button>}
+    </div>
+    {error && <section className="panel state-card"><CalendarDays/><h2>Clients could not be loaded</h2><p>{error.message}</p><button className="btn btn-secondary" onClick={() => void mutate()}>Retry</button></section>}
+    {!error && isLoading && <section className="panel state-card"><CalendarDays/><h2>Loading clients…</h2><p>Fetching the requested page.</p></section>}
+    {!error && !isLoading && visibleCustomers.length ? <section className="panel table-panel"><table><thead><tr><th>Client</th><th>Contact</th><th>Appointments</th><th>Last activity</th></tr></thead><tbody>{visibleCustomers.map((customer) => {
+>>>>>>> Stashed changes
       return <tr key={customer.id} className="clickable-row" tabIndex={0} onClick={() => setSelected(customer)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelected(customer); } }}>
         <td><strong>{customer.name}</strong></td><td><span>{customer.email}</span><small>{customer.phone}</small></td><td>{customer.appointmentCount ?? 0}</td><td>{formatDate(customer.lastActivityAt ?? customer.createdAt)}</td>
       </tr>;
