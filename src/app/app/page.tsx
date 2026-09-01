@@ -12,7 +12,6 @@ import {
 import { getStaffSession } from "@/lib/auth";
 import {
   formatPhp,
-  formatServicePrice,
   manilaDate,
 } from "@/lib/domain";
 import {
@@ -35,6 +34,7 @@ import { ClientRecords } from "./client-records";
 import { ScheduleSettings } from "./schedule-settings";
 import { ReportsView } from "./reports-view";
 import { SalesView } from "./sales-view";
+import { ServiceList } from "./service-list";
 import { StaffViewSkeleton } from "./staff-skeletons";
 import { resolveStaffView, type StaffView } from "./view-config";
 
@@ -264,23 +264,7 @@ function StudioSettings({
             staff={data.staff}
             assignments={data.serviceAssignments}
           />
-          <div className="simple-list">
-            {data.services.map((service) => (
-              <div key={service.id}>
-                <span>
-                  <strong>{service.name}</strong>
-                  <small>
-                    {service.category} · {service.durationMinutes} minutes ·{" "}
-                    {service.isActive ? "Active" : "Inactive"}
-                  </small>
-                </span>
-                <b>{formatServicePrice(service)}</b>
-              </div>
-            ))}
-            {!data.services.length && (
-              <p className="status-note">No services configured.</p>
-            )}
-          </div>
+          <ServiceList services={data.services} />
         </section>
         <section className="panel setting-section">
           <PanelHead
