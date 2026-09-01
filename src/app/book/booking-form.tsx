@@ -5,6 +5,7 @@ import {
   ArrowRight,
   CalendarDays,
   Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Clock3,
@@ -307,6 +308,7 @@ export function BookingForm({
                   <button
                     type="button"
                     key={service.id}
+                    data-palette={servicePaletteIndex(displayServices, service.id)}
                     onClick={() => toggleService(service.id)}
                     aria-label={`Remove ${service.name}`}
                   >
@@ -324,6 +326,7 @@ export function BookingForm({
             <div className="service-list compact" role="group" aria-label={`${serviceCategory} services`}>
               {filteredServices.map((service) => <button
                 type="button" role="checkbox" aria-checked={serviceIds.includes(service.id)} key={service.id}
+                data-palette={servicePaletteIndex(displayServices, service.id)}
                 className={serviceIds.includes(service.id) ? "selected" : ""}
                 onClick={() => toggleService(service.id)}>
                 <span className="service-radio">
@@ -374,7 +377,23 @@ export function BookingForm({
             <button type="button" onClick={() => { setDate(minDate); void loadSlots(serviceIds, minDate, piercerId); }}>Today</button>
             <button type="button" aria-label="Next week" disabled={!canNavigateNextWeek} onClick={() => { if (!canNavigateNextWeek) return; const next = shiftManilaDate(date, 7); setDate(next); void loadSlots(serviceIds, next, piercerId); }}><ChevronRight/></button>
             <strong>{formatWeekRange(visibleDates)}</strong>
-            <label><span>Piercer</span><select value={piercerId} onChange={(event) => { const value = event.target.value; setPiercerId(value); void loadSlots(serviceIds, date, value); }}><option value="">Any qualified piercer</option>{eligiblePiercers.map((person) => <option value={person.id} key={person.id}>{person.name}</option>)}</select></label>
+            <label className={`piercer-field ${piercerId ? "has-selection" : ""}`}>
+              <span>Piercer</span>
+              <select
+                value={piercerId}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setPiercerId(value);
+                  void loadSlots(serviceIds, date, value);
+                }}
+              >
+                <option value="">Any qualified piercer</option>
+                {eligiblePiercers.map((person) => (
+                  <option value={person.id} key={person.id}>{person.name}</option>
+                ))}
+              </select>
+              <ChevronDown aria-hidden="true" />
+            </label>
           </div>
           <div className="public-calendar-shell" aria-live="polite" aria-busy={loadingSlots}>
             {loadingSlots ? <><span className="sr-only" role="status">Calculating the week’s openings</span><div className="public-calendar-scroll"><CalendarGridSkeleton publicCalendar/></div></> : <div className="public-calendar-scroll"><div className="public-calendar-grid">
@@ -601,4 +620,9 @@ function manilaSlotDate(value: string) { return new Intl.DateTimeFormat("en-CA",
 function slotTop(value: string) {
   const parts = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Asia/Manila" }).format(new Date(value)).split(":").map(Number);
   return Math.max(0, (parts[0] * 60 + parts[1] - publicCalendarStartHour * 60) * publicCalendarHourHeight / 60);
+}
+
+function servicePaletteIndex(services: Service[], serviceId: string) {
+  const index = services.findIndex((service) => service.id === serviceId);
+  return index < 0 ? 0 : index % 4;
 }
