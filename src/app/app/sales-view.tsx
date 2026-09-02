@@ -8,6 +8,7 @@ import { calculateBalance, formatPhp, type Service } from "@/lib/domain";
 import type { SaleRecord } from "@/lib/data/staff";
 import type { PageMeta } from "@/lib/pagination";
 import { DraftSaleActions, SaleAdjustment, SaleForm } from "./controls";
+import { dashButton, dashField, featureView, metricCard, metricGrid, pagination, stateCard, statusClasses, statusNote, tablePanel } from "./dashboard-styles";
 
 type SalesResponse = { data: SaleRecord[]; page: PageMeta };
 
@@ -37,20 +38,20 @@ export function SalesView({ initialSales, services }: { initialSales: SaleRecord
   const outstanding = sales.filter((item) => item.status === "draft").reduce((sum, item) => sum + calculateBalance(item.totalCents, [item.paidCents]), 0);
   const meta = response?.page;
 
-  return <div className="feature-view">
-    <div className="metric-grid compact">
+  return <div className={featureView}>
+    <div className={`${metricGrid} grid-cols-3`}>
       <Metric icon={<CircleDollarSign />} label="Completed revenue" value={formatPhp(total)} note="Current page" />
       <Metric icon={<ShoppingBag />} label="Transactions" value={String(meta?.total ?? sales.length)} note="Matching records" />
       <Metric icon={<Clock3 />} label="Outstanding" value={formatPhp(outstanding)} note="Current page" />
     </div>
-    <div className="sales-toolbar">
-      <div className="sales-search"><label className="field">Search sales<input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Reference or client" /></label>{isValidating && !isLoading && <span className="status-note">Refreshing…</span>}</div>
+    <div className="grid grid-cols-[minmax(220px,1fr)_auto] items-end gap-3 max-[640px]:grid-cols-1">
+      <div className="flex items-end gap-2"><label className={`${dashField} w-full`}>Search sales<input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Reference or client" /></label>{isValidating && !isLoading && <span className={statusNote}>Refreshing…</span>}</div>
       <SaleForm services={services} />
     </div>
-    {error && <State title="Sales could not be loaded" detail={error.message}><button className="btn btn-secondary" onClick={() => void mutate()}>Retry</button></State>}
+    {error && <State title="Sales could not be loaded" detail={error.message}><button className={dashButton({ variant: "secondary" })} onClick={() => void mutate()}>Retry</button></State>}
     {!error && isLoading && <State title="Loading sales…" detail="Fetching the requested page." />}
-    {!error && !isLoading && sales.length ? <section className="panel table-panel"><table><thead><tr><th>Reference</th><th>Client</th><th>Total</th><th>Paid</th><th>Method</th><th>Status</th><th>Items</th><th>Adjustments</th></tr></thead><tbody>{sales.map((sale) => <tr key={sale.id}>
-      <td><strong>{sale.reference}</strong><small>{formatDate(sale.createdAt)}</small></td><td>{sale.customerName}</td><td>{formatPhp(sale.totalCents)}</td><td>{formatPhp(sale.paidCents)}</td><td>{sale.methods.join(", ") || "—"}</td><td><span className={`status-pill ${sale.status}`}>{sale.status.replace("_", " ")}</span></td>
+    {!error && !isLoading && sales.length ? <section className={tablePanel}><table><thead><tr><th>Reference</th><th>Client</th><th>Total</th><th>Paid</th><th>Method</th><th>Status</th><th>Items</th><th>Adjustments</th></tr></thead><tbody>{sales.map((sale) => <tr key={sale.id}>
+      <td><strong>{sale.reference}</strong><small>{formatDate(sale.createdAt)}</small></td><td>{sale.customerName}</td><td>{formatPhp(sale.totalCents)}</td><td>{formatPhp(sale.paidCents)}</td><td>{sale.methods.join(", ") || "—"}</td><td><span className={statusClasses(sale.status)}>{sale.status.replace("_", " ")}</span></td>
       <td>{sale.items.map((item) => <small key={item.id}>{item.description} · {item.unitPriceCents === null ? "Pricing required" : formatPhp(item.unitPriceCents)}</small>)}</td>
       <td>{sale.adjustmentCents > 0 && <small>{formatPhp(sale.adjustmentCents)} adjusted</small>}{sale.status === "completed" && <SaleAdjustment id={sale.id} remainingCents={sale.totalCents - sale.adjustmentCents} />}{sale.status === "draft" && <DraftSaleActions sale={sale} />}</td>
     </tr>)}</tbody></table><Pagination meta={meta} onPage={setPage}/></section> : !error && !isLoading ? <State title="No sales found" detail={query ? "Try a different search." : "Record a sale to begin."} /> : null}
@@ -58,13 +59,13 @@ export function SalesView({ initialSales, services }: { initialSales: SaleRecord
 }
 
 function Metric({ icon, label, value, note }: { icon: ReactNode; label: string; value: string; note: string }) {
-  return <section className="metric-card compact"><span>{icon}</span><div><small>{label}</small><strong>{value}</strong><p>{note}</p></div></section>;
+  return <section className={metricCard}><span>{icon}</span><div><small>{label}</small><strong>{value}</strong><p>{note}</p></div></section>;
 }
 function State({ title, detail, children }: { title: string; detail: string; children?: ReactNode }) {
-  return <section className="panel state-card"><ShoppingBag/><h2>{title}</h2><p>{detail}</p>{children}</section>;
+  return <section className={stateCard}><ShoppingBag/><h2>{title}</h2><p>{detail}</p>{children}</section>;
 }
 function Pagination({ meta, onPage }: { meta?: PageMeta; onPage: (page: number) => void }) {
   if (!meta || meta.totalPages <= 1) return null;
-  return <nav className="pagination" aria-label="Sales pages"><button className="btn btn-secondary" disabled={meta.number <= 1} onClick={() => onPage(meta.number - 1)}>Previous</button><span>Page {meta.number} of {meta.totalPages} · {meta.total} sales</span><button className="btn btn-secondary" disabled={meta.number >= meta.totalPages} onClick={() => onPage(meta.number + 1)}>Next</button></nav>;
+  return <nav className={pagination} aria-label="Sales pages"><button className={dashButton({ variant: "secondary" })} disabled={meta.number <= 1} onClick={() => onPage(meta.number - 1)}>Previous</button><span>Page {meta.number} of {meta.totalPages} · {meta.total} sales</span><button className={dashButton({ variant: "secondary" })} disabled={meta.number >= meta.totalPages} onClick={() => onPage(meta.number + 1)}>Next</button></nav>;
 }
 function formatDate(value: string) { return new Intl.DateTimeFormat("en-PH", { dateStyle: "medium", timeZone: "Asia/Manila" }).format(new Date(value)); }
