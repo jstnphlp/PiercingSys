@@ -6,6 +6,7 @@ import { formatPhp } from "@/lib/domain";
 import { validateReportRange, type ReportPeriod, type ReportPreset } from "@/lib/report-period";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { ReportPeriodControls, type PresetLink } from "./report-period-controls";
+import { dashError, emptyState, featureView, metricCard, metricGrid, panel, panelHead, twoPanel } from "./dashboard-styles";
 import { WORKSPACE_REFRESH_EVENT } from "./workspace-refresh";
 
 export type ReportSummary = {
@@ -18,11 +19,11 @@ export type ReportSummary = {
 };
 
 function Metric({ icon, label, value, note }: { icon: ReactNode; label: string; value: string; note: string }) {
-  return <section className="metric-card compact"><span>{icon}</span><div><small>{label}</small><strong>{value}</strong><p>{note}</p></div></section>;
+  return <section className={metricCard}><span>{icon}</span><div><small>{label}</small><strong>{value}</strong><p>{note}</p></div></section>;
 }
 
 function PanelHead({ title, detail }: { title: string; detail: string }) {
-  return <div className="panel-head"><div><h3>{title}</h3><p>{detail}</p></div></div>;
+  return <div className={panelHead}><div><h3>{title}</h3><p>{detail}</p></div></div>;
 }
 
 export function ReportsView({ initialPeriod, initialSummary, presets }: {
@@ -105,7 +106,7 @@ export function ReportsView({ initialPeriod, initialSummary, presets }: {
   const canExport = !pending && Number(summary.sale_count ?? 0) > 0;
 
   return (
-    <div className="feature-view">
+    <div className={featureView}>
       <ReportPeriodControls
         activePreset={period.preset}
         from={period.from}
@@ -115,26 +116,26 @@ export function ReportsView({ initialPeriod, initialSummary, presets }: {
         canExport={canExport}
         onSelect={(selection) => void selectPeriod(selection)}
       />
-      {error && <p className="form-error" role="alert">{error}</p>}
-      <div className="metric-grid compact" aria-live="polite">
+      {error && <p className={dashError} role="alert">{error}</p>}
+      <div className={`${metricGrid} grid-cols-3`} aria-live="polite">
         <Metric icon={<CircleDollarSign />} label="Revenue" value={formatPhp(revenue)} note={`${period.from} to ${period.to}`} />
         <Metric icon={<ShoppingBag />} label="Transactions" value={String(completedCount)} note="Completed" />
         <Metric icon={<CalendarDays />} label="Procedures" value={String(bookingStatuses.completed ?? 0)} note={`${bookingStatuses.no_show ?? 0} no-shows`} />
       </div>
-      <div className="two-panel">
-        <section className="panel">
+      <div className={twoPanel}>
+        <section className={panel}>
           <PanelHead title="Payment methods" detail="Collected amounts" />
-          {methodTotals.length ? <div className="report-list">{methodTotals.map(([method, amount]) => <div key={method}><span>{method.replaceAll("_", " ")}</span><strong>{formatPhp(Number(amount))}</strong></div>)}</div>
-            : <div className="empty-state"><span><CircleDollarSign /></span><strong>No report data</strong><p>Complete a sale to populate this report.</p></div>}
+          {methodTotals.length ? <div className="flex flex-col [&>div]:flex [&>div]:min-h-12 [&>div]:items-center [&>div]:justify-between [&>div]:border-b [&>div]:border-dashed [&>div]:border-[#d6a786] [&>div]:px-[18px] [&>div]:text-[10px] [&>div]:capitalize [&_strong]:font-display [&_strong]:text-sm [&_strong]:font-[650]">{methodTotals.map(([method, amount]) => <div key={method}><span>{method.replaceAll("_", " ")}</span><strong>{formatPhp(Number(amount))}</strong></div>)}</div>
+            : <div className={emptyState}><span><CircleDollarSign /></span><strong>No report data</strong><p>Complete a sale to populate this report.</p></div>}
         </section>
-        <section className="panel">
+        <section className={panel}>
           <PanelHead title="Appointment outcomes" detail="Selected report period" />
-          <div className="report-list">
+          <div className="flex flex-col [&>div]:flex [&>div]:min-h-12 [&>div]:items-center [&>div]:justify-between [&>div]:border-b [&>div]:border-dashed [&>div]:border-[#d6a786] [&>div]:px-[18px] [&>div]:text-[10px] [&>div]:capitalize [&_strong]:font-display [&_strong]:text-sm [&_strong]:font-[650]">
             {["requested", "confirmed", "completed", "cancelled", "no_show", "rejected"].map((status) => <div key={status}><span>{status.replaceAll("_", " ")}</span><strong>{bookingStatuses[status] ?? 0}</strong></div>)}
           </div>
         </section>
       </div>
-      <p className="report-note">Operational reporting only; this is not a tax invoice or official accounting ledger.</p>
+      <p className="text-[8px] text-[#8a6254]">Operational reporting only; this is not a tax invoice or official accounting ledger.</p>
     </div>
   );
 }

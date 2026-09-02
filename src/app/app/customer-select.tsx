@@ -12,7 +12,7 @@ export function CustomerSelect({ name = "customerId", required = false }: { name
     return () => window.clearTimeout(timer);
   }, [search]);
   const { data, isLoading } = useSWR<{ data: CustomerRecord[] }>(`/api/customers?q=${encodeURIComponent(query)}&page=1&pageSize=25`);
-  return <div className="customer-select">
+  return <div className="grid gap-1.5 [&_input]:w-full [&_select]:w-full">
     <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search clients" aria-label="Search clients" />
     <select name={name} required={required} aria-label="Client">
       <option value="">{required ? "Choose a client" : "Walk-in"}</option>

@@ -36,6 +36,7 @@ import { ReportsView } from "./reports-view";
 import { SalesView } from "./sales-view";
 import { ServiceList } from "./service-list";
 import { StaffViewSkeleton } from "./staff-skeletons";
+import { emptyState, featureView, metricCard, metricGrid, panel, panelHead, settingSection, settingsStack, statusClasses, statusNote, twoPanel } from "./dashboard-styles";
 import { resolveStaffView, type StaffView } from "./view-config";
 
 export const metadata: Metadata = { title: "Studio operations" };
@@ -98,8 +99,8 @@ function Overview({
     (item) => item.status === "pending" || item.status === "failed",
   ).length;
   return (
-    <div className="feature-view">
-      <div className="metric-grid">
+    <div className={featureView}>
+      <div className={metricGrid}>
         <Metric
           icon={<CalendarDays />}
           label="Appointments"
@@ -129,8 +130,8 @@ function Overview({
           />
         )}
       </div>
-      <div className="two-panel overview-panels">
-        <section className="panel">
+      <div className={`${twoPanel} items-start`}>
+        <section className={panel}>
           <PanelHead
             title="Today’s appointments"
             detail="Live records from the studio calendar"
@@ -145,12 +146,12 @@ function Overview({
             />
           )}
         </section>
-        <section className="panel">
+        <section className={panel}>
           <PanelHead
             title="Studio readiness"
             detail="Items affecting daily operations"
           />
-          <div className="readiness-list">
+          <div className="flex flex-col [&>div]:grid [&>div]:min-h-[61px] [&>div]:grid-cols-[26px_1fr] [&>div]:items-center [&>div]:gap-x-[9px] [&>div]:border-b [&>div]:border-dashed [&>div]:border-[#d5a684] [&>div]:px-[17px] [&>div]:py-2.5 [&>div>span]:row-span-2 [&>div>span]:grid [&>div>span]:size-6 [&>div>span]:place-items-center [&>div>span]:rounded-full [&>div>span]:border [&>div>span]:border-hippy-ink [&>div>span]:text-[10px] [&>div>span]:font-black [&>div>span]:shadow-[1px_1px_0_#3b2923] [&_strong]:text-[10px] [&_small]:text-[8px] [&_small]:text-studio-muted">
             <Readiness
               label="Business hours"
               done={Object.keys(data.studio.businessHours).length > 0}
@@ -196,7 +197,7 @@ function Clients({
   role: string;
 }) {
   return (
-    <div className="feature-view">
+    <div className={featureView}>
       <ClientRecords
         customers={data.customers}
         canCreate={role === "owner" || role === "manager"}
@@ -249,11 +250,11 @@ function StudioSettings({
   role: string;
 }) {
   return (
-    <div className="feature-view">
-      <div className="settings-stack">
+    <div className={featureView}>
+      <div className={settingsStack}>
         <SettingsForm studio={data.studio} />
         <ScheduleSettings studio={data.studio} staff={data.staff} availability={data.availability} closures={data.closures} />
-        <section className="panel setting-section">
+        <section className={settingSection}>
           <PanelHead
             title="Services & pricing"
             detail="Only active, assigned services appear on public booking."
@@ -266,14 +267,14 @@ function StudioSettings({
           />
           <ServiceList services={data.services} />
         </section>
-        <section className="panel setting-section">
+        <section className={settingSection}>
           <PanelHead
             title="Team, schedules & stations"
             detail="Owners manage invitations; managers configure operational availability."
           />
           {role === "owner" && <InviteForm />}
           <StationForm />
-          <div className="simple-list">
+          <div className="mt-3 [&>div]:flex [&>div]:min-h-[54px] [&>div]:items-center [&>div]:justify-between [&>div]:border-t [&>div]:border-dashed [&>div]:border-[#d6a786] [&>div]:px-[18px] [&>div]:py-2 [&>div>span]:flex [&>div>span]:flex-col [&>div>span]:gap-[3px] [&_strong]:text-[10px] [&_small]:text-[8px] [&_small]:text-studio-muted">
             {data.staff.map((person) => (
               <div key={person.id}>
                 <span>
@@ -286,7 +287,7 @@ function StudioSettings({
                   person={person}
                   currentRole={role as "owner" | "manager" | "piercer"}
                 />
-                <i className="staff-dot" style={{ background: person.color }} />
+                <i className="size-2 shrink-0 rounded-full" style={{ background: person.color }} />
               </div>
             ))}
             {data.stations.map((station) => (
@@ -299,24 +300,24 @@ function StudioSettings({
             ))}
           </div>
         </section>
-        <section className="two-panel">
-          <div className="panel setting-section">
+        <section className={twoPanel}>
+          <div className={settingSection}>
             <PanelHead
               title="Consent records"
               detail="Signed acknowledgements are stored against bookings."
             />
-            <p className="status-note">
+            <p className={`${statusNote} mx-[18px] my-2.5`}>
               Consent records become visible from the associated client and
               appointment once submitted.
             </p>
           </div>
-          <div className="panel setting-section">
+          <div className={settingSection}>
             <PanelHead
               title="Notification deliveries"
               detail="Confirmation, reschedule, and cancellation email status."
             />
             {data.deliveries.length ? (
-              <div className="delivery-list">
+              <div className="px-[17px] [&>div]:flex [&>div]:min-h-[50px] [&>div]:items-center [&>div]:gap-[9px] [&>div]:border-b [&>div]:border-dashed [&>div]:border-[#d6a786] [&>div>span:last-child]:flex [&>div>span:last-child]:flex-col [&>div>span:last-child]:text-[9px] [&_small]:mt-[3px] [&_small]:text-danger">
                 {data.deliveries.slice(0, 6).map((item) => (
                   <div key={item.id}>
                     <Status value={item.status} />
@@ -328,7 +329,7 @@ function StudioSettings({
                 ))}
               </div>
             ) : (
-              <p className="status-note">No email deliveries recorded.</p>
+              <p className={`${statusNote} mx-[18px] my-2.5`}>No email deliveries recorded.</p>
             )}
           </div>
         </section>
@@ -345,21 +346,21 @@ function AppointmentList({
   role: string;
 }) {
   return (
-    <div className="appointment-list">
+    <div>
       {bookings.map((item) => (
-        <article className="appointment-row" key={item.id}>
-          <div className="appointment-time">
+        <article className="grid min-h-[72px] grid-cols-[64px_34px_minmax(150px,1fr)_minmax(130px,.65fr)_82px_auto] items-center gap-2.5 border-b border-dashed border-[#dab08f] bg-transparent px-4 py-[9px] hover:bg-[#fff1cf] last:border-0 max-[1100px]:grid-cols-[60px_32px_1fr_80px_auto] max-[760px]:grid-cols-[52px_30px_1fr_auto] max-[760px]:px-2.5" key={item.id}>
+          <div className="flex flex-col [&_strong]:text-[10px] [&_strong]:text-hippy-ink [&_small]:mt-[3px] [&_small]:text-[8px] [&_small]:text-[#80675e]">
             <strong>{formatTime(item.startsAt)}</strong>
             <small>{formatTime(item.endsAt)}</small>
           </div>
-          <span className="client-avatar">{initials(item.customer.name)}</span>
-          <div className="appointment-client">
+          <span className="grid size-[33px] place-items-center rounded-[50%_42%_50%_45%] border border-hippy-ink bg-[#e98956] text-[10px] font-extrabold text-[#522b1b]">{initials(item.customer.name)}</span>
+          <div className="flex flex-col [&_strong]:text-[10px] [&_strong]:text-hippy-ink [&_small]:mt-[3px] [&_small]:text-[8px] [&_small]:text-[#80675e]">
             <strong>{item.customer.name}</strong>
             <small>
               {item.services.map((service) => service.name).join(" + ")} · {item.reference}
             </small>
           </div>
-          <div className="appointment-piercer">
+          <div className="flex items-center gap-[7px] text-[9px] max-[1100px]:hidden [&>i]:size-2 [&>i]:shrink-0 [&>i]:rounded-full [&>span]:flex [&>span]:flex-col [&_small]:mt-[3px] [&_small]:text-[8px] [&_small]:text-[#80675e]">
             {item.piercer && <i style={{ background: item.piercer.color }} />}
             <span>
               {item.piercer?.name ?? "Unassigned"}
@@ -392,7 +393,7 @@ function Metric({
   note: string;
 }) {
   return (
-    <section className="metric-card">
+    <section className={metricCard}>
       <span>{icon}</span>
       <div>
         <small>{label}</small>
@@ -404,7 +405,7 @@ function Metric({
 }
 function PanelHead({ title, detail }: { title: string; detail: string }) {
   return (
-    <div className="panel-head">
+    <div className={panelHead}>
       <div>
         <h3>{title}</h3>
         <p>{detail}</p>
@@ -422,7 +423,7 @@ function Empty({
   text: string;
 }) {
   return (
-    <div className="empty-state">
+    <div className={emptyState}>
       <span>{icon}</span>
       <strong>{title}</strong>
       <p>{text}</p>
@@ -431,7 +432,7 @@ function Empty({
 }
 function StateCard({ title, detail }: { title: string; detail: string }) {
   return (
-    <section className="panel state-card">
+    <section className={`${panel} ${emptyState} [&>svg]:z-1 [&>svg]:mb-3 [&>svg]:size-[45px] [&>svg]:rounded-full [&>svg]:border-[1.5px] [&>svg]:border-hippy-ink [&>svg]:bg-hippy-sage [&>svg]:p-[11px] [&>svg]:text-[#315342] [&>svg]:shadow-[3px_3px_0_#3b2923] [&_h2]:m-0 [&_h2]:font-display [&_h2]:text-2xl [&_h2]:font-[650]`}>
       <Sparkles />
       <h2>{title}</h2>
       <p>{detail}</p>
@@ -440,7 +441,7 @@ function StateCard({ title, detail }: { title: string; detail: string }) {
 }
 function Status({ value }: { value: string }) {
   return (
-    <span className={`status-pill ${value}`}>{value.replace("_", " ")}</span>
+    <span className={statusClasses(value)}>{value.replace("_", " ")}</span>
   );
 }
 function Readiness({
@@ -454,7 +455,7 @@ function Readiness({
 }) {
   return (
     <div>
-      <span className={done ? "ready" : "todo"}>{done ? "✓" : "!"}</span>
+      <span className={done ? "bg-hippy-sage text-[#274c3c]" : "bg-hippy-gold text-[#664219]"}>{done ? "✓" : "!"}</span>
       <strong>{label}</strong>
       <small>{detail ?? (done ? "Configured" : "Needs setup")}</small>
     </div>

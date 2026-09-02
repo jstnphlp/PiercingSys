@@ -13,6 +13,7 @@ import {
 import type { SaleRecord, StaffRecord } from "@/lib/data/staff";
 import { CustomerSelect } from "./customer-select";
 import { requestWorkspaceRefresh } from "./workspace-refresh";
+import { dashButton, dashError, dashField, inlineForm, panelHead, settingSection } from "./dashboard-styles";
 
 function useMutation() {
   const [busy, setBusy] = useState(false);
@@ -77,7 +78,7 @@ export function BookingActions({
       requestWorkspaceRefresh();
   }
   return (
-    <div className="booking-actions">
+    <div className="relative flex flex-wrap gap-1 [&>button]:cursor-pointer [&>button]:rounded-[7px] [&>button]:border [&>button]:border-hippy-ink [&>button]:bg-[#fff7e3] [&>button]:px-[7px] [&>button]:py-[5px] [&>button]:text-[8px] [&>button]:font-extrabold [&>button]:text-[#70402e] [&>button]:shadow-[1px_1px_0_#3b2923] [&>button:hover]:bg-[#f6d19c] [&>small]:absolute [&>small]:top-full [&>small]:right-0 [&>small]:w-[150px] [&>small]:text-[7px] [&>small]:text-danger">
       {status === "requested" && canManage && (
         <>
           <button disabled={mutation.busy} onClick={() => change("confirmed")}>
@@ -87,7 +88,7 @@ export function BookingActions({
             Reject
           </button>
           <button
-            className="danger"
+            className="text-danger!"
             disabled={mutation.busy}
             onClick={() => change("cancelled")}
           >
@@ -110,7 +111,7 @@ export function BookingActions({
             Reschedule
           </button>
           <button
-            className="danger"
+            className="text-danger!"
             disabled={mutation.busy}
             onClick={() => change("cancelled")}
           >
@@ -119,8 +120,8 @@ export function BookingActions({
         </>
       )}
       {rescheduling && (
-        <div className="reschedule-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setRescheduling(false); }}>
-        <form className="reschedule-popover" role="dialog" aria-modal="true" aria-label="Reschedule appointment" onSubmit={reschedule}>
+        <div className="fixed inset-0 z-90" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setRescheduling(false); }}>
+        <form className="absolute top-[calc(100%+6px)] right-0 z-91 grid w-[220px] grid-cols-2 gap-1.5 rounded-[10px] border-2 border-hippy-ink bg-[#fff4dc] p-2.5 shadow-[5px_5px_0_#3b2923] [&>strong]:col-span-2 [&>strong]:text-[9px] [&>input]:h-[31px] [&>input]:min-w-0 [&>input]:rounded-md [&>input]:border [&>input]:border-studio-line [&>input]:p-1 [&>input]:text-[8px]" role="dialog" aria-modal="true" aria-label="Reschedule appointment" onSubmit={reschedule}>
           <strong>New Manila time</strong>
           <input name="date" aria-label="New date" type="date" defaultValue={manilaDateValue(startsAt)} required />
           <input name="time" aria-label="New time" type="time" defaultValue={manilaTimeValue(startsAt)} required />
@@ -170,28 +171,28 @@ export function SettingsForm({ studio }: { studio: StudioSettings }) {
       requestWorkspaceRefresh();
   }
   return (
-    <form className="panel setting-section settings-form" onSubmit={submit}>
-      <div className="panel-head">
+    <form className={settingSection} onSubmit={submit}>
+      <div className={panelHead}>
         <div>
           <h3>Studio profile & booking policy</h3>
           <p>Only configured facts are shown publicly.</p>
         </div>
-        <button className="btn btn-primary" disabled={mutation.busy}>
-          {mutation.busy ? <LoaderCircle className="spin" /> : <Check />} Save
+        <button className={dashButton({ variant: "primary" })} disabled={mutation.busy}>
+          {mutation.busy ? <LoaderCircle className="animate-[spin_1.6s_linear_infinite]" /> : <Check />} Save
           settings
         </button>
       </div>
-      <div className="settings-body">
-        <div className="form-grid">
-          <label className="field">
+      <div className="px-[18px] pt-0.5 pb-5">
+        <div className="grid grid-cols-2 gap-[13px] max-[760px]:grid-cols-1">
+          <label className={dashField}>
             Studio name
             <input value="Piercing Corner" readOnly />
           </label>
-          <label className="field">
+          <label className={dashField}>
             Location
             <input name="location" defaultValue={studio.location} required />
           </label>
-          <label className="field wide">
+          <label className={dashField}>
             Exact address
             <input
               name="address"
@@ -199,7 +200,7 @@ export function SettingsForm({ studio }: { studio: StudioSettings }) {
               placeholder="Not configured"
             />
           </label>
-          <label className="field">
+          <label className={dashField}>
             Studio email
             <input
               name="email"
@@ -207,11 +208,11 @@ export function SettingsForm({ studio }: { studio: StudioSettings }) {
               defaultValue={studio.email ?? ""}
             />
           </label>
-          <label className="field">
+          <label className={dashField}>
             Phone
             <input name="phone" defaultValue={studio.phone ?? ""} />
           </label>
-          <label className="field wide">
+          <label className={dashField}>
             Instagram URL
             <input
               name="instagramUrl"
@@ -220,7 +221,7 @@ export function SettingsForm({ studio }: { studio: StudioSettings }) {
               required
             />
           </label>
-          <label className="field">
+          <label className={dashField}>
             Lead time (hours)
             <input
               name="minimumLeadHours"
@@ -229,7 +230,7 @@ export function SettingsForm({ studio }: { studio: StudioSettings }) {
               defaultValue={studio.minimumLeadHours}
             />
           </label>
-          <label className="field">
+          <label className={dashField}>
             Booking horizon (days)
             <input
               name="bookingHorizonDays"
@@ -239,7 +240,7 @@ export function SettingsForm({ studio }: { studio: StudioSettings }) {
               defaultValue={studio.bookingHorizonDays}
             />
           </label>
-          <label className="field">
+          <label className={dashField}>
             Slot interval (minutes)
             <input
               name="bookingIntervalMinutes"
@@ -248,7 +249,7 @@ export function SettingsForm({ studio }: { studio: StudioSettings }) {
               defaultValue={studio.bookingIntervalMinutes}
             />
           </label>
-          <label className="field">
+          <label className={dashField}>
             Minimum booking age
             <input
               name="minimumAge"
@@ -257,7 +258,7 @@ export function SettingsForm({ studio }: { studio: StudioSettings }) {
               defaultValue={studio.minimumAge}
             />
           </label>
-          <label className="field wide">
+          <label className={dashField}>
             Cancellation policy
             <textarea
               name="cancellationPolicy"
@@ -266,12 +267,12 @@ export function SettingsForm({ studio }: { studio: StudioSettings }) {
           </label>
         </div>
         {mutation.error && (
-          <p className="form-error" role="alert">
+          <p className={dashError} role="alert">
             {mutation.error}
           </p>
         )}
         {mutation.message && (
-          <p className="save-message" role="status">
+          <p className="text-[10px] font-extrabold text-success" role="status">
             {mutation.message}
           </p>
         )}
@@ -311,23 +312,23 @@ export function ServiceForm({ staff }: { staff: StaffRecord[] }) {
   if (!open)
     return (
       <button
-        className="btn btn-secondary setting-add"
+        className={`${dashButton({ variant: "secondary" })} ml-[18px] min-h-[34px] text-[9px]`}
         onClick={() => setOpen(true)}
       >
         <Plus size={15} /> Add service
       </button>
     );
   return (
-    <form className="inline-form" onSubmit={submit}>
-      <label className="field">
+    <form className={inlineForm} onSubmit={submit}>
+      <label className={dashField}>
         Service name
         <input name="name" required />
       </label>
-      <label className="field">
+      <label className={dashField}>
         Description
         <input name="description" />
       </label>
-      <label className="field">
+      <label className={dashField}>
         Category
         <select name="category" defaultValue="Ear Piercings">
           <option>Ear Piercings</option>
@@ -335,27 +336,27 @@ export function ServiceForm({ staff }: { staff: StaffRecord[] }) {
           <option>Other Services</option>
         </select>
       </label>
-      <label className="field">
+      <label className={dashField}>
         Duration (minutes)
         <input name="durationMinutes" type="number" min="5" required />
       </label>
-      <label className="field">
+      <label className={dashField}>
         Fixed price (PHP)
         <input name="price" type="number" min="0" step="0.01" />
       </label>
-      <label className="field">
+      <label className={dashField}>
         Minimum price (PHP)
         <input name="minPrice" type="number" min="0" step="0.01" />
       </label>
-      <label className="field">
+      <label className={dashField}>
         Maximum price (PHP)
         <input name="maxPrice" type="number" min="0" step="0.01" />
       </label>
-      <label className="field">
+      <label className={dashField}>
         Price unit (optional)
         <input name="priceUnit" placeholder="per process" />
       </label>
-      <fieldset className="staff-checks">
+      <fieldset className="col-span-full flex flex-wrap gap-x-4 gap-y-[9px] rounded-[10px] border-[1.5px] border-dashed border-[#9e6748] bg-[#fff3d3] px-3 py-2.5 [&_legend]:px-[5px] [&_legend]:text-[9px] [&_legend]:font-extrabold [&_legend]:text-studio-muted [&_label]:text-[10px]">
         <legend>Qualified staff</legend>
         {staff
           .filter((item) => item.active && item.role === "piercer")
@@ -366,16 +367,16 @@ export function ServiceForm({ staff }: { staff: StaffRecord[] }) {
             </label>
           ))}
       </fieldset>
-      {mutation.error && <p className="form-error">{mutation.error}</p>}
+      {mutation.error && <p className={dashError}>{mutation.error}</p>}
       <div>
         <button
           type="button"
-          className="btn btn-secondary"
+          className={dashButton({ variant: "secondary" })}
           onClick={() => setOpen(false)}
         >
           Cancel
         </button>
-        <button className="btn btn-primary" disabled={mutation.busy}>
+        <button className={dashButton({ variant: "primary" })} disabled={mutation.busy}>
           Add service
         </button>
       </div>
@@ -408,7 +409,7 @@ export function ServiceAssignmentForm({
   if (!open) {
     return (
       <button
-        className="btn btn-secondary setting-add"
+        className={`${dashButton({ variant: "secondary" })} ml-[18px] min-h-[34px] text-[9px]`}
         disabled={!services.length || !staff.length}
         onClick={() => setOpen(true)}
       >
@@ -417,8 +418,8 @@ export function ServiceAssignmentForm({
     );
   }
   return (
-    <form className="inline-form" onSubmit={submit}>
-      <label className="field">
+    <form className={inlineForm} onSubmit={submit}>
+      <label className={dashField}>
         Service
         <select
           name="serviceId"
@@ -432,7 +433,7 @@ export function ServiceAssignmentForm({
           ))}
         </select>
       </label>
-      <fieldset className="staff-checks" key={serviceId}>
+      <fieldset className="col-span-full flex flex-wrap gap-x-4 gap-y-[9px] rounded-[10px] border-[1.5px] border-dashed border-[#9e6748] bg-[#fff3d3] px-3 py-2.5 [&_legend]:px-[5px] [&_legend]:text-[9px] [&_legend]:font-extrabold [&_legend]:text-studio-muted [&_label]:text-[10px]" key={serviceId}>
         <legend>Qualified staff</legend>
         {staff
           .filter((person) => person.active && person.role === "piercer")
@@ -451,16 +452,16 @@ export function ServiceAssignmentForm({
             </label>
           ))}
       </fieldset>
-      {mutation.error && <p className="form-error">{mutation.error}</p>}
+      {mutation.error && <p className={dashError}>{mutation.error}</p>}
       <div>
         <button
           type="button"
-          className="btn btn-secondary"
+          className={dashButton({ variant: "secondary" })}
           onClick={() => setOpen(false)}
         >
           Cancel
         </button>
-        <button className="btn btn-primary" disabled={mutation.busy}>
+        <button className={dashButton({ variant: "primary" })} disabled={mutation.busy}>
           Save assignments
         </button>
       </div>
@@ -498,15 +499,15 @@ export function AvailabilityForm({ staff }: { staff: StaffRecord[] }) {
   if (!open)
     return (
       <button
-        className="btn btn-secondary setting-add"
+        className={`${dashButton({ variant: "secondary" })} ml-[18px] min-h-[34px] text-[9px]`}
         onClick={() => setOpen(true)}
       >
         <Plus size={15} /> Add availability
       </button>
     );
   return (
-    <form className="inline-form" onSubmit={submit}>
-      <label className="field">
+    <form className={inlineForm} onSubmit={submit}>
+      <label className={dashField}>
         Staff
         <select name="staffId">
           {staff
@@ -518,7 +519,7 @@ export function AvailabilityForm({ staff }: { staff: StaffRecord[] }) {
             ))}
         </select>
       </label>
-      <label className="field">
+      <label className={dashField}>
         Day
         <select name="weekday">
           {days.map((day, index) => (
@@ -528,24 +529,24 @@ export function AvailabilityForm({ staff }: { staff: StaffRecord[] }) {
           ))}
         </select>
       </label>
-      <label className="field">
+      <label className={dashField}>
         Starts
         <input name="startsAt" type="time" defaultValue="10:00" />
       </label>
-      <label className="field">
+      <label className={dashField}>
         Ends
         <input name="endsAt" type="time" defaultValue="18:00" />
       </label>
-      {mutation.error && <p className="form-error">{mutation.error}</p>}
+      {mutation.error && <p className={dashError}>{mutation.error}</p>}
       <div>
         <button
           type="button"
-          className="btn btn-secondary"
+          className={dashButton({ variant: "secondary" })}
           onClick={() => setOpen(false)}
         >
           Cancel
         </button>
-        <button className="btn btn-primary" disabled={mutation.busy}>
+        <button className={dashButton({ variant: "primary" })} disabled={mutation.busy}>
           Add hours
         </button>
       </div>
@@ -571,28 +572,28 @@ export function StationForm() {
   if (!open)
     return (
       <button
-        className="btn btn-secondary setting-add"
+        className={`${dashButton({ variant: "secondary" })} ml-[18px] min-h-[34px] text-[9px]`}
         onClick={() => setOpen(true)}
       >
         <Plus size={15} /> Add station
       </button>
     );
   return (
-    <form className="inline-form" onSubmit={submit}>
-      <label className="field">
+    <form className={inlineForm} onSubmit={submit}>
+      <label className={dashField}>
         Station name
         <input name="name" required />
       </label>
-      {mutation.error && <p className="form-error">{mutation.error}</p>}
+      {mutation.error && <p className={dashError}>{mutation.error}</p>}
       <div>
         <button
           type="button"
-          className="btn btn-secondary"
+          className={dashButton({ variant: "secondary" })}
           onClick={() => setOpen(false)}
         >
           Cancel
         </button>
-        <button className="btn btn-primary" disabled={mutation.busy}>
+        <button className={dashButton({ variant: "primary" })} disabled={mutation.busy}>
           Add station
         </button>
       </div>
@@ -620,39 +621,39 @@ export function InviteForm() {
   if (!open)
     return (
       <button
-        className="btn btn-secondary setting-add"
+        className={`${dashButton({ variant: "secondary" })} ml-[18px] min-h-[34px] text-[9px]`}
         onClick={() => setOpen(true)}
       >
         <UserPlus size={15} /> Invite staff
       </button>
     );
   return (
-    <form className="inline-form" onSubmit={submit}>
-      <label className="field">
+    <form className={inlineForm} onSubmit={submit}>
+      <label className={dashField}>
         Display name
         <input name="displayName" required />
       </label>
-      <label className="field">
+      <label className={dashField}>
         Email
         <input name="email" type="email" required />
       </label>
-      <label className="field">
+      <label className={dashField}>
         Role
         <select name="role">
           <option value="piercer">Piercer</option>
           <option value="manager">Manager</option>
         </select>
       </label>
-      {mutation.error && <p className="form-error">{mutation.error}</p>}
+      {mutation.error && <p className={dashError}>{mutation.error}</p>}
       <div>
         <button
           type="button"
-          className="btn btn-secondary"
+          className={dashButton({ variant: "secondary" })}
           onClick={() => setOpen(false)}
         >
           Cancel
         </button>
-        <button className="btn btn-primary" disabled={mutation.busy}>
+        <button className={dashButton({ variant: "primary" })} disabled={mutation.busy}>
           Send invitation
         </button>
       </div>
@@ -680,7 +681,7 @@ export function StaffActions({
   }
   if (currentRole !== "owner" || person.role === "owner") return null;
   return (
-    <span className="staff-actions">
+    <span className="grid w-[min(100%,330px)] grid-cols-[minmax(145px,1fr)_minmax(88px,auto)] items-center justify-self-end gap-[7px] max-[450px]:grid-cols-1 [&>select]:h-[34px] [&>select]:min-w-0 [&>select]:w-full [&>select]:rounded-lg [&>select]:border [&>select]:border-hippy-ink [&>select]:bg-[#fff7e3] [&>select]:px-[9px] [&>select]:py-1 [&>select]:text-[9px] [&>select]:shadow-[1px_1px_0_#3b2923] [&>button]:h-[34px] [&>button]:w-full [&>button]:rounded-lg [&>button]:border [&>button]:border-hippy-ink [&>button]:bg-[#fff7e3] [&>button]:px-[9px] [&>button]:py-1 [&>button]:text-[9px] [&>button]:shadow-[1px_1px_0_#3b2923] [&>small]:col-span-full [&>small]:text-[7px] [&>small]:text-danger">
       <select
         aria-label={`Role for ${person.displayName}`}
         defaultValue={person.role}
@@ -751,7 +752,7 @@ export function SaleForm({
   if (!open)
     return (
       <button
-        className="btn btn-primary page-add"
+        className={dashButton({ variant: "primary" })}
         disabled={!activeServices.length}
         onClick={() => setOpen(true)}
       >
@@ -759,12 +760,12 @@ export function SaleForm({
       </button>
     );
   return (
-    <form className="panel inline-form sale-form" onSubmit={submit}>
-      <label className="field">
+    <form className={`${inlineForm} m-0`} onSubmit={submit}>
+      <label className={dashField}>
         Client
         <CustomerSelect />
       </label>
-      <label className="field">
+      <label className={dashField}>
         Service
         <select
           name="serviceId"
@@ -779,7 +780,7 @@ export function SaleForm({
           ))}
         </select>
       </label>
-      <label className="field">
+      <label className={dashField}>
         Sale price (PHP)
         <input
           key={serviceId}
@@ -793,7 +794,7 @@ export function SaleForm({
         />
         {selectedService && <small>{formatServicePrice(selectedService)}</small>}
       </label>
-      <label className="field">
+      <label className={dashField}>
         Payment received (PHP)
         <input
           name="amount"
@@ -803,7 +804,7 @@ export function SaleForm({
           defaultValue="0"
         />
       </label>
-      <label className="field">
+      <label className={dashField}>
         Method
         <select name="method">
           <option value="cash">Cash</option>
@@ -814,16 +815,16 @@ export function SaleForm({
           <option value="other">Other</option>
         </select>
       </label>
-      {mutation.error && <p className="form-error">{mutation.error}</p>}
+      {mutation.error && <p className={dashError}>{mutation.error}</p>}
       <div>
         <button
           type="button"
-          className="btn btn-secondary"
+          className={dashButton({ variant: "secondary" })}
           onClick={() => setOpen(false)}
         >
           Cancel
         </button>
-        <button className="btn btn-primary" disabled={mutation.busy}>
+        <button className={dashButton({ variant: "primary" })} disabled={mutation.busy}>
           Save sale
         </button>
       </div>
@@ -859,7 +860,7 @@ export function SaleAdjustment({
   if (!open)
     return (
       <button
-        className="table-action"
+        className="min-h-[27px] cursor-pointer rounded-[7px] border border-hippy-ink bg-[#fff7e3] px-2 text-[8px] font-extrabold text-[#70402e] shadow-[1px_1px_0_#3b2923] hover:bg-[#f6d19c]"
         disabled={remainingCents <= 0}
         onClick={() => setOpen(true)}
       >
@@ -867,7 +868,7 @@ export function SaleAdjustment({
       </button>
     );
   return (
-    <form className="adjustment-form" onSubmit={submit}>
+    <form className="grid min-w-[250px] grid-cols-[70px_75px_1fr] gap-[5px] [&>select]:h-[29px] [&>select]:min-w-0 [&>select]:rounded-md [&>select]:border [&>select]:border-hippy-ink [&>select]:bg-white [&>select]:p-1 [&>select]:text-[8px] [&>input]:h-[29px] [&>input]:min-w-0 [&>input]:rounded-md [&>input]:border [&>input]:border-hippy-ink [&>input]:bg-white [&>input]:p-1 [&>input]:text-[8px] [&>button]:h-[29px] [&>button]:rounded-md [&>button]:border [&>button]:border-hippy-ink [&>button]:bg-white [&>button]:p-1 [&>button]:text-[8px] [&>button]:font-extrabold [&>button]:text-seafoam-dark [&>small]:col-span-full [&>small]:text-danger" onSubmit={submit}>
       <select name="kind">
         <option value="refund">Refund</option>
         <option value="void">Void</option>
@@ -911,14 +912,14 @@ export function DraftSaleActions({ sale }: { sale: SaleRecord }) {
   async function complete() {
     if (await mutation.run(`/api/sales/${sale.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "complete" }) })) requestWorkspaceRefresh();
   }
-  return <div className="draft-sale-actions">
+  return <div className="mt-[7px] flex min-w-[210px] flex-col gap-[7px] [&>form]:grid [&>form]:grid-cols-[1fr_auto] [&>form]:gap-[5px] [&>form]:rounded-[9px] [&>form]:border [&>form]:border-dashed [&>form]:border-[#b76c4c] [&>form]:bg-[#fae1b8] [&>form]:p-[7px] [&>form>strong]:col-span-full [&>form>small]:col-span-full [&_input]:h-[30px] [&_input]:min-w-0 [&_input]:rounded-[7px] [&_input]:border [&_input]:border-hippy-ink [&_input]:bg-[#fff9eb] [&_input]:text-[9px] [&_select]:h-[30px] [&_select]:min-w-0 [&_select]:rounded-[7px] [&_select]:border [&_select]:border-hippy-ink [&_select]:bg-[#fff9eb] [&_select]:text-[9px] [&_button]:min-h-[29px] [&_button]:rounded-[7px] [&_button]:border [&_button]:border-hippy-ink [&_button]:bg-hippy-orange [&_button]:text-[9px] [&_button]:font-extrabold [&_button]:text-white">
     {unresolved.map((item) => <form key={item.id} onSubmit={(event) => void resolve(event, item.id)}>
       <strong>{item.description}</strong><small>Pricing required · {formatServicePrice({ priceCents: null, minPriceCents: item.minPriceCents, maxPriceCents: item.maxPriceCents, priceUnit: null })}</small>
       <input name="price" aria-label={`Price for ${item.description} in PHP`} type="number" min={(item.minPriceCents ?? 0) / 100} max={(item.maxPriceCents ?? 0) / 100} step="0.01" required/><button disabled={mutation.busy}>Set price</button>
     </form>)}
-    {!unresolved.length && <div className="draft-controls"><button className="table-action" onClick={() => setPaymentOpen((current) => !current)}>Add payment</button><button className="table-action" disabled={sale.paidCents < sale.totalCents || mutation.busy} onClick={() => void complete()}>Complete sale</button></div>}
+    {!unresolved.length && <div className="flex gap-[5px]"><button onClick={() => setPaymentOpen((current) => !current)}>Add payment</button><button disabled={sale.paidCents < sale.totalCents || mutation.busy} onClick={() => void complete()}>Complete sale</button></div>}
     {paymentOpen && <form onSubmit={payment}><input name="amount" aria-label="Payment amount in PHP" type="number" min="0.01" max={((sale.totalCents - sale.paidCents) / 100).toFixed(2)} step="0.01" required/><select name="method"><option value="cash">Cash</option><option value="gcash">GCash</option><option value="maya">Maya</option><option value="card">Card</option><option value="bank_transfer">Bank transfer</option><option value="other">Other</option></select><input name="reference" aria-label="Payment reference" placeholder="Reference (optional)"/><button disabled={mutation.busy}>Save payment</button></form>}
-    {mutation.error && <small className="form-error" role="alert">{mutation.error}</small>}
+    {mutation.error && <small className={dashError} role="alert">{mutation.error}</small>}
   </div>;
 }
 
@@ -945,40 +946,40 @@ export function ClosureForm() {
   if (!open)
     return (
       <button
-        className="btn btn-secondary setting-add"
+        className={`${dashButton({ variant: "secondary" })} ml-[18px] min-h-[34px] text-[9px]`}
         onClick={() => setOpen(true)}
       >
         <Plus size={15} /> Add closure
       </button>
     );
   return (
-    <form className="inline-form" onSubmit={submit}>
-      <label className="field">
+    <form className={inlineForm} onSubmit={submit}>
+      <label className={dashField}>
         Date
         <input name="date" type="date" required />
       </label>
-      <label className="field">
+      <label className={dashField}>
         Starts
         <input name="startsAt" type="time" defaultValue="10:00" required />
       </label>
-      <label className="field">
+      <label className={dashField}>
         Ends
         <input name="endsAt" type="time" defaultValue="18:00" required />
       </label>
-      <label className="field">
+      <label className={dashField}>
         Reason
         <input name="reason" />
       </label>
-      {mutation.error && <p className="form-error">{mutation.error}</p>}
+      {mutation.error && <p className={dashError}>{mutation.error}</p>}
       <div>
         <button
           type="button"
-          className="btn btn-secondary"
+          className={dashButton({ variant: "secondary" })}
           onClick={() => setOpen(false)}
         >
           Cancel
         </button>
-        <button className="btn btn-primary" disabled={mutation.busy}>
+        <button className={dashButton({ variant: "primary" })} disabled={mutation.busy}>
           Add closure
         </button>
       </div>
