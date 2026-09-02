@@ -37,6 +37,27 @@ export function CalendarGridSkeleton({ publicCalendar = false, day = false }: { 
   </div>;
 }
 
+export function DayListSkeleton() {
+  return <div className="day-calendar day-list-skeleton" aria-hidden="true">
+    <aside className="day-date-block skeleton-day-date">
+      <Skeleton width={34} height={8}/><Skeleton width={38} height={34}/><Skeleton width={42} height={9}/>
+    </aside>
+    <div className="day-calendar-content">
+      <header className="day-list-heading skeleton-day-heading"><div><Skeleton width={190} height={16}/><Skeleton width={138} height={8}/></div><Skeleton width={92} height={25} radius={99}/></header>
+      <div className="day-appointment-list">
+        {Array.from({ length: 4 }, (_, index) => <div className="day-appointment-row skeleton-day-row" key={index}>
+          <span className="day-appointment-time skeleton-day-copy"><Skeleton width={50} height={10}/><Skeleton width={38} height={8}/></span>
+          <Skeleton className="client-avatar" width={34} height={34} radius="50%"/>
+          <span className="day-appointment-client skeleton-day-copy"><Skeleton width={index % 2 ? "64%" : "78%"} height={10}/><Skeleton width="88%" height={8}/></span>
+          <span className="day-appointment-piercer skeleton-day-copy"><Skeleton width="66%" height={9}/><Skeleton width="54%" height={8}/></span>
+          <Skeleton className="status-pill" width={72} height={22} radius={99}/>
+          <Skeleton className="day-row-chevron" width={12} height={15}/>
+        </div>)}
+      </div>
+    </div>
+  </div>;
+}
+
 function OverviewSkeleton() {
   return <><div className="metric-grid">{Array.from({ length: 4 }, (_, index) => <MetricSkeleton key={index}/>)}</div><div className="two-panel">
     <section className="panel skeleton-panel"><PanelHeadingSkeleton/>{Array.from({ length: 5 }, (_, index) => <RowSkeleton key={index} columns={4}/>)}</section>
@@ -49,7 +70,7 @@ function SalesSkeleton() {
 }
 
 function ReportsSkeleton() {
-  return <><div className="skeleton-view-actions"><Skeleton width={118} height={38}/></div><div className="metric-grid compact">{Array.from({ length: 3 }, (_, index) => <MetricSkeleton compact key={index}/>)}</div><div className="two-panel">{Array.from({ length: 2 }, (_, panel) => <section className="panel skeleton-panel" key={panel}><PanelHeadingSkeleton/>{Array.from({ length: 5 }, (_, index) => <RowSkeleton key={index} columns={2}/>)}</section>)}</div></>;
+  return <><div className="skeleton-report-controls"><Skeleton width="48%" height={38}/><Skeleton width="36%" height={38}/><Skeleton width={132} height={38}/></div><div className="metric-grid compact">{Array.from({ length: 3 }, (_, index) => <MetricSkeleton compact key={index}/>)}</div><div className="two-panel">{Array.from({ length: 2 }, (_, panel) => <section className="panel skeleton-panel" key={panel}><PanelHeadingSkeleton/>{Array.from({ length: 5 }, (_, index) => <RowSkeleton key={index} columns={2}/>)}</section>)}</div></>;
 }
 
 function SettingsSkeleton() {

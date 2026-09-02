@@ -2,6 +2,8 @@ import { z } from "zod";
 import { getStaffSession, hasRole } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { validationError } from "@/lib/validation";
+import { mapSaleRow, saleDetailSelect } from "@/lib/data/staff";
+import { pageMeta, parsePageQuery, safeSearchTerm } from "@/lib/pagination";
 
 const schema = z.object({
   customerId: z.string().uuid().nullable().optional(),
@@ -37,6 +39,37 @@ const schema = z.object({
     .default([]),
   complete: z.boolean().default(false),
 });
+
+export async function GET(request: Request) {
+  const session = await getStaffSession();
+  if (!session) return Response.json({ error: { code: "UNAUTHORIZED", message: "Sign in is required." } }, { status: 401 });
+  if (!hasRole(session.role, ["owner", "manager"])) return Response.json({ error: { code: "FORBIDDEN", message: "Sales are limited to management." } }, { status: 403 });
+  const { q, page, pageSize, from, to } = parsePageQuery(new URL(request.url));
+  const search = safeSearchTerm(q);
+  const supabase = await createSupabaseServerClient();
+  let customerIds: string[] = [];
+  if (search) {
+    const term = `*${search}*`;
+    const customerResult = await supabase!.from("customers").select("id")
+      .or(`first_name.ilike.${term},last_name.ilike.${term},email.ilike.${term}`)
+      .limit(100);
+    if (customerResult.error) return Response.json({ error: { code: "LOOKUP_FAILED", message: customerResult.error.message } }, { status: 400 });
+    customerIds = (customerResult.data ?? []).map((row) => row.id);
+  }
+  let query = supabase!.from("sales").select(saleDetailSelect, { count: "exact" })
+    .order("created_at", { ascending: false }).order("id", { ascending: false });
+  if (search) {
+    const filters = [`reference.ilike.*${search}*`];
+    if (customerIds.length) filters.push(`customer_id.in.(${customerIds.join(",")})`);
+    query = query.or(filters.join(","));
+  }
+  const { data, error, count } = await query.range(from, to);
+  if (error) return Response.json({ error: { code: "LOOKUP_FAILED", message: error.message } }, { status: 400 });
+  return Response.json({
+    data: (data ?? []).map((row) => mapSaleRow(row as Record<string, unknown>)),
+    page: pageMeta(page, pageSize, count ?? 0),
+  });
+}
 
 export async function POST(request: Request) {
   const session = await getStaffSession();

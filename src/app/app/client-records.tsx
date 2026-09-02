@@ -1,15 +1,42 @@
 "use client";
 
-import { CalendarDays, Mail, Phone, X } from "lucide-react";
+import { CalendarDays, Mail, Phone, Plus, X } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import useSWR from "swr";
 import type { BookingRecord, CustomerRecord } from "@/lib/data/staff";
+import type { PageMeta } from "@/lib/pagination";
+import { requestWorkspaceRefresh } from "./workspace-refresh";
 
-export function ClientRecords({ customers }: { customers: CustomerRecord[] }) {
+export function ClientRecords({ customers, canCreate }: { customers: CustomerRecord[]; canCreate: boolean }) {
+  const urlParams = useSearchParams();
   const [selected, setSelected] = useState<CustomerRecord | null>(null);
+  const [creating, setCreating] = useState(false);
+  const initialSearch = urlParams.get("q") ?? "";
+  const initialPage = Math.max(1, Number(urlParams.get("page") ?? 1) || 1);
+  const [search, setSearch] = useState(initialSearch);
+  const [debouncedSearch, setDebouncedSearch] = useState(initialSearch);
+  const [page, setPage] = useState(initialPage);
+  useEffect(() => {
+    const timer = window.setTimeout(() => { setDebouncedSearch(search.trim()); setPage(1); }, 300);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (debouncedSearch) url.searchParams.set("q", debouncedSearch); else url.searchParams.delete("q");
+    if (page > 1) url.searchParams.set("page", String(page)); else url.searchParams.delete("page");
+    window.history.replaceState(null, "", url);
+  }, [debouncedSearch, page]);
+  const key = `/api/customers?q=${encodeURIComponent(debouncedSearch)}&page=${page}&pageSize=25`;
+  const { data: response, error, isLoading, isValidating, mutate } = useSWR<{ data: CustomerRecord[]; page: PageMeta }>(key, {
+    fallbackData: page === 1 && !debouncedSearch ? {
+      data: customers,
+      page: { number: 1, size: 25, total: customers.length, totalPages: 1 },
+    } : undefined,
+  });
+  const visibleCustomers = response?.data ?? [];
+  const meta = response?.page;
   return <>
-<<<<<<< Updated upstream
-    {customers.length ? <section className="panel table-panel"><table><thead><tr><th>Client</th><th>Contact</th><th>Appointments</th><th>Last activity</th></tr></thead><tbody>{customers.map((customer) => {
-=======
     <div className="list-toolbar">
       <label className="field">Search clients<input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Name, email, or phone" /></label>
       {isValidating && !isLoading && <span className="status-note">Refreshing…</span>}
@@ -18,13 +45,77 @@ export function ClientRecords({ customers }: { customers: CustomerRecord[] }) {
     {error && <section className="panel state-card"><CalendarDays/><h2>Clients could not be loaded</h2><p>{error.message}</p><button className="btn btn-secondary" onClick={() => void mutate()}>Retry</button></section>}
     {!error && isLoading && <section className="panel state-card"><CalendarDays/><h2>Loading clients…</h2><p>Fetching the requested page.</p></section>}
     {!error && !isLoading && visibleCustomers.length ? <section className="panel table-panel"><table><thead><tr><th>Client</th><th>Contact</th><th>Appointments</th><th>Last activity</th></tr></thead><tbody>{visibleCustomers.map((customer) => {
->>>>>>> Stashed changes
       return <tr key={customer.id} className="clickable-row" tabIndex={0} onClick={() => setSelected(customer)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelected(customer); } }}>
         <td><strong>{customer.name}</strong></td><td><span>{customer.email}</span><small>{customer.phone}</small></td><td>{customer.appointmentCount ?? 0}</td><td>{formatDate(customer.lastActivityAt ?? customer.createdAt)}</td>
       </tr>;
-    })}</tbody></table></section> : <section className="panel state-card"><CalendarDays/><h2>No clients yet</h2><p>A client record is created automatically with their first confirmed booking.</p></section>}
+    })}</tbody></table><PageControls meta={meta} onPage={setPage}/></section> : !error && !isLoading ? <section className="panel state-card"><CalendarDays/><h2>No clients found</h2><p>{debouncedSearch ? "Try a different search." : "Add a client manually or create one with their first confirmed booking."}</p></section> : null}
+    {creating && <AddClientDialog onClose={() => setCreating(false)} onCreated={() => { setCreating(false); requestWorkspaceRefresh(); void mutate(); }}/>}
     {selected && <ClientDialog key={selected.id} customer={selected} onClose={() => setSelected(null)}/>}
   </>;
+}
+
+function PageControls({ meta, onPage }: { meta?: PageMeta; onPage: (page: number) => void }) {
+  if (!meta || meta.totalPages <= 1) return null;
+  return <nav className="pagination" aria-label="Client pages"><button className="btn btn-secondary" disabled={meta.number <= 1} onClick={() => onPage(meta.number - 1)}>Previous</button><span>Page {meta.number} of {meta.totalPages} · {meta.total} clients</span><button className="btn btn-secondary" disabled={meta.number >= meta.totalPages} onClick={() => onPage(meta.number + 1)}>Next</button></nav>;
+}
+
+function AddClientDialog({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const firstInput = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null;
+    firstInput.current?.focus();
+    function keydown(event: KeyboardEvent) {
+      if (event.key === "Escape" && !busy) onClose();
+      if (event.key === "Tab" && ref.current) {
+        const nodes = [...ref.current.querySelectorAll<HTMLElement>('button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[href]')];
+        const first = nodes[0], last = nodes.at(-1);
+        if (event.shiftKey && document.activeElement === first && last) { event.preventDefault(); last.focus(); }
+        else if (!event.shiftKey && document.activeElement === last && first) { event.preventDefault(); first.focus(); }
+      }
+    }
+    document.addEventListener("keydown", keydown);
+    return () => { document.removeEventListener("keydown", keydown); previous?.focus(); };
+  }, [busy, onClose]);
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch("/api/customers", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          firstName: form.get("firstName"),
+          lastName: form.get("lastName"),
+          email: form.get("email"),
+          phone: form.get("phone"),
+        }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error?.message ?? "The client could not be saved.");
+      onCreated();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "The client could not be saved.");
+      setBusy(false);
+    }
+  }
+  return <div className="operation-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onClose(); }}><div className="operation-dialog client-create-dialog" role="dialog" aria-modal="true" aria-labelledby="add-client-dialog-title" tabIndex={-1} ref={ref}>
+    <header><div><h2 id="add-client-dialog-title">Add client</h2><p>Create a client record without booking an appointment.</p></div><button type="button" aria-label="Close add client form" disabled={busy} onClick={onClose}><X/></button></header>
+    <form className="operation-form" onSubmit={submit}>
+      <div className="form-grid">
+        <label className="field">First name<input ref={firstInput} name="firstName" autoComplete="given-name" maxLength={80} required/></label>
+        <label className="field">Last name<input name="lastName" autoComplete="family-name" maxLength={80} required/></label>
+        <label className="field">Email<input name="email" type="email" autoComplete="email" required/></label>
+        <label className="field">Phone<input name="phone" type="tel" autoComplete="tel" minLength={7} maxLength={30} required/></label>
+      </div>
+      {error && <p className="form-error" role="alert">{error}</p>}
+      <footer><button className="btn btn-secondary" type="button" disabled={busy} onClick={onClose}>Cancel</button><button className="btn btn-primary" disabled={busy}>{busy ? "Saving…" : "Save client"}</button></footer>
+    </form>
+  </div></div>;
 }
 
 function ClientDialog({ customer, onClose }: { customer: CustomerRecord; onClose: () => void }) {

@@ -46,6 +46,26 @@ describe("POST /api/customers", () => {
       email: "ana@example.com",
     }));
   });
+
+  it("rejects invalid contact details", async () => {
+    getStaffSession.mockResolvedValue(sessions.manager);
+    const { status } = await readJson(await POST(jsonRequest("http://localhost/api/customers", {
+      firstName: "", lastName: "Cruz", email: "not-an-email", phone: "123",
+    })));
+    expect(status).toBe(422);
+    expect(createSupabaseServerClient).not.toHaveBeenCalled();
+  });
+
+  it("returns a friendly conflict for a duplicate client", async () => {
+    getStaffSession.mockResolvedValue(sessions.manager);
+    const insert = createQuery({ data: null, error: { code: "23505", message: "duplicate key value violates unique constraint" } });
+    createSupabaseServerClient.mockResolvedValue({ from: vi.fn(() => insert) });
+    const { status, body } = await readJson(await POST(jsonRequest("http://localhost/api/customers", {
+      firstName: "Ana", lastName: "Cruz", email: "ana@example.com", phone: "09170000000",
+    })));
+    expect(status).toBe(409);
+    expect(body).toEqual({ error: { code: "CUSTOMER_EXISTS", message: "A client with this email and phone already exists." } });
+  });
 });
 
 describe("GET /api/customers/:id/bookings", () => {

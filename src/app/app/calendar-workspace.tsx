@@ -3,9 +3,11 @@
 import { Check, ChevronLeft, ChevronRight, Clock3, Plus, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { combinedServiceDuration, manilaDate, shiftManilaDate, type BookingStatus, type Service } from "@/lib/domain";
-import type { CustomerRecord, StaffRecord } from "@/lib/data/staff";
+import type { StaffRecord } from "@/lib/data/staff";
+import { CustomerSelect } from "./customer-select";
+import { WORKSPACE_REFRESH_EVENT } from "./workspace-refresh";
 import { layoutOverlappingAppointments } from "./calendar-layout";
-import { CalendarGridSkeleton } from "./staff-skeletons";
+import { CalendarGridSkeleton, DayListSkeleton } from "./staff-skeletons";
 
 type Station = { id: string; name: string };
 type RawAppointment = {
@@ -25,7 +27,6 @@ type Props = {
   staff: StaffRecord[];
   assignments: Array<{ serviceId: string; staffId: string }>;
   stations: Station[];
-  customers: CustomerRecord[];
 };
 
 const dayNames = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
@@ -47,8 +48,8 @@ export function CalendarWorkspace(props: Props) {
   const days = useMemo(() => mode === "week" ? weekDates(anchor) : [anchor], [anchor, mode]);
   const visibleAppointments = useMemo(() => appointments.filter(isVisibleAppointment), [appointments]);
 
-  async function load() {
-    setLoading(true); setError("");
+  async function load(background = false) {
+    if (!background) setLoading(true); setError("");
     const query = new URLSearchParams({ from: days[0], to: days.at(-1)! });
     if (piercerId) query.set("piercerId", piercerId);
     if (stationId) query.set("stationId", stationId);
@@ -63,6 +64,11 @@ export function CalendarWorkspace(props: Props) {
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 0);
     return () => window.clearTimeout(timer);
+  }, [anchor, mode, piercerId, stationId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    function refresh() { void load(true); }
+    window.addEventListener(WORKSPACE_REFRESH_EVENT, refresh);
+    return () => window.removeEventListener(WORKSPACE_REFRESH_EVENT, refresh);
   }, [anchor, mode, piercerId, stationId]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 60_000);
@@ -88,7 +94,7 @@ export function CalendarWorkspace(props: Props) {
     </div>
     {error && <p className="form-error" role="alert">{error}</p>}
     <section className="panel operation-calendar" aria-busy={loading}>
-      {loading ? <><span className="sr-only" role="status">Loading live appointments</span><div className="calendar-scroll"><CalendarGridSkeleton day={mode === "day"}/></div></>
+      {loading ? <><span className="sr-only" role="status">Loading live appointments</span>{mode === "week" ? <div className="calendar-scroll"><CalendarGridSkeleton/></div> : <DayListSkeleton/>}</>
         : mode === "week" ? <WeekCalendar days={days} anchor={anchor} appointments={visibleAppointments} now={now} onSelectDate={(date) => { setAnchor(date); setMode("day"); }} onSelectAppointment={setSelected}/>
           : <DayCalendar date={anchor} appointments={visibleAppointments} onSelectAppointment={setSelected}/>}
     </section>
@@ -194,7 +200,7 @@ function AppointmentFormDialog(props: Props & { initialDate: string; onClose: ()
         <span><strong>{service.name}</strong><small>{service.durationMinutes} min</small></span>
       </label>)}</fieldset>
       <div className="segmented"><button type="button" className={clientMode === "existing" ? "active" : ""} onClick={() => setClientMode("existing")}>Existing client</button><button type="button" className={clientMode === "new" ? "active" : ""} onClick={() => setClientMode("new")}>New client</button></div>
-      {clientMode === "existing" ? <label className="field wide">Client<select name="customerId" required><option value="">Choose a client</option>{props.customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name} · {customer.email}</option>)}</select></label>
+      {clientMode === "existing" ? <label className="field wide">Client<CustomerSelect required /></label>
         : <div className="form-grid"><label className="field">First name<input name="firstName" required/></label><label className="field">Last name<input name="lastName" required/></label><label className="field">Email<input name="email" type="email" required/></label><label className="field">Phone<input name="phone" required/></label></div>}
       <div className="form-grid"><label className="field">Piercer<select value={effectivePiercerId} onChange={(event) => setPiercerId(event.target.value)} required disabled={props.role === "piercer"}><option value="">Choose eligible piercer</option>{eligible.map((person) => <option key={person.id} value={person.id}>{person.displayName}</option>)}</select></label>
         <label className="field">Station<select name="stationId"><option value="">No station</option>{props.stations.map((station) => <option key={station.id} value={station.id}>{station.name}</option>)}</select></label>
