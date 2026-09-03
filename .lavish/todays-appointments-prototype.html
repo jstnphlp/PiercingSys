@@ -1,0 +1,691 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PiercingSys Today Appointments Prototype</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    :root {
+      --cream: #fff8e8;
+      --paper: #fff9eb;
+      --head: #fff7e5;
+      --table-head: #f5ddba;
+      --ink: #3b2923;
+      --orange: #df682c;
+      --gold: #efb83f;
+      --sage: #a9c99a;
+      --lilac: #c9afd4;
+      --teal: #73aaa2;
+      --muted: #756861;
+      --line: #dab08f;
+      --danger: #a33e30;
+      --success: #2f6b57;
+    }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--cream);
+      color: #30231f;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 13px;
+    }
+    button, input { font: inherit; }
+    button { color: inherit; }
+    .page {
+      width: min(1180px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 24px 0 40px;
+    }
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+    .metric {
+      min-height: 118px;
+      display: flex;
+      align-items: center;
+      gap: 13px;
+      overflow: hidden;
+      border: 1.5px solid var(--ink);
+      border-radius: 19px 14px 20px 16px;
+      background: #fff8e8;
+      padding: 17px;
+      box-shadow: 4px 4px 0 var(--ink);
+      position: relative;
+    }
+    .metric:nth-child(2) { background: #f8d4bb; transform: rotate(.35deg); }
+    .metric:nth-child(3) { background: #e8def0; transform: rotate(-.35deg); }
+    .metric:nth-child(4) { background: #d8e5cf; }
+    .metric-icon {
+      width: 43px;
+      height: 43px;
+      display: grid;
+      place-items: center;
+      border: 1.5px solid var(--ink);
+      border-radius: 50% 43% 54% 45%;
+      background: var(--orange);
+      color: white;
+      box-shadow: 2px 2px 0 var(--ink);
+      flex: 0 0 auto;
+      font-weight: 900;
+    }
+    .metric:nth-child(2) .metric-icon { background: var(--gold); color: #59351c; }
+    .metric:nth-child(3) .metric-icon { background: #795d8e; }
+    .metric:nth-child(4) .metric-icon { background: #538679; }
+    .metric small { color: #765c52; font-size: 9px; }
+    .metric strong { display: block; margin: 4px 0; font-size: 22px; color: var(--ink); }
+    .metric p { margin: 0; color: #765c52; font-size: 8px; }
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.7fr) minmax(280px, .8fr);
+      gap: 18px;
+      align-items: start;
+    }
+    .panel {
+      overflow: hidden;
+      border: 1.5px solid var(--ink);
+      border-radius: 19px 14px 20px 16px;
+      background: var(--paper);
+      box-shadow: 4px 4px 0 var(--ink);
+    }
+    .panel-head {
+      min-height: 66px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      border-bottom: 1px dashed #c98965;
+      background: var(--head);
+      padding: 12px 18px;
+    }
+    .panel-head h3 {
+      margin: 0;
+      color: var(--ink);
+      font-size: 16px;
+      line-height: 1.1;
+      font-weight: 760;
+      letter-spacing: 0;
+    }
+    .panel-head p {
+      margin: 4px 0 0;
+      color: #82675d;
+      font-size: 9px;
+    }
+    .search-wrap {
+      position: relative;
+      width: clamp(240px, 36%, 292px);
+      flex: 0 1 292px;
+    }
+    .search-wrap svg {
+      position: absolute;
+      left: 10px;
+      top: 50%;
+      width: 14px;
+      height: 14px;
+      transform: translateY(-50%);
+      color: #8a6a5d;
+      pointer-events: none;
+    }
+    .search-wrap input {
+      width: 100%;
+      min-height: 36px;
+      border: 1.5px solid var(--ink);
+      border-radius: 10px 7px 11px 8px;
+      background: #fffaf0;
+      padding: 8px 11px 8px 31px;
+      color: #30231f;
+      font-size: 10px;
+      font-weight: 700;
+      box-shadow: 2px 2px 0 #d9a47e;
+      outline: none;
+    }
+    .search-wrap input:focus {
+      border-color: var(--orange);
+      outline: 3px solid #df682c35;
+    }
+    .table-shell {
+      overflow-x: auto;
+      scrollbar-width: thin;
+      scrollbar-color: #d5aa89 transparent;
+    }
+    table {
+      width: 100%;
+      min-width: 640px;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+    col.time { width: 11%; }
+    col.customer { width: 28%; }
+    col.piercer { width: 21%; }
+    col.appt { width: 16%; }
+    col.complete { width: 16%; }
+    col.details { width: 8%; }
+    thead th {
+      height: 40px;
+      background: var(--table-head);
+      color: #795346;
+      text-align: left;
+      font-size: 8px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      padding: 0 9px;
+      vertical-align: middle;
+    }
+    thead th:first-child, tbody td:first-child { padding-left: 14px; }
+    thead th:last-child, tbody td:last-child { padding-right: 10px; text-align: right; }
+    tbody tr {
+      min-height: 70px;
+      border-bottom: 1px dashed var(--line);
+      transition: background .15s ease;
+    }
+    tbody tr:last-child { border-bottom: 0; }
+    tbody tr:hover, tbody tr.selected { background: #fff1cf; }
+    td {
+      padding: 9px;
+      vertical-align: middle;
+      min-width: 0;
+    }
+    .cell-main {
+      display: block;
+      color: var(--ink);
+      font-size: 10px;
+      line-height: 1.25;
+      font-weight: 850;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .cell-sub {
+      display: block;
+      margin-top: 3px;
+      color: #80675e;
+      font-size: 8px;
+      line-height: 1.25;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .customer-button {
+      width: 100%;
+      display: grid;
+      grid-template-columns: 33px minmax(0, 1fr);
+      gap: 8px;
+      align-items: center;
+      border: 0;
+      background: transparent;
+      padding: 0;
+      text-align: left;
+      cursor: pointer;
+    }
+    .avatar {
+      width: 33px;
+      height: 33px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--ink);
+      border-radius: 50% 42% 50% 45%;
+      background: #e98956;
+      color: #522b1b;
+      font-size: 10px;
+      font-weight: 900;
+      flex: 0 0 auto;
+    }
+    .piercer-cell {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      min-width: 0;
+    }
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      flex: 0 0 auto;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 21px;
+      max-width: 100%;
+      border: 1px solid currentColor;
+      border-radius: 999px;
+      padding: 3px 7px;
+      font-size: 8px;
+      font-weight: 900;
+      line-height: 1;
+      white-space: nowrap;
+      text-transform: none;
+    }
+    .badge.confirmed { background: #c8dfc6; color: #315342; border-color: #4a6d5b; }
+    .badge.pending, .badge.requested { background: #f3ce70; color: #694313; border-color: #9b631d; }
+    .badge.completed { background: #ddd0e5; color: #5a436c; border-color: #68547a; }
+    .badge.cancelled, .badge.rejected, .badge.no-show, .badge.na { background: #f0c0ad; color: #783321; border-color: #9a4734; }
+    .badge.na { background: #f6dfd4; }
+    .chevron {
+      width: 31px;
+      height: 31px;
+      display: inline-grid;
+      place-items: center;
+      border: 1px solid var(--ink);
+      border-radius: 9px;
+      background: #fff7e3;
+      color: #70402e;
+      box-shadow: 1px 1px 0 var(--ink);
+      cursor: pointer;
+      font-size: 18px;
+      line-height: 1;
+    }
+    .empty-row {
+      margin: 0;
+      padding: 20px 16px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .readiness-row {
+      min-height: 61px;
+      display: grid;
+      grid-template-columns: 26px 1fr;
+      align-items: center;
+      gap: 0 9px;
+      border-bottom: 1px dashed #d5a684;
+      padding: 10px 17px;
+    }
+    .readiness-row:last-child { border-bottom: 0; }
+    .readiness-row span {
+      grid-row: span 2;
+      width: 24px;
+      height: 24px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--ink);
+      border-radius: 999px;
+      box-shadow: 1px 1px 0 var(--ink);
+      font-size: 10px;
+      font-weight: 900;
+    }
+    .readiness-row strong { font-size: 10px; }
+    .readiness-row small { font-size: 8px; color: var(--muted); }
+    .drawer-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      display: none;
+      justify-content: flex-end;
+      background: rgba(45, 24, 18, .28);
+      backdrop-filter: blur(1.5px);
+    }
+    .drawer-backdrop.open { display: flex; }
+    .drawer {
+      width: min(392px, calc(100vw - 24px));
+      height: min(100vh, 740px);
+      margin: 14px;
+      overflow: auto;
+      border: 2px solid var(--ink);
+      border-radius: 22px 16px 22px 18px;
+      background: #fff5df;
+      box-shadow: 8px 8px 0 var(--ink);
+      animation: slideIn .16s ease-out;
+    }
+    @keyframes slideIn {
+      from { transform: translateX(18px); opacity: .75; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    .drawer header {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      border-bottom: 1px dashed #c88f6e;
+      background: #fff5df;
+      padding: 18px 20px;
+    }
+    .drawer h2 {
+      margin: 0;
+      color: var(--ink);
+      font-size: 21px;
+      line-height: 1.1;
+    }
+    .drawer header p {
+      margin: 5px 0 0;
+      color: #785d53;
+      font-size: 10px;
+    }
+    .close {
+      width: 34px;
+      height: 34px;
+      border: 1.5px solid var(--ink);
+      border-radius: 10px;
+      background: #efc6a4;
+      cursor: pointer;
+      font-size: 20px;
+      line-height: 1;
+      flex: 0 0 auto;
+    }
+    .drawer-body {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      padding: 20px;
+    }
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1px;
+      overflow: hidden;
+      border: 1.5px solid var(--ink);
+      border-radius: 14px;
+      background: var(--ink);
+    }
+    .detail-grid div {
+      min-width: 0;
+      background: #fff9eb;
+      padding: 11px;
+    }
+    dt {
+      margin-bottom: 5px;
+      color: #a34d30;
+      font-size: 8px;
+      font-weight: 900;
+      letter-spacing: .8px;
+      text-transform: uppercase;
+    }
+    dd {
+      margin: 0;
+      color: #3f302a;
+      font-size: 11px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+    .actions-box {
+      border: 1.5px solid var(--ink);
+      border-radius: 14px;
+      background: #fff9eb;
+      padding: 12px;
+      box-shadow: 2px 2px 0 var(--ink);
+    }
+    .actions-box h3 {
+      margin: 0 0 8px;
+      color: #a34d30;
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: .7px;
+      text-transform: uppercase;
+    }
+    .action-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+    }
+    .action {
+      min-height: 31px;
+      border: 1px solid var(--ink);
+      border-radius: 7px;
+      background: #fff7e3;
+      padding: 6px 9px;
+      color: #70402e;
+      font-size: 8px;
+      font-weight: 900;
+      box-shadow: 1px 1px 0 var(--ink);
+    }
+    .action.danger { color: var(--danger); }
+    .note {
+      margin: 9px 0 0;
+      color: var(--muted);
+      font-size: 10px;
+      line-height: 1.45;
+    }
+    .role-switch {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      margin: 0 0 12px;
+      color: #694d43;
+      font-size: 10px;
+      font-weight: 850;
+    }
+    .role-switch select {
+      min-height: 32px;
+      border: 1.5px solid var(--ink);
+      border-radius: 10px 7px 11px 8px;
+      background: #fffaf0;
+      padding: 5px 9px;
+      box-shadow: 2px 2px 0 #d9a47e;
+      color: #30231f;
+      font-size: 10px;
+      font-weight: 750;
+    }
+    .review-hint {
+      margin: 0 0 14px;
+      color: #755b52;
+      font-size: 11px;
+      line-height: 1.45;
+    }
+    @media (max-width: 1100px) {
+      .dashboard-grid { grid-template-columns: 1fr; }
+      .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 700px) {
+      .page { width: min(100vw - 20px, 680px); padding-top: 14px; }
+      .panel-head { align-items: stretch; flex-direction: column; gap: 9px; }
+      .search-wrap { width: 100%; flex-basis: auto; }
+      table { min-width: 620px; }
+      .detail-grid { grid-template-columns: 1fr; }
+      .drawer { width: calc(100vw - 20px); height: calc(100vh - 20px); margin: 10px; border-radius: 18px; }
+    }
+    @media (max-width: 450px) {
+      .metric-grid { grid-template-columns: 1fr; }
+      .metric { min-height: 88px; padding: 13px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <p class="review-hint">Prototype only. The surrounding dashboard frame is present to judge fit; production PiercingSys files are untouched.</p>
+    <div class="role-switch">
+      Preview role
+      <select id="roleSelect" aria-label="Preview role">
+        <option value="owner">Owner / Manager</option>
+        <option value="piercer">Piercer</option>
+      </select>
+    </div>
+    <section class="metric-grid" aria-label="Dashboard metrics">
+      <div class="metric"><span class="metric-icon">C</span><div><small>Appointments</small><strong>6</strong><p>Today in Manila</p></div></div>
+      <div class="metric"><span class="metric-icon">T</span><div><small>Confirmed</small><strong>3</strong><p>Ready for the studio</p></div></div>
+      <div class="metric"><span class="metric-icon">U</span><div><small>Clients</small><strong>128</strong><p>Stored records</p></div></div>
+      <div class="metric"><span class="metric-icon">P</span><div><small>Collected</small><strong>PHP 8,200</strong><p>2 completed sales</p></div></div>
+    </section>
+    <section class="dashboard-grid">
+      <article class="panel" id="appointmentsPanel">
+        <header class="panel-head">
+          <div>
+            <h3>Today’s appointments</h3>
+            <p>Live records from the studio calendar</p>
+          </div>
+          <label class="search-wrap">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"></circle>
+              <path d="m16 16 4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+            </svg>
+            <input id="search" type="search" placeholder="Search appointments..." autocomplete="off">
+          </label>
+        </header>
+        <div class="table-shell">
+          <table aria-label="Today's appointments">
+            <colgroup>
+              <col class="time"><col class="customer"><col class="piercer"><col class="appt"><col class="complete"><col class="details">
+            </colgroup>
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Customer</th>
+                <th>Piercer</th>
+                <th>Appointment Status</th>
+                <th>Completion Status</th>
+                <th>Details</th>
+              </tr>
+            </thead>
+            <tbody id="rows"></tbody>
+          </table>
+          <p class="empty-row" id="empty" hidden>No appointments match the current search.</p>
+        </div>
+      </article>
+      <aside class="panel" aria-label="Studio readiness reference">
+        <header class="panel-head">
+          <div>
+            <h3>Studio readiness</h3>
+            <p>Items affecting daily operations</p>
+          </div>
+        </header>
+        <div class="readiness-row"><span style="background:#a9c99a">✓</span><strong>Business hours</strong><small>Configured</small></div>
+        <div class="readiness-row"><span style="background:#a9c99a">✓</span><strong>Active services</strong><small>Configured</small></div>
+        <div class="readiness-row"><span style="background:#a9c99a">✓</span><strong>Qualified staff</strong><small>Configured</small></div>
+        <div class="readiness-row"><span style="background:#efb83f">!</span><strong>Email deliveries</strong><small>All clear</small></div>
+      </aside>
+    </section>
+  </main>
+
+  <div class="drawer-backdrop" id="drawerBackdrop" role="presentation">
+    <section class="drawer" role="dialog" aria-modal="true" aria-labelledby="drawerTitle">
+      <header>
+        <div>
+          <h2 id="drawerTitle"></h2>
+          <p id="drawerSub"></p>
+        </div>
+        <button class="close" type="button" id="closeDrawer" aria-label="Close details">×</button>
+      </header>
+      <div class="drawer-body">
+        <dl class="detail-grid" id="drawerDetails"></dl>
+        <section class="actions-box">
+          <h3>Booking actions</h3>
+          <div class="action-row" id="drawerActions"></div>
+          <p class="note" id="drawerNote"></p>
+        </section>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const bookings = [
+      { id: "b1", reference: "MOCK-PC-002", status: "confirmed", startsAt: "2026-09-03T10:00:00+08:00", endsAt: "2026-09-03T11:00:00+08:00", customer: { name: "Bianca Lim", email: "bianca.lim@example.com", phone: "+63 917 555 0182" }, services: ["Nostril"], piercer: { name: "Bea Cruz", color: "#df682c" }, station: "Station Two", notes: "Prefers right side." },
+      { id: "b2", reference: "MOCK-PC-001", status: "completed", startsAt: "2026-09-03T10:00:00+08:00", endsAt: "2026-09-03T11:00:00+08:00", customer: { name: "Alyssa Navarro", email: "alyssa.navarro@example.com", phone: "+63 917 555 0101" }, services: ["Lobe"], piercer: { name: "Ana Reyes", color: "#73aaa2" }, station: "Station One", notes: "Sale completed." },
+      { id: "b3", reference: "MOCK-PC-003", status: "completed", startsAt: "2026-09-03T11:00:00+08:00", endsAt: "2026-09-03T12:00:00+08:00", customer: { name: "Camille Flores", email: "camille.flores@example.com", phone: "+63 917 555 0133" }, services: ["Conch"], piercer: { name: "Carlo Mendoza", color: "#795d8e" }, station: "Station Three", notes: "" },
+      { id: "b4", reference: "MOCK-PC-004", status: "requested", startsAt: "2026-09-03T13:00:00+08:00", endsAt: "2026-09-03T14:00:00+08:00", customer: { name: "Daniel Ramos", email: "daniel.ramos@example.com", phone: "+63 917 555 0144" }, services: ["Helix"], piercer: { name: "Ana Reyes", color: "#73aaa2" }, station: "Station One", notes: "Needs confirmation." },
+      { id: "b5", reference: "MOCK-PC-005", status: "cancelled", startsAt: "2026-09-03T15:00:00+08:00", endsAt: "2026-09-03T16:00:00+08:00", customer: { name: "Erika Garcia", email: "erika.garcia@example.com", phone: "+63 917 555 0155" }, services: ["Septum"], piercer: { name: "Bea Cruz", color: "#df682c" }, station: "Station Two", notes: "Client cancelled." },
+      { id: "b6", reference: "MOCK-PC-006", status: "no_show", startsAt: "2026-09-03T16:00:00+08:00", endsAt: "2026-09-03T17:00:00+08:00", customer: { name: "Marco Santos", email: "marco.santos@example.com", phone: "+63 917 555 0166" }, services: ["Eyebrow"], piercer: null, station: null, notes: "No-show recorded." },
+      { id: "b7", reference: "MOCK-PC-007", status: "rejected", startsAt: "2026-09-03T17:00:00+08:00", endsAt: "2026-09-03T18:00:00+08:00", customer: { name: "Nina Dizon", email: "nina.dizon@example.com", phone: "+63 917 555 0177" }, services: ["Industrial"], piercer: { name: "Bea Cruz", color: "#df682c" }, station: "Station Two", notes: "Rejected by manager." }
+    ];
+    let selectedId = null;
+
+    const statusLabels = {
+      requested: ["Requested", "Pending", "requested", "pending"],
+      confirmed: ["Confirmed", "Pending", "confirmed", "pending"],
+      completed: ["Confirmed", "Completed", "confirmed", "completed"],
+      rejected: ["Rejected", "N/A", "rejected", "na"],
+      cancelled: ["Cancelled", "N/A", "cancelled", "na"],
+      no_show: ["No-show", "No-show", "no-show", "no-show"]
+    };
+    const actions = {
+      requested: ["Confirm", "Reject", "Cancel"],
+      confirmed: ["Complete", "No-show", "Reschedule", "Cancel"],
+      completed: [],
+      rejected: [],
+      cancelled: [],
+      no_show: []
+    };
+    const rows = document.getElementById("rows");
+    const empty = document.getElementById("empty");
+    const search = document.getElementById("search");
+    const roleSelect = document.getElementById("roleSelect");
+    const backdrop = document.getElementById("drawerBackdrop");
+
+    function normalize(value) {
+      return String(value || "").toLowerCase().replace(/\s+/g, " ").trim();
+    }
+    function time(value) {
+      return new Intl.DateTimeFormat("en-PH", { hour: "numeric", minute: "2-digit", timeZone: "Asia/Manila" }).format(new Date(value));
+    }
+    function date(value) {
+      return new Intl.DateTimeFormat("en-PH", { weekday: "long", month: "long", day: "numeric", year: "numeric", timeZone: "Asia/Manila" }).format(new Date(value));
+    }
+    function initials(name) {
+      return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "PC";
+    }
+    function searchable(item) {
+      return normalize([item.customer.name, item.reference, item.piercer?.name, item.station, item.services.join(" "), item.status.replace("_", " ")].join(" "));
+    }
+    function badge(label, tone) {
+      return `<span class="badge ${tone}">${label}</span>`;
+    }
+    function renderRows() {
+      const q = normalize(search.value);
+      const visible = q ? bookings.filter((item) => searchable(item).includes(q)) : bookings;
+      rows.innerHTML = visible.map((item) => {
+        const [apptLabel, completionLabel, apptTone, completionTone] = statusLabels[item.status];
+        const piercer = item.piercer || { name: "Unassigned", color: "#80675e" };
+        return `<tr class="${item.id === selectedId ? "selected" : ""}">
+          <td><span class="cell-main">${time(item.startsAt)}</span><span class="cell-sub">${time(item.endsAt)}</span></td>
+          <td><button class="customer-button" type="button" data-open="${item.id}" aria-label="Open appointment details for ${item.customer.name}">
+            <span class="avatar">${initials(item.customer.name)}</span>
+            <span><span class="cell-main">${item.customer.name}</span><span class="cell-sub">${item.services.join(" + ")} · ${item.reference}</span></span>
+          </button></td>
+          <td><span class="piercer-cell"><i class="dot" style="background:${piercer.color}"></i><span><span class="cell-main">${piercer.name}</span><span class="cell-sub">${item.station || "No station"}</span></span></span></td>
+          <td>${badge(apptLabel, apptTone)}</td>
+          <td>${badge(completionLabel, completionTone)}</td>
+          <td><button class="chevron" type="button" data-open="${item.id}" aria-label="Open details for ${item.customer.name}">›</button></td>
+        </tr>`;
+      }).join("");
+      empty.hidden = visible.length > 0;
+      rows.querySelectorAll("[data-open]").forEach((button) => {
+        button.addEventListener("click", () => openDrawer(button.dataset.open));
+      });
+    }
+    function openDrawer(id) {
+      selectedId = id;
+      const item = bookings.find((booking) => booking.id === id);
+      const [apptLabel, completionLabel, apptTone, completionTone] = statusLabels[item.status];
+      document.getElementById("drawerTitle").textContent = item.customer.name;
+      document.getElementById("drawerSub").textContent = `${item.reference} · ${item.services.join(" + ")}`;
+      document.getElementById("drawerDetails").innerHTML = `
+        <div><dt>Contact</dt><dd>${item.customer.email}<br>${item.customer.phone}</dd></div>
+        <div><dt>Booking reference</dt><dd>${item.reference}</dd></div>
+        <div><dt>Appointment start</dt><dd>${date(item.startsAt)}<br>${time(item.startsAt)}</dd></div>
+        <div><dt>Appointment end</dt><dd>${date(item.endsAt)}<br>${time(item.endsAt)}</dd></div>
+        <div><dt>Services</dt><dd>${item.services.join(" + ")}</dd></div>
+        <div><dt>Assigned piercer</dt><dd>${item.piercer?.name || "Unassigned"}<br>${item.station || "No station"}</dd></div>
+        <div><dt>Appointment Status</dt><dd>${badge(apptLabel, apptTone)}</dd></div>
+        <div><dt>Completion Status</dt><dd>${badge(completionLabel, completionTone)}</dd></div>
+      `;
+      const canManage = roleSelect.value !== "piercer";
+      const allowed = actions[item.status] || [];
+      document.getElementById("drawerActions").innerHTML = canManage && allowed.length
+        ? allowed.map((label) => `<button type="button" class="action ${label === "Cancel" ? "danger" : ""}">${label}</button>`).join("")
+        : "";
+      document.getElementById("drawerNote").textContent = !canManage
+        ? "Piercer preview: management actions are hidden, preserving current role behavior."
+        : allowed.length
+          ? "Actions are shown here instead of inside the table. They mirror existing BookingActions transitions."
+          : `This appointment is already ${item.status.replace("_", " ")}.`;
+      backdrop.classList.add("open");
+      renderRows();
+    }
+    function closeDrawer() {
+      selectedId = null;
+      backdrop.classList.remove("open");
+      renderRows();
+    }
+    search.addEventListener("input", renderRows);
+    roleSelect.addEventListener("change", () => { if (selectedId) openDrawer(selectedId); });
+    document.getElementById("closeDrawer").addEventListener("click", closeDrawer);
+    backdrop.addEventListener("mousedown", (event) => { if (event.target === backdrop) closeDrawer(); });
+    document.addEventListener("keydown", (event) => { if (event.key === "Escape") closeDrawer(); });
+    renderRows();
+  </script>
+</body>
+</html>

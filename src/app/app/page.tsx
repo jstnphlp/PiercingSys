@@ -16,12 +16,10 @@ import {
 } from "@/lib/domain";
 import {
   getStaffData,
-  type BookingRecord,
   type StaffDataScope,
 } from "@/lib/data/staff";
 import { resolveReportPeriod, type ReportPeriod, type ReportPreset } from "@/lib/report-period";
 import {
-  BookingActions,
   InviteForm,
   ServiceAssignmentForm,
   ServiceForm,
@@ -36,6 +34,7 @@ import { ReportsView } from "./reports-view";
 import { SalesView } from "./sales-view";
 import { ServiceList } from "./service-list";
 import { StaffViewSkeleton } from "./staff-skeletons";
+import { TodayAppointments } from "./appointment-list";
 import { emptyState, featureView, metricCard, metricGrid, panel, panelHead, settingSection, settingsStack, statusClasses, statusNote, twoPanel } from "./dashboard-styles";
 import { resolveStaffView, type StaffView } from "./view-config";
 
@@ -131,21 +130,7 @@ function Overview({
         )}
       </div>
       <div className={`${twoPanel} items-start`}>
-        <section className={panel}>
-          <PanelHead
-            title="Today’s appointments"
-            detail="Live records from the studio calendar"
-          />
-          {appointments.length ? (
-            <AppointmentList bookings={appointments} role={role} />
-          ) : (
-            <Empty
-              icon={<CalendarDays />}
-              title="No appointments today"
-              text="Confirmed online bookings and staff appointments will appear here."
-            />
-          )}
-        </section>
+        <TodayAppointments bookings={appointments} role={role} />
         <section className={panel}>
           <PanelHead
             title="Studio readiness"
@@ -338,49 +323,6 @@ function StudioSettings({
   );
 }
 
-function AppointmentList({
-  bookings,
-  role,
-}: {
-  bookings: BookingRecord[];
-  role: string;
-}) {
-  return (
-    <div>
-      {bookings.map((item) => (
-        <article className="grid min-h-[72px] grid-cols-[64px_34px_minmax(150px,1fr)_minmax(130px,.65fr)_82px_auto] items-center gap-2.5 border-b border-dashed border-[#dab08f] bg-transparent px-4 py-[9px] hover:bg-[#fff1cf] last:border-0 max-[1100px]:grid-cols-[60px_32px_1fr_80px_auto] max-[760px]:grid-cols-[52px_30px_1fr_auto] max-[760px]:px-2.5" key={item.id}>
-          <div className="flex flex-col [&_strong]:text-[10px] [&_strong]:text-hippy-ink [&_small]:mt-[3px] [&_small]:text-[8px] [&_small]:text-[#80675e]">
-            <strong>{formatTime(item.startsAt)}</strong>
-            <small>{formatTime(item.endsAt)}</small>
-          </div>
-          <span className="grid size-[33px] place-items-center rounded-[50%_42%_50%_45%] border border-hippy-ink bg-[#e98956] text-[10px] font-extrabold text-[#522b1b]">{initials(item.customer.name)}</span>
-          <div className="flex flex-col [&_strong]:text-[10px] [&_strong]:text-hippy-ink [&_small]:mt-[3px] [&_small]:text-[8px] [&_small]:text-[#80675e]">
-            <strong>{item.customer.name}</strong>
-            <small>
-              {item.services.map((service) => service.name).join(" + ")} · {item.reference}
-            </small>
-          </div>
-          <div className="flex items-center gap-[7px] text-[9px] max-[1100px]:hidden [&>i]:size-2 [&>i]:shrink-0 [&>i]:rounded-full [&>span]:flex [&>span]:flex-col [&_small]:mt-[3px] [&_small]:text-[8px] [&_small]:text-[#80675e]">
-            {item.piercer && <i style={{ background: item.piercer.color }} />}
-            <span>
-              {item.piercer?.name ?? "Unassigned"}
-              <small>{item.station ?? "No station"}</small>
-            </span>
-          </div>
-          <Status value={item.status} />
-          {["confirmed", "requested"].includes(item.status) && (
-            <BookingActions
-              id={item.id}
-              status={item.status}
-              canManage={role !== "piercer"}
-              startsAt={item.startsAt}
-            />
-          )}
-        </article>
-      ))}
-    </div>
-  );
-}
 function Metric({
   icon,
   label,
@@ -413,23 +355,6 @@ function PanelHead({ title, detail }: { title: string; detail: string }) {
     </div>
   );
 }
-function Empty({
-  icon,
-  title,
-  text,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  text: string;
-}) {
-  return (
-    <div className={emptyState}>
-      <span>{icon}</span>
-      <strong>{title}</strong>
-      <p>{text}</p>
-    </div>
-  );
-}
 function StateCard({ title, detail }: { title: string; detail: string }) {
   return (
     <section className={`${panel} ${emptyState} [&>svg]:z-1 [&>svg]:mb-3 [&>svg]:size-[45px] [&>svg]:rounded-full [&>svg]:border-[1.5px] [&>svg]:border-hippy-ink [&>svg]:bg-hippy-sage [&>svg]:p-[11px] [&>svg]:text-[#315342] [&>svg]:shadow-[3px_3px_0_#3b2923] [&_h2]:m-0 [&_h2]:font-display [&_h2]:text-2xl [&_h2]:font-[650]`}>
@@ -459,23 +384,5 @@ function Readiness({
       <strong>{label}</strong>
       <small>{detail ?? (done ? "Configured" : "Needs setup")}</small>
     </div>
-  );
-}
-function formatTime(value: string) {
-  return new Intl.DateTimeFormat("en-PH", {
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone: "Asia/Manila",
-  }).format(new Date(value));
-}
-function initials(value: string) {
-  return (
-    value
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((part) => part[0])
-      .join("")
-      .toUpperCase() || "PC"
   );
 }
