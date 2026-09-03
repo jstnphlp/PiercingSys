@@ -36,7 +36,7 @@ import { ReportsView } from "./reports-view";
 import { SalesView } from "./sales-view";
 import { ServiceList } from "./service-list";
 import { StaffViewSkeleton } from "./staff-skeletons";
-import { emptyState, featureView, metricCard, metricGrid, panel, panelHead, settingSection, settingsStack, statusClasses, statusNote, twoPanel } from "./dashboard-styles";
+import { emptyState, featureView, metricCard, metricGrid, panel, panelHead, settingSection, settingsListRow, settingsStack, statusClasses, statusNote, twoPanel } from "./dashboard-styles";
 import { resolveStaffView, type StaffView } from "./view-config";
 
 export const metadata: Metadata = { title: "Studio operations" };
@@ -259,12 +259,14 @@ function StudioSettings({
             title="Services & pricing"
             detail="Only active, assigned services appear on public booking."
           />
-          <ServiceForm staff={data.staff} />
-          <ServiceAssignmentForm
-            services={data.services}
-            staff={data.staff}
-            assignments={data.serviceAssignments}
-          />
+          <div className="flex flex-wrap items-center justify-start gap-2 px-[18px] py-3.5">
+            <ServiceForm staff={data.staff} />
+            <ServiceAssignmentForm
+              services={data.services}
+              staff={data.staff}
+              assignments={data.serviceAssignments}
+            />
+          </div>
           <ServiceList services={data.services} />
         </section>
         <section className={settingSection}>
@@ -272,26 +274,20 @@ function StudioSettings({
             title="Team, schedules & stations"
             detail="Owners manage invitations; managers configure operational availability."
           />
-          {role === "owner" && <InviteForm />}
-          <StationForm />
-          <div className="mt-3 [&>div]:flex [&>div]:min-h-[54px] [&>div]:items-center [&>div]:justify-between [&>div]:border-t [&>div]:border-dashed [&>div]:border-[#d6a786] [&>div]:px-[18px] [&>div]:py-2 [&>div>span]:flex [&>div>span]:flex-col [&>div>span]:gap-[3px] [&_strong]:text-[10px] [&_small]:text-[8px] [&_small]:text-studio-muted">
+          <div className="flex flex-wrap items-center justify-start gap-2 px-[18px] py-3.5">
+            {role === "owner" && <InviteForm />}
+            <StationForm />
+          </div>
+          <div>
             {data.staff.map((person) => (
-              <div key={person.id}>
-                <span>
-                  <strong>{person.displayName}</strong>
-                  <small>
-                    {person.role} · {person.active ? "Active" : "Inactive"}
-                  </small>
-                </span>
-                <StaffActions
-                  person={person}
-                  currentRole={role as "owner" | "manager" | "piercer"}
-                />
-                <i className="size-2 shrink-0 rounded-full" style={{ background: person.color }} />
-              </div>
+              <StaffActions
+                key={person.id}
+                person={person}
+                currentRole={role as "owner" | "manager" | "piercer"}
+              />
             ))}
             {data.stations.map((station) => (
-              <div key={station.id}>
+              <div className={settingsListRow} key={station.id}>
                 <span>
                   <strong>{station.name}</strong>
                   <small>Active station</small>

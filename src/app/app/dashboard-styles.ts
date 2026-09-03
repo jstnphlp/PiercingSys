@@ -15,6 +15,7 @@ export const panel = "overflow-hidden rounded-[19px_14px_20px_16px] border-[1.5p
 export const panelHead = "flex min-h-[66px] items-center justify-between border-b border-dashed border-[#c98965] bg-[#fff7e5] px-[18px] py-3.5 [&_h3]:m-0 [&_h3]:font-display [&_h3]:text-base [&_h3]:font-[760] [&_h3]:text-hippy-ink [&_p]:mt-1 [&_p]:mb-0 [&_p]:text-[9px] [&_p]:text-[#82675d]";
 export const settingSection = `${panel} isolate pb-[17px]`;
 export const settingsStack = "flex flex-col gap-[19px]";
+export const settingsListRow = "flex min-h-[54px] w-full items-center gap-3 border-0 border-t border-dashed border-[#d6a786] bg-transparent px-[18px] py-2 text-left text-hippy-ink [&>span]:flex [&>span]:min-w-0 [&>span]:flex-1 [&>span]:flex-col [&>span]:gap-[3px] [&_strong]:text-[10px] [&_small]:text-[8px] [&_small]:text-studio-muted";
 export const inlineForm = "mx-[18px] my-3.5 grid grid-cols-4 gap-[11px] rounded-[15px_11px_16px_12px] border-[1.5px] border-hippy-ink bg-[#f4d59b] p-[15px] shadow-[3px_3px_0_#3b2923] max-[1100px]:grid-cols-2 max-[760px]:grid-cols-1 [&>div]:col-span-full [&>div]:flex [&>div]:flex-wrap [&>div]:items-center [&>div]:justify-end [&>div]:gap-2 max-[760px]:[&>div]:col-auto [&>[role=alert]]:col-span-full max-[760px]:[&>[role=alert]]:col-auto";
 export const statusNote = "text-xs text-studio-muted";
 

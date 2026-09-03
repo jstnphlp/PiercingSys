@@ -11,6 +11,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { StudioSelect } from "@/components/ui/studio-select";
+import { toast } from "@/components/ui/toast";
 import {
   formatServicePrice,
   servicePriceBounds,
@@ -22,16 +23,14 @@ import {
 import type { SaleRecord, StaffRecord } from "@/lib/data/staff";
 import { CustomerSelect } from "./customer-select";
 import { requestWorkspaceRefresh } from "./workspace-refresh";
-import { dashButton, dashError, dashField, inlineForm, operationDialog, operationForm, operationGrid, panelHead, settingSection } from "./dashboard-styles";
+import { dashButton, dashError, dashField, inlineForm, operationDialog, operationForm, operationGrid, panelHead, settingSection, settingsListRow } from "./dashboard-styles";
 
 function useMutation() {
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   async function run(url: string, options: RequestInit) {
     setBusy(true);
     setError("");
-    setMessage("");
     const response = await fetch(url, options);
     const body = await response.json();
     setBusy(false);
@@ -39,10 +38,12 @@ function useMutation() {
       setError(body.error?.message ?? "The change could not be saved.");
       return false;
     }
-    setMessage("Saved.");
     return true;
   }
-  return { busy, message, error, run };
+  function reset() {
+    setError("");
+  }
+  return { busy, error, run, reset };
 }
 
 const paymentMethodOptions = [
@@ -185,8 +186,16 @@ export function SettingsForm({ studio }: { studio: StudioSettings }) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),
       })
-    )
+    ) {
+      toast.add({
+        title: "Settings saved",
+        description: "Your studio settings were updated successfully.",
+        type: "success",
+        timeout: 3_000,
+        priority: "low",
+      });
       requestWorkspaceRefresh();
+    }
   }
   return (
     <form className={settingSection} onSubmit={submit}>
@@ -289,11 +298,6 @@ export function SettingsForm({ studio }: { studio: StudioSettings }) {
             {mutation.error}
           </p>
         )}
-        {mutation.message && (
-          <p className="text-[10px] font-extrabold text-success" role="status">
-            {mutation.message}
-          </p>
-        )}
       </div>
     </form>
   );
@@ -325,19 +329,25 @@ export function ServiceForm({ staff }: { staff: StaffRecord[] }) {
         staffIds: form.getAll("staffIds").map(String),
       }),
     });
-    if (ok) requestWorkspaceRefresh();
+    if (ok) {
+      setOpen(false);
+      requestWorkspaceRefresh();
+    }
   }
-  if (!open)
-    return (
-      <button
-        className={`${dashButton({ variant: "secondary" })} ml-[18px] min-h-[34px] text-[9px]`}
-        onClick={() => setOpen(true)}
-      >
-        <Plus size={15} /> Add service
-      </button>
-    );
   return (
-    <form className={inlineForm} onSubmit={submit}>
+    <Dialog open={open} onOpenChange={(nextOpen) => {
+      if (!mutation.busy || nextOpen) {
+        if (nextOpen) mutation.reset();
+        setOpen(nextOpen);
+      }
+    }} disablePointerDismissal={mutation.busy}>
+      <DialogTrigger className={`${dashButton({ variant: "secondary" })} min-h-[34px] text-[9px]`}>
+        <Plus size={15} /> Add service
+      </DialogTrigger>
+      <DialogContent className={`${operationDialog} gap-0 p-0 ring-0 sm:max-w-[720px]`} showCloseButton={false}>
+        <header><div><DialogTitle>Add service</DialogTitle><DialogDescription>Create a service and assign qualified staff.</DialogDescription></div><DialogClose aria-label="Close add service form" disabled={mutation.busy}><X /></DialogClose></header>
+        <form className={operationForm} onSubmit={submit}>
+          <div className={operationGrid}>
       <label className={dashField}>
         Service name
         <input name="name" required />
@@ -385,20 +395,17 @@ export function ServiceForm({ staff }: { staff: StaffRecord[] }) {
             </label>
           ))}
       </fieldset>
-      {mutation.error && <p className={dashError}>{mutation.error}</p>}
-      <div>
-        <button
-          type="button"
-          className={dashButton({ variant: "secondary" })}
-          onClick={() => setOpen(false)}
-        >
-          Cancel
-        </button>
+          </div>
+      {mutation.error && <p className={dashError} role="alert">{mutation.error}</p>}
+      <footer>
+        <DialogClose className={dashButton({ variant: "secondary" })} disabled={mutation.busy}>Cancel</DialogClose>
         <button className={dashButton({ variant: "primary" })} disabled={mutation.busy}>
-          Add service
+          {mutation.busy ? "Adding…" : "Add service"}
         </button>
-      </div>
-    </form>
+      </footer>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -422,21 +429,28 @@ export function ServiceAssignmentForm({
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ staffIds: form.getAll("staffIds").map(String) }),
     });
-    if (ok) requestWorkspaceRefresh();
-  }
-  if (!open) {
-    return (
-      <button
-        className={`${dashButton({ variant: "secondary" })} ml-[18px] min-h-[34px] text-[9px]`}
-        disabled={!services.length || !staff.length}
-        onClick={() => setOpen(true)}
-      >
-        Manage service assignments
-      </button>
-    );
+    if (ok) {
+      setOpen(false);
+      requestWorkspaceRefresh();
+    }
   }
   return (
-    <form className={inlineForm} onSubmit={submit}>
+    <Dialog open={open} onOpenChange={(nextOpen) => {
+      if (!mutation.busy || nextOpen) {
+        if (nextOpen) mutation.reset();
+        setOpen(nextOpen);
+      }
+    }} disablePointerDismissal={mutation.busy}>
+      <DialogTrigger
+        className={`${dashButton({ variant: "secondary" })} min-h-[34px] text-[9px]`}
+        disabled={!services.length || !staff.length}
+      >
+        Manage service assignments
+      </DialogTrigger>
+      <DialogContent className={`${operationDialog} gap-0 p-0 ring-0 sm:max-w-[620px]`} showCloseButton={false}>
+        <header><div><DialogTitle>Manage service assignments</DialogTitle><DialogDescription>Choose which piercers can perform each service.</DialogDescription></div><DialogClose aria-label="Close service assignments" disabled={mutation.busy}><X /></DialogClose></header>
+        <form className={operationForm} onSubmit={submit}>
+          <div className={operationGrid}>
       <label className={dashField}>
         Service
         <StudioSelect
@@ -466,20 +480,17 @@ export function ServiceAssignmentForm({
             </label>
           ))}
       </fieldset>
-      {mutation.error && <p className={dashError}>{mutation.error}</p>}
-      <div>
-        <button
-          type="button"
-          className={dashButton({ variant: "secondary" })}
-          onClick={() => setOpen(false)}
-        >
-          Cancel
-        </button>
+          </div>
+      {mutation.error && <p className={dashError} role="alert">{mutation.error}</p>}
+      <footer>
+        <DialogClose className={dashButton({ variant: "secondary" })} disabled={mutation.busy}>Cancel</DialogClose>
         <button className={dashButton({ variant: "primary" })} disabled={mutation.busy}>
-          Save assignments
+          {mutation.busy ? "Saving…" : "Save assignments"}
         </button>
-      </div>
-    </form>
+      </footer>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -560,44 +571,43 @@ export function StationForm() {
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    if (
-      await mutation.run("/api/stations", {
+    const ok = await mutation.run("/api/stations", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ name: String(form.get("name")) }),
-      })
-    )
+      });
+    if (ok) {
+      setOpen(false);
       requestWorkspaceRefresh();
+    }
   }
-  if (!open)
-    return (
-      <button
-        className={`${dashButton({ variant: "secondary" })} ml-[18px] min-h-[34px] text-[9px]`}
-        onClick={() => setOpen(true)}
-      >
-        <Plus size={15} /> Add station
-      </button>
-    );
   return (
-    <form className={inlineForm} onSubmit={submit}>
-      <label className={dashField}>
-        Station name
-        <input name="name" required />
-      </label>
-      {mutation.error && <p className={dashError}>{mutation.error}</p>}
-      <div>
-        <button
-          type="button"
-          className={dashButton({ variant: "secondary" })}
-          onClick={() => setOpen(false)}
-        >
-          Cancel
-        </button>
-        <button className={dashButton({ variant: "primary" })} disabled={mutation.busy}>
-          Add station
-        </button>
-      </div>
-    </form>
+    <Dialog open={open} onOpenChange={(nextOpen) => {
+      if (!mutation.busy || nextOpen) {
+        if (nextOpen) mutation.reset();
+        setOpen(nextOpen);
+      }
+    }} disablePointerDismissal={mutation.busy}>
+      <DialogTrigger className={`${dashButton({ variant: "secondary" })} min-h-[34px] text-[9px]`}>
+        <Plus size={15} /> Add station
+      </DialogTrigger>
+      <DialogContent className={`${operationDialog} gap-0 p-0 ring-0 sm:max-w-[480px]`} showCloseButton={false}>
+        <header><div><DialogTitle>Add station</DialogTitle><DialogDescription>Create another station for appointment scheduling.</DialogDescription></div><DialogClose aria-label="Close add station form" disabled={mutation.busy}><X /></DialogClose></header>
+        <form className={operationForm} onSubmit={submit}>
+          <div className={operationGrid}>
+            <label className={`${dashField} col-span-full`}>
+              Station name
+              <input name="name" required />
+            </label>
+          </div>
+          {mutation.error && <p className={dashError} role="alert">{mutation.error}</p>}
+          <footer>
+            <DialogClose className={dashButton({ variant: "secondary" })} disabled={mutation.busy}>Cancel</DialogClose>
+            <button className={dashButton({ variant: "primary" })} disabled={mutation.busy}>{mutation.busy ? "Adding…" : "Add station"}</button>
+          </footer>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -616,45 +626,37 @@ export function InviteForm() {
         role: String(form.get("role")),
       }),
     });
-    if (ok) requestWorkspaceRefresh();
+    if (ok) {
+      setOpen(false);
+      requestWorkspaceRefresh();
+    }
   }
-  if (!open)
-    return (
-      <button
-        className={`${dashButton({ variant: "secondary" })} ml-[18px] min-h-[34px] text-[9px]`}
-        onClick={() => setOpen(true)}
-      >
-        <UserPlus size={15} /> Invite staff
-      </button>
-    );
   return (
-    <form className={inlineForm} onSubmit={submit}>
-      <label className={dashField}>
-        Display name
-        <input name="displayName" required />
-      </label>
-      <label className={dashField}>
-        Email
-        <input name="email" type="email" required />
-      </label>
-      <label className={dashField}>
-        Role
-        <StudioSelect name="role" defaultValue="piercer" ariaLabel="Role" options={[{ value: "piercer", label: "Piercer" }, { value: "manager", label: "Manager" }]} />
-      </label>
-      {mutation.error && <p className={dashError}>{mutation.error}</p>}
-      <div>
-        <button
-          type="button"
-          className={dashButton({ variant: "secondary" })}
-          onClick={() => setOpen(false)}
-        >
-          Cancel
-        </button>
-        <button className={dashButton({ variant: "primary" })} disabled={mutation.busy}>
-          Send invitation
-        </button>
-      </div>
-    </form>
+    <Dialog open={open} onOpenChange={(nextOpen) => {
+      if (!mutation.busy || nextOpen) {
+        if (nextOpen) mutation.reset();
+        setOpen(nextOpen);
+      }
+    }} disablePointerDismissal={mutation.busy}>
+      <DialogTrigger className={`${dashButton({ variant: "secondary" })} min-h-[34px] text-[9px]`}>
+        <UserPlus size={15} /> Invite staff
+      </DialogTrigger>
+      <DialogContent className={`${operationDialog} gap-0 p-0 ring-0 sm:max-w-[560px]`} showCloseButton={false}>
+        <header><div><DialogTitle>Invite staff</DialogTitle><DialogDescription>Send an invitation and choose the staff member&apos;s initial role.</DialogDescription></div><DialogClose aria-label="Close invite staff form" disabled={mutation.busy}><X /></DialogClose></header>
+        <form className={operationForm} onSubmit={submit}>
+          <div className={operationGrid}>
+            <label className={dashField}>Display name<input name="displayName" required /></label>
+            <label className={dashField}>Email<input name="email" type="email" required /></label>
+            <label className={`${dashField} col-span-full`}>Role<StudioSelect name="role" defaultValue="piercer" ariaLabel="Role" options={[{ value: "piercer", label: "Piercer" }, { value: "manager", label: "Manager" }]} /></label>
+          </div>
+          {mutation.error && <p className={dashError} role="alert">{mutation.error}</p>}
+          <footer>
+            <DialogClose className={dashButton({ variant: "secondary" })} disabled={mutation.busy}>Cancel</DialogClose>
+            <button className={dashButton({ variant: "primary" })} disabled={mutation.busy}>{mutation.busy ? "Sending…" : "Send invitation"}</button>
+          </footer>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -666,36 +668,73 @@ export function StaffActions({
   currentRole: StaffRole;
 }) {
   const mutation = useMutation();
-  async function update(payload: Record<string, unknown>) {
-    if (
-      await mutation.run(`/api/staff/${person.id}`, {
+  const [open, setOpen] = useState(false);
+  const [role, setRole] = useState(person.role);
+  const [active, setActive] = useState(person.active);
+  const [confirmingTransfer, setConfirmingTransfer] = useState(false);
+  function resetForm() {
+    mutation.reset();
+    setRole(person.role);
+    setActive(person.active);
+    setConfirmingTransfer(false);
+  }
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (role === "owner" && !confirmingTransfer) {
+      setConfirmingTransfer(true);
+      return;
+    }
+    const ok = await mutation.run(`/api/staff/${person.id}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
-      })
-    )
+        body: JSON.stringify(role === "owner" ? { role } : { role, active }),
+      });
+    if (ok) {
+      setOpen(false);
       requestWorkspaceRefresh();
+    }
   }
-  if (currentRole !== "owner" || person.role === "owner") return null;
-  return (
-    <span className="grid w-[min(100%,330px)] grid-cols-[minmax(145px,1fr)_minmax(88px,auto)] items-center justify-self-end gap-[7px] max-[450px]:grid-cols-1 [&>select]:h-[34px] [&>select]:min-w-0 [&>select]:w-full [&>select]:rounded-lg [&>select]:border [&>select]:border-hippy-ink [&>select]:bg-[#fff7e3] [&>select]:px-[9px] [&>select]:py-1 [&>select]:text-[9px] [&>select]:shadow-[1px_1px_0_#3b2923] [&>button]:h-[34px] [&>button]:w-full [&>button]:rounded-lg [&>button]:border [&>button]:border-hippy-ink [&>button]:bg-[#fff7e3] [&>button]:px-[9px] [&>button]:py-1 [&>button]:text-[9px] [&>button]:shadow-[1px_1px_0_#3b2923] [&>small]:col-span-full [&>small]:text-[7px] [&>small]:text-danger">
-      <StudioSelect
-        ariaLabel={`Role for ${person.displayName}`}
-        value={person.role}
-        onValueChange={(role) => void update({ role })}
-        disabled={mutation.busy}
-        triggerClassName="h-[34px] min-h-[34px] text-[9px] shadow-[1px_1px_0_#3b2923]"
-        options={[{ value: "manager", label: "Manager" }, { value: "piercer", label: "Piercer" }, { value: "owner", label: "Transfer ownership" }]}
-      />
-      <button
-        type="button"
-        onClick={() => void update({ active: !person.active })}
-        disabled={mutation.busy}
-      >
-        {person.active ? "Deactivate" : "Activate"}
-      </button>
-      {mutation.error && <small>{mutation.error}</small>}
+  const summary = <>
+    <span>
+      <strong>{person.displayName}</strong>
+      <small>{person.role} · {person.active ? "Active" : "Inactive"}</small>
     </span>
+    <i className="size-2 shrink-0 rounded-full" style={{ background: person.color }} />
+  </>;
+  if (currentRole !== "owner" || person.role === "owner") {
+    return <div className={settingsListRow}>{summary}</div>;
+  }
+  return (
+    <Dialog open={open} onOpenChange={(nextOpen) => {
+      if (!mutation.busy || nextOpen) {
+        if (nextOpen) resetForm();
+        setOpen(nextOpen);
+      }
+    }} disablePointerDismissal={mutation.busy}>
+      <DialogTrigger
+        type="button"
+        className={`${settingsListRow} cursor-pointer transition-colors hover:bg-[#fff1cf] focus-visible:bg-[#f7dfb3] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#d66335]`}
+        aria-label={`Manage ${person.displayName}`}
+      >
+        {summary}
+      </DialogTrigger>
+      <DialogContent className={`${operationDialog} gap-0 p-0 ring-0 sm:max-w-[520px]`} showCloseButton={false}>
+        <header><div><DialogTitle>Manage {person.displayName}</DialogTitle><DialogDescription>Update this staff member&apos;s role and account access.</DialogDescription></div><DialogClose aria-label={`Close management for ${person.displayName}`} disabled={mutation.busy}><X /></DialogClose></header>
+        <form className={operationForm} onSubmit={submit}>
+          <div className={operationGrid}>
+            <label className={`${dashField} col-span-full`}>Role<StudioSelect ariaLabel={`Role for ${person.displayName}`} value={role} onValueChange={(nextRole) => { setRole(nextRole as StaffRole); setConfirmingTransfer(false); }} disabled={mutation.busy} options={[{ value: "manager", label: "Manager" }, { value: "piercer", label: "Piercer" }, { value: "owner", label: "Transfer ownership" }]} /></label>
+            {role !== "owner" && <fieldset className="col-span-full rounded-[12px] border-[1.5px] border-dashed border-[#9e6748] bg-[#fff3d3] p-3"><legend className="px-1 text-[9px] font-extrabold text-studio-muted">Account access</legend><label className="flex cursor-pointer items-center gap-2 text-[10px] font-bold"><input type="checkbox" checked={active} onChange={(event) => setActive(event.target.checked)} disabled={mutation.busy} /> Active staff account</label></fieldset>}
+            {role === "owner" && <div className="col-span-full rounded-[12px] border border-[#9a4734] bg-[#f2c8b6] p-3 text-[10px]/[1.5] text-[#783321]"><strong>Ownership transfer</strong><p className="mb-0">This will make {person.displayName} the studio owner and change your own access. This action requires confirmation.</p></div>}
+            {confirmingTransfer && <div className="col-span-full rounded-[12px] border-2 border-[#9a4734] bg-[#fff1e8] p-3 text-[10px]/[1.5] text-[#783321]" role="alert"><strong>Confirm ownership transfer</strong><p className="mb-0">Are you sure you want to transfer ownership to {person.displayName}?</p></div>}
+          </div>
+          {mutation.error && <p className={dashError} role="alert">{mutation.error}</p>}
+          <footer>
+            {confirmingTransfer ? <button type="button" className={dashButton({ variant: "secondary" })} onClick={() => setConfirmingTransfer(false)} disabled={mutation.busy}>Back</button> : <DialogClose className={dashButton({ variant: "secondary" })} disabled={mutation.busy}>Cancel</DialogClose>}
+            <button className={dashButton({ variant: "primary" })} disabled={mutation.busy}>{mutation.busy ? "Saving…" : confirmingTransfer ? "Confirm transfer" : role === "owner" ? "Continue" : "Save changes"}</button>
+          </footer>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
