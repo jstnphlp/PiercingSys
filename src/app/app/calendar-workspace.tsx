@@ -2,9 +2,10 @@
 
 import { Check, ChevronLeft, ChevronRight, Clock3, Plus, Search, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { combinedServiceDuration, manilaDate, shiftManilaDate, type BookingStatus, type Service } from "@/lib/domain";
-import type { StaffRecord } from "@/lib/data/staff";
+import { combinedServiceDuration, manilaDate, manilaDateTime, manilaSchedulingEnd, shiftManilaDate, type BookingStatus, type Service, type StudioSettings } from "@/lib/domain";
+import type { AvailabilityRecord, StaffRecord } from "@/lib/data/staff";
 import { CustomerSelect } from "./customer-select";
+import { appointmentDayBoundary } from "./appointment-time";
 import { WORKSPACE_REFRESH_EVENT } from "./workspace-refresh";
 import { calendarBodyHeight, calendarEndLabel, calendarEventStyle, calendarHeaderHeight, calendarHourLabels, calendarMinuteTop, isCalendarMinuteVisible } from "./calendar-geometry";
 import { layoutOverlappingAppointments } from "./calendar-layout";
@@ -30,6 +31,8 @@ type Props = {
   staff: StaffRecord[];
   assignments: Array<{ serviceId: string; staffId: string }>;
   stations: Station[];
+  studio: StudioSettings;
+  availability: AvailabilityRecord[];
 };
 
 const dayNames = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
@@ -125,7 +128,9 @@ function WeekCalendar({ days, anchor, appointments, now, onSelectDate, onSelectA
         const positionedAppointments = layoutOverlappingAppointments(appointments.filter((item) => manilaDate(item.starts_at) === date));
         return <div className={cn("relative border-l border-dashed border-[#c79370] bg-[#fff9eb] bg-[repeating-linear-gradient(to_bottom,transparent_0,transparent_59px,#d9b493_60px)]", date === today && "bg-[#f9edcf]", date === anchor && "bg-[#fbe5c9]")} key={date}>
         {positionedAppointments.map(({ item, lane, laneCount }) => {
-          const start = manilaMinutes(item.starts_at); const end = manilaMinutes(item.ends_at); const piercer = one(item.staff_profiles); const station = one(item.stations);
+          const start = manilaMinutes(item.starts_at);
+          const end = start + Math.round((new Date(item.ends_at).getTime() - new Date(item.starts_at).getTime()) / 60_000);
+          const piercer = one(item.staff_profiles); const station = one(item.stations);
           const accessibleLabel = `${formatTime(item.starts_at)} to ${formatTime(item.ends_at)}, ${clientName(item)}, ${servicesLabel(item)}, ${piercer?.display_name ?? "Unassigned"}, ${station?.name ?? "No station"}`;
           const eventStyle = calendarEventStyle(start, end);
           return <button type="button" key={item.id} className={cn("absolute left-[calc((100%/var(--event-lanes))*var(--event-lane)+4px)] z-2 min-h-[34px] w-[calc(100%/var(--event-lanes)-8px)] cursor-pointer overflow-hidden rounded-[10px_7px_11px_8px] border border-l-[5px] border-hippy-ink border-l-[var(--event-color)] bg-[color-mix(in_srgb,var(--event-color)_25%,#fff6df)] px-2 py-1.5 text-left text-[#432e27] shadow-[2px_2px_0_#3b2923] transition hover:z-7 hover:-translate-x-px hover:-translate-y-0.5 hover:shadow-[4px_5px_0_#3b2923] focus-visible:z-7 focus-visible:-translate-x-px focus-visible:-translate-y-0.5 focus-visible:shadow-[4px_5px_0_#3b2923] [&>strong]:block [&>strong]:overflow-hidden [&>strong]:text-[9px] [&>strong]:text-ellipsis [&>strong]:whitespace-nowrap [&>small]:mt-0.5 [&>small]:block [&>small]:overflow-hidden [&>small]:text-[8px] [&>small]:text-ellipsis [&>small]:whitespace-nowrap [&>i]:mt-0.5 [&>i]:block [&>i]:overflow-hidden [&>i]:text-[8px] [&>i]:text-ellipsis [&>i]:whitespace-nowrap [&>i]:not-italic [&>i]:text-[#765d53]", item.status === "completed" && "opacity-70")} style={{
@@ -206,15 +211,33 @@ function AppointmentFormDialog(props: Props & { initialDate: string; onClose: ()
   const chosenPiercer = props.staff.find((person) => person.id === effectivePiercerId);
   const chosenStation = props.stations.find((station) => station.id === stationId);
   const clientSummary = clientMode === "existing" ? cleanClientLabel(clientLabel) : `${newClient.firstName} ${newClient.lastName}`.trim();
+  const boundary = date && time && duration ? appointmentDayBoundary(date, time, duration) : null;
+  const endsAt = boundary?.endsAt ?? null;
+  const dayHours = props.studio.businessHours[String(weekday(date))];
+  const studioScheduleIssue = endsAt && (!dayHours || dayHours.closed
+    ? "The studio is closed on this date."
+    : endsAt > manilaSchedulingEnd(date, dayHours.close)
+      ? `The studio closes at ${compactScheduleTime(dayHours.close)}.`
+      : null);
+  const piercerScheduleIssue = endsAt && effectivePiercerId && !props.availability.some((block) =>
+    block.staffId === effectivePiercerId &&
+    (block.availabilityDate ? block.availabilityDate === date : block.weekday === weekday(date)) &&
+    new Date(`${date}T${time}:00+08:00`) >= manilaDateTime(date, block.startsAt.slice(0, 5)) &&
+    endsAt <= manilaSchedulingEnd(date, block.endsAt.slice(0, 5)),
+  ) ? `${chosenPiercer?.displayName ?? "The selected piercer"} is not available through ${formatTime(endsAt.toISOString())}.` : null;
   const missing = [
     !serviceIds.length && "Services",
     !clientSummary && (clientMode === "existing" ? "Client" : "New client name"),
     clientMode === "new" && (!newClient.email || !newClient.phone) && "New client contact",
     !effectivePiercerId && "Piercer",
     (!date || !time) && "Date and time",
+    boundary?.endsPastMidnight && "Choose a start time that ends by midnight",
+    studioScheduleIssue,
+    piercerScheduleIssue,
   ].filter(Boolean) as string[];
+  const readinessMissing = error ? [...missing, "Resolve the issue above"] : missing;
   return <Dialog title="New appointment" detail="Studio-created bookings ignore public lead time and horizon limits." onClose={props.onClose}>
-    <form className="grid grid-cols-[minmax(0,1fr)_320px] items-start max-[900px]:grid-cols-1" onSubmit={submit}>
+    <form className="grid grid-cols-[minmax(0,1fr)_320px] max-[900px]:grid-cols-1" onSubmit={submit}>
       <div className="flex flex-col gap-4 p-[21px] max-[700px]:p-4">
         <section className="flex flex-col gap-2.5">
           <SectionHead index="1" title="Services" meta={`${serviceIds.length} selected · ${duration} min`}/>
@@ -222,7 +245,7 @@ function AppointmentFormDialog(props: Props & { initialDate: string; onClose: ()
           <fieldset className="grid max-h-[250px] grid-cols-2 gap-[7px] overflow-auto rounded-[14px] border-[1.5px] border-hippy-ink bg-[#fae5bf] p-2.5 [scrollbar-color:#d5aa89_transparent] [scrollbar-width:thin] max-[700px]:grid-cols-1"><legend className="sr-only">Services</legend>{visibleServices.map((service) => {
             const selected = serviceIds.includes(service.id);
             return <label className={cn("grid min-h-[54px] cursor-pointer grid-cols-[22px_minmax(0,1fr)_auto] items-center gap-2 rounded-[12px_9px_13px_10px] border-[1.5px] border-[#bc7c57] bg-[#fff8e8] p-2 text-[10px] transition", selected && "-translate-x-px -translate-y-px border-2 border-hippy-ink bg-[#f0c66e] shadow-[3px_3px_0_#3b2923]")} key={service.id}>
-              <input className="peer sr-only" type="checkbox" checked={selected} onChange={(event) => setServiceIds((current) => event.target.checked ? [...current, service.id] : current.filter((id) => id !== service.id))}/>
+              <input className="peer sr-only" type="checkbox" checked={selected} onChange={(event) => { setError(""); setServiceIds((current) => event.target.checked ? [...current, service.id] : current.filter((id) => id !== service.id)); }}/>
               <span className="grid size-5 place-items-center rounded-[6px_4px_7px_5px] border-2 border-hippy-ink bg-white text-transparent leading-none peer-checked:bg-hippy-orange peer-checked:text-white [&>svg]:block [&>svg]:size-[11px]"><Check/></span>
               <span className="min-w-0"><strong className="block overflow-hidden text-ellipsis whitespace-nowrap">{service.name}</strong><small className="mt-1 block text-[8px] text-[#81665c]">{qualifiedNames(service.id, props).join(", ") || "No eligible piercer"}</small></span>
               <small className="rounded-full border border-dashed border-[#9f6a4d] bg-[#fff5df] px-2 py-1 text-[8px] font-black whitespace-nowrap">{service.durationMinutes} min</small>
@@ -237,10 +260,10 @@ function AppointmentFormDialog(props: Props & { initialDate: string; onClose: ()
         </section>
         <section className="border-t border-dashed border-[#c88f6e] pt-4">
           <SectionHead index="3" title="Schedule" meta="Asia/Manila"/>
-          <div className={operationGrid}><label className={dashField}>Eligible piercer<select value={effectivePiercerId} onChange={(event) => setPiercerId(event.target.value)} required disabled={props.role === "piercer"}><option value="">Choose eligible piercer</option>{eligible.map((person) => <option key={person.id} value={person.id}>{person.displayName}</option>)}</select></label>
-            <label className={dashField}>Station<select name="stationId" value={stationId} onChange={(event) => setStationId(event.target.value)}><option value="">No station</option>{props.stations.map((station) => <option key={station.id} value={station.id}>{station.name}</option>)}</select></label>
-            <label className={dashField}>Date<input name="date" type="date" value={date} onChange={(event) => setDate(event.target.value)} required/></label><label className={dashField}>Manila time<input name="time" type="time" value={time} onChange={(event) => setTime(event.target.value)} required/></label></div>
-          <p className="mt-3 mb-0 flex items-center gap-[7px] rounded-[11px] border border-dashed border-[#ba7652] bg-[#f8dcae] px-3 py-2.5 text-[11px] text-[#60463c] [&>svg]:w-4"><Clock3/> Combined duration: <strong>{duration} minutes</strong>. End time is calculated automatically.</p>
+          <div className={operationGrid}><label className={dashField}>Eligible piercer<select value={effectivePiercerId} onChange={(event) => { setError(""); setPiercerId(event.target.value); }} required disabled={props.role === "piercer"}><option value="">Choose eligible piercer</option>{eligible.map((person) => <option key={person.id} value={person.id}>{person.displayName}</option>)}</select></label>
+            <label className={dashField}>Station<select name="stationId" value={stationId} onChange={(event) => { setError(""); setStationId(event.target.value); }}><option value="">No station</option>{props.stations.map((station) => <option key={station.id} value={station.id}>{station.name}</option>)}</select></label>
+            <label className={dashField}>Date<input name="date" type="date" value={date} onChange={(event) => { setError(""); setDate(event.target.value); }} required/></label><label className={dashField}>Manila time<input name="time" type="time" value={time} onChange={(event) => { setError(""); setTime(event.target.value); }} required/></label></div>
+          <p className={cn("mt-3 mb-0 flex items-center gap-[7px] rounded-[11px] border border-dashed border-[#ba7652] bg-[#f8dcae] px-3 py-2.5 text-[11px] text-[#60463c] [&>svg]:w-4", (boundary?.endsPastMidnight || studioScheduleIssue || piercerScheduleIssue) && "border-[#a33e30] bg-[#f2c8b6] text-[#783321]", boundary?.endsAtMidnight && !studioScheduleIssue && !piercerScheduleIssue && "border-[#4d745e] bg-[#d8e5cf] text-[#315342]")}><Clock3/> Combined duration: <strong>{duration} minutes</strong>. {boundary?.endsPastMidnight ? "This ends after midnight. Cross-day appointments are not supported." : studioScheduleIssue ?? piercerScheduleIssue ?? (boundary?.endsAtMidnight ? "Ends exactly at midnight — valid end-of-day boundary." : "End time is calculated automatically.")}</p>
         </section>
         <section className="border-t border-dashed border-[#c88f6e] pt-4 opacity-90">
           <SectionHead index="4" title="Notes / additional details"/>
@@ -249,18 +272,19 @@ function AppointmentFormDialog(props: Props & { initialDate: string; onClose: ()
           {error && <p className={dashError} role="alert">{error}</p>}
         </section>
       </div>
-      <aside className="sticky top-[74px] m-0 border-l border-dashed border-[#bb7f5d] bg-[#f6dcae] p-[17px] max-[900px]:static max-[900px]:border-t max-[900px]:border-l-0">
-        <div className="flex max-h-[calc(100dvh-126px)] flex-col overflow-hidden rounded-[18px_13px_19px_14px] border-2 border-hippy-ink bg-[#fff8e8] shadow-[4px_4px_0_#3b2923] max-[900px]:max-h-none">
+      <aside className="sticky top-[74px] m-0 flex h-full min-h-full self-stretch flex-col border-l border-dashed border-[#bb7f5d] bg-[#f6dcae] p-[17px] max-[900px]:static max-[900px]:border-t max-[900px]:border-l-0">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[18px_13px_19px_14px] border-2 border-hippy-ink bg-[#fff8e8] shadow-[4px_4px_0_#3b2923]">
           <header className="border-b border-dashed border-[#c98965] bg-[#fff1cf] p-[15px]"><strong className="block font-display text-[18px] font-[760] text-hippy-ink">Appointment Summary</strong><small className="mt-1 block text-[10px] text-[#765c52]">Live review before creation</small></header>
-          <dl className="m-0 grid min-h-0 gap-3 overflow-auto p-[15px] text-[11px] [scrollbar-color:#d5aa89_transparent] [scrollbar-width:thin] [&_dt]:mb-1 [&_dt]:text-[8px] [&_dt]:font-black [&_dt]:tracking-[.8px] [&_dt]:text-[#a34d30] [&_dt]:uppercase [&_dd]:m-0 [&_dd]:leading-[1.45]">{summaryRow("Services", selectedServices.length ? <span className="flex flex-wrap gap-1.5">{selectedServices.map((service) => <span className="rounded-[10px_8px_11px_9px] border-[1.5px] border-hippy-ink bg-[#f0c66e] px-2 py-1.5 font-black shadow-[1px_1px_0_#3b2923]" key={service.id}>{service.name}</span>)}</span> : <span className="text-[#82675d] italic">Not selected</span>)}
+          <dl className="m-0 grid min-h-0 flex-1 content-start gap-3 overflow-auto p-[15px] text-[11px] [scrollbar-color:#d5aa89_transparent] [scrollbar-width:thin] [&_dt]:mb-1 [&_dt]:text-[8px] [&_dt]:font-black [&_dt]:tracking-[.8px] [&_dt]:text-[#a34d30] [&_dt]:uppercase [&_dd]:m-0 [&_dd]:leading-[1.45]">{summaryRow("Services", selectedServices.length ? <span className="flex flex-wrap gap-1.5">{selectedServices.map((service) => <span className="rounded-[10px_8px_11px_9px] border-[1.5px] border-hippy-ink bg-[#f0c66e] px-2 py-1.5 font-black shadow-[1px_1px_0_#3b2923]" key={service.id}>{service.name}</span>)}</span> : <span className="text-[#82675d] italic">Not selected</span>)}
             {summaryRow("Total duration", duration ? `${duration} min` : <span className="text-[#82675d] italic">Not selected</span>)}
             {summaryRow("Client", clientSummary || <span className="text-[#82675d] italic">{clientMode === "existing" ? "Choose a client" : "Enter new client details"}</span>)}
             {summaryRow("Piercer", chosenPiercer?.displayName ?? <span className="text-[#82675d] italic">Choose a piercer</span>)}
             {summaryRow("Station", chosenStation?.name ?? "No station")}
             {summaryRow("Date & time", date && time ? `${formatShortDate(date)} · ${formatTime(`${date}T${time}:00+08:00`)}` : <span className="text-[#82675d] italic">Choose date and time</span>)}
+            {summaryRow("Ends", endsAt ? <span>{formatShortDate(manilaDate(endsAt))} · {formatTime(endsAt.toISOString())}{boundary?.endsAtMidnight && <small className="mt-1 block font-bold text-[#315342]">Valid midnight endpoint</small>}{boundary?.endsPastMidnight && <small className="mt-1 block font-bold text-[#a33e30]">Crosses midnight — choose an earlier start</small>}</span> : <span className="text-[#82675d] italic">Select services and a start time</span>)}
             {summaryRow("Notes", notes.trim() || <span className="text-[#82675d] italic">No notes</span>)}</dl>
-          <div className={cn("mx-[15px] mb-[14px] rounded-[14px_10px_15px_11px] border-[1.5px] border-hippy-ink bg-[#fff5df] p-3 text-[10px] leading-[1.55]", !missing.length && "bg-[#d8e5cf] text-[#315342]")}><strong className="block text-[12px]">{missing.length ? "Still needed:" : "Ready to create"}</strong>{missing.length ? <ul className="my-1.5 pl-5">{missing.map((item) => <li key={item}>{item}</li>)}</ul> : <p className="mt-1">Server validation still checks qualifications, hours, availability, and conflicts.</p>}</div>
-          <footer className="flex shrink-0 flex-wrap justify-end gap-[9px] border-t border-dashed border-[#c98965] bg-[#fff1cf] p-[15px]"><button type="button" className={dashButton({ variant: "secondary" })} onClick={props.onClose}>Cancel</button><button className={dashButton({ variant: "primary" })} disabled={busy || Boolean(missing.length)}>{busy ? "Creating…" : "Create appointment"}</button></footer>
+          <div className={cn("mx-[15px] mb-[14px] rounded-[14px_10px_15px_11px] border-[1.5px] border-hippy-ink bg-[#fff5df] p-3 text-[10px] leading-[1.55]", !readinessMissing.length && "bg-[#d8e5cf] text-[#315342]")}><strong className="block text-[12px]">{readinessMissing.length ? "Still needed:" : "Ready to create"}</strong>{readinessMissing.length ? <ul className="my-1.5 pl-5">{readinessMissing.map((item) => <li key={item}>{item}</li>)}</ul> : <p className="mt-1">Server validation still checks qualifications, hours, availability, and conflicts.</p>}</div>
+          <footer className="flex shrink-0 flex-wrap justify-end gap-[9px] border-t border-dashed border-[#c98965] bg-[#fff1cf] p-[15px]"><button type="button" className={dashButton({ variant: "secondary" })} onClick={props.onClose}>Cancel</button><button className={dashButton({ variant: "primary" })} disabled={busy || Boolean(readinessMissing.length)}>{busy ? "Creating…" : "Create appointment"}</button></footer>
         </div>
       </aside>
     </form>
@@ -336,5 +360,6 @@ function formatShortDate(date: string) { return new Intl.DateTimeFormat("en-PH",
 function formatLongDate(date: string) { return new Intl.DateTimeFormat("en-PH", { weekday: "long", month: "long", day: "numeric", year: "numeric", timeZone: "UTC" }).format(new Date(`${date}T12:00:00Z`)); }
 function formatHour(hour: number) { return new Intl.DateTimeFormat("en-PH", { hour: "numeric", timeZone: "UTC" }).format(new Date(Date.UTC(2020, 0, 1, hour))); }
 function formatTime(value: string) { return new Intl.DateTimeFormat("en-PH", { hour: "numeric", minute: "2-digit", timeZone: "Asia/Manila" }).format(new Date(value)); }
+function compactScheduleTime(value: string) { return value.startsWith("24:00") || value.startsWith("23:59") ? "12:00 AM" : new Intl.DateTimeFormat("en-PH", { hour: "numeric", minute: "2-digit", timeZone: "UTC" }).format(new Date(`2020-01-01T${value.slice(0, 5)}:00Z`)); }
 function manilaTimeValue(value: string) { const parts = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Asia/Manila" }).formatToParts(new Date(value)); return `${parts.find((part) => part.type === "hour")?.value}:${parts.find((part) => part.type === "minute")?.value}`; }
 function manilaMinutes(value: string) { const [hour, minute] = manilaTimeValue(value).split(":").map(Number); return hour * 60 + minute; }

@@ -164,6 +164,11 @@ export function manilaDateTime(date: string, time: string) {
   return new Date(`${date}T${time.length === 5 ? `${time}:00` : time}+08:00`);
 }
 
+/** A displayed 11:59 PM endpoint means the exclusive midnight day boundary. */
+export function manilaSchedulingEnd(date: string, time: string) {
+  return manilaDateTime(date, time.slice(0, 5) === "23:59" ? "24:00" : time);
+}
+
 export function eachManilaDate(from: string, to: string) {
   const dates: string[] = [];
   let current = from;
@@ -258,11 +263,11 @@ export function generateAvailableSlots(input: {
   const intervalMs = input.bookingIntervalMinutes * 60_000;
   const durationMs = input.serviceDurationMinutes * 60_000;
   const studioOpen = manilaDateTime(input.date, studioHours.open).getTime();
-  const studioClose = manilaDateTime(input.date, studioHours.close).getTime();
+  const studioClose = manilaSchedulingEnd(input.date, studioHours.close).getTime();
   for (const staffId of staffIds) {
     for (const block of blocksByStaff.get(staffId) ?? []) {
       const opens = Math.max(studioOpen, manilaDateTime(input.date, block.startsAt.slice(0, 5)).getTime());
-      const closes = Math.min(studioClose, manilaDateTime(input.date, block.endsAt.slice(0, 5)).getTime());
+      const closes = Math.min(studioClose, manilaSchedulingEnd(input.date, block.endsAt.slice(0, 5)).getTime());
       const occupied = bookingsByPiercer.get(staffId) ?? [];
       for (let start = opens; start + durationMs <= closes; start += intervalMs) {
         const end = start + durationMs;

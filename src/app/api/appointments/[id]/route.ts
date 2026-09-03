@@ -73,6 +73,16 @@ function scheduleError(error: { code?: string; message: string }) {
     code: forbidden ? "FORBIDDEN" : conflict ? "SCHEDULE_CONFLICT" : "INVALID_SCHEDULE",
     message: forbidden ? "You cannot assign that piercer." : conflict
       ? "That piercer or station is already booked."
-      : error.message.replaceAll("_", " "),
+      : scheduleMessage(error.message),
   } }, { status: forbidden ? 403 : conflict ? 409 : 422 });
+}
+
+function scheduleMessage(message: string) {
+  const messages: Record<string, string> = {
+    studio_closed: "The studio is closed on the selected date.",
+    before_studio_hours: "The selected start time is before the studio opens.",
+    appointment_ends_after_studio_hours: "This appointment ends after the studio's configured closing time.",
+    outside_staff_availability: "The selected piercer is not available for the full appointment.",
+  };
+  return messages[message] ?? message.replaceAll("_", " ");
 }

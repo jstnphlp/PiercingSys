@@ -44,13 +44,13 @@ describe("bounded workspace lists", () => {
     expect(saleResponse.body).toMatchObject({ page: { number: 2, size: 25, total: 51, totalPages: 3 } });
   });
 
-  it("searches normalized multi-word names through the directory full-name field", async () => {
+  it("searches normalized multi-word names across first and last names", async () => {
     getStaffSession.mockResolvedValue(sessions.manager);
     const customers = createQuery({ data: [], error: null, count: 0 });
     createSupabaseServerClient.mockResolvedValue({ from: vi.fn(() => customers) });
 
     await getCustomers(new Request("http://localhost/api/customers?q=%20Juan%20%20Dela%20%20Cruz%20"));
 
-    expect(customers.or).toHaveBeenCalledWith("full_name.ilike.*Juan*Dela*Cruz*,email.ilike.*Juan Dela Cruz*,phone.ilike.*Juan Dela Cruz*");
+    expect(customers.or).toHaveBeenCalledWith("and(or(first_name.ilike.*Juan*,last_name.ilike.*Juan*),or(first_name.ilike.*Dela*,last_name.ilike.*Dela*),or(first_name.ilike.*Cruz*,last_name.ilike.*Cruz*)),email.ilike.*Juan Dela Cruz*,phone.ilike.*Juan Dela Cruz*");
   });
 });

@@ -89,7 +89,7 @@ export async function POST(request: Request) {
       code: forbidden ? "FORBIDDEN" : conflict ? "SCHEDULE_CONFLICT" : "CREATE_FAILED",
       message: forbidden ? "You cannot assign that piercer." : conflict
         ? "That piercer or station is unavailable at the selected time."
-        : error.message.replaceAll("_", " "),
+        : scheduleMessage(error.message),
     } }, { status: forbidden ? 403 : conflict ? 409 : 422 });
   }
   const booking = Array.isArray(data) ? data[0] : data;
@@ -98,4 +98,14 @@ export async function POST(request: Request) {
     if (delivery.data) queueBookingEmail(delivery.data.id);
   }
   return Response.json({ data: booking }, { status: 201 });
+}
+
+function scheduleMessage(message: string) {
+  const messages: Record<string, string> = {
+    studio_closed: "The studio is closed on the selected date.",
+    before_studio_hours: "The selected start time is before the studio opens.",
+    appointment_ends_after_studio_hours: "This appointment ends after the studio's configured closing time.",
+    outside_staff_availability: "The selected piercer is not available for the full appointment.",
+  };
+  return messages[message] ?? message.replaceAll("_", " ");
 }

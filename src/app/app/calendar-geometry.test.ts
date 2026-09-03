@@ -40,6 +40,13 @@ describe("calendar geometry", () => {
     });
   });
 
+  it("keeps a full hour visible when an appointment ends exactly at midnight", () => {
+    expect(calendarEventStyle(23 * 60, 24 * 60)).toEqual({
+      top: 900,
+      height: 60,
+    });
+  });
+
   it("clips appointments that begin before the visible start of day", () => {
     expect(calendarEventStyle(7 * 60 + 30, 8 * 60 + 15)).toEqual({
       top: 0,

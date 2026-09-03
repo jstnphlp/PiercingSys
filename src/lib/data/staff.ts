@@ -228,7 +228,7 @@ export async function getStaffData(
     closureResult,
     reportResult,
   ] = await Promise.all([
-    includes("overview", "settings")
+    includes("overview", "calendar", "settings")
       ? supabase.from("studio_settings").select("id,name,location,address,email,phone,instagram_url,business_hours,booking_interval_minutes,minimum_lead_hours,booking_horizon_days,minimum_age,cancellation_policy").eq("id", 1).single()
       : emptySingle,
     includes("overview", "calendar", "sales", "settings")
@@ -285,7 +285,7 @@ export async function getStaffData(
           .eq("active", true)
           .order("name")
       : emptyMany,
-    includes("settings")
+    includes("calendar", "settings")
       ? supabase.from("staff_availability").select("id,staff_id,weekday,starts_at,ends_at,availability_date").order("weekday").order("starts_at")
       : emptyMany,
     includes("settings")

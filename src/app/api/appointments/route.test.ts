@@ -122,6 +122,19 @@ describe("POST /api/appointments", () => {
     expect(body).toMatchObject({ error: { code: "SCHEDULE_CONFLICT" } });
   });
 
+  it("explains when an appointment would end after the configured studio close", async () => {
+    getStaffSession.mockResolvedValue(sessions.manager);
+    createSupabaseServerClient.mockResolvedValue({
+      rpc: vi.fn(async () => ({ data: null, error: { code: "22007", message: "appointment_ends_after_studio_hours" } })),
+    });
+    const { status, body } = await readJson(await POST(jsonRequest("http://localhost/api/appointments", createBody)));
+    expect(status).toBe(422);
+    expect(body).toMatchObject({ error: {
+      code: "CREATE_FAILED",
+      message: "This appointment ends after the studio's configured closing time.",
+    } });
+  });
+
   it("creates the appointment and queues a confirmation email", async () => {
     getStaffSession.mockResolvedValue(sessions.manager);
     const rpc = vi.fn(async () => ({

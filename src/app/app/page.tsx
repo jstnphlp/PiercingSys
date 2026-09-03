@@ -73,7 +73,7 @@ function viewContent(
   const role = session.role;
   if (view === "overview") return <Overview data={data} role={role} />;
   if (view === "calendar")
-    return <CalendarWorkspace role={role} userId={session.userId} services={data.services} staff={data.staff} assignments={data.serviceAssignments} stations={data.stations} />;
+    return <CalendarWorkspace role={role} userId={session.userId} services={data.services} staff={data.staff} assignments={data.serviceAssignments} stations={data.stations} studio={data.studio} availability={data.availability} />;
   if (view === "clients") return <Clients data={data} role={role} />;
   if (view === "sales") return <Sales data={data} />;
   if (view === "reports") return <Reports data={data} period={reportPeriod} />;

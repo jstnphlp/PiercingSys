@@ -17,9 +17,11 @@ export async function GET(request: Request) {
     .order("created_at", { ascending: false })
     .order("id", { ascending: false });
   if (search) {
-    const fullNameTerm = `*${search.split(" ").join("*")}*`;
     const term = `*${search}*`;
-    query = query.or(`full_name.ilike.${fullNameTerm},email.ilike.${term},phone.ilike.${term}`);
+    const nameTerms = search.split(" ")
+      .map((word) => `or(first_name.ilike.*${word}*,last_name.ilike.*${word}*)`)
+      .join(",");
+    query = query.or(`and(${nameTerms}),email.ilike.${term},phone.ilike.${term}`);
   }
   const { data, error, count } = await query.range(from, to);
   if (error) return Response.json({ error: { code: "LOOKUP_FAILED", message: error.message } }, { status: 400 });
