@@ -70,7 +70,16 @@ Create the local email/password owner from the `PRISMA_SEED_EMAIL` and `PRISMA_S
 npm run prisma:seed
 ```
 
-The seed is idempotent: rerunning it refreshes that local account's password without creating another staff profile. It refuses to replace a different existing owner and blocks non-local Supabase URLs unless `PRISMA_SEED_ALLOW_REMOTE=true` is explicitly set. Keep that flag off for normal development. Prisma tooling prefers `DIRECT_URL` and falls back to `DATABASE_URL`, while user creation still goes through the server-only Supabase Admin Auth API rather than writing directly to `auth.users`.
+The seed is idempotent: rerunning it refreshes the configured owner's password without creating another owner. On a local Supabase database it also creates a compact mock dataset with four additional staff accounts, three piercer schedules and service assignments, three stations, 12 customers, 18 appointments around the current Manila date, and nine completed sales. This gives the dashboard, calendar, clients, sales, reports, settings, and public availability useful data immediately after a reset.
+
+The local mock staff accounts are listed below. They all use the value of `PRISMA_SEED_PASSWORD`:
+
+- `manager.seed@piercingcorner.test` — manager
+- `ana.seed@piercingcorner.test` — piercer
+- `bea.seed@piercingcorner.test` — piercer
+- `carlo.seed@piercingcorner.test` — piercer
+
+Mock records use reserved IDs and are inserted only once, so rerunning the seed does not duplicate them or attempt to rewrite completed sales. Their relative dates are calculated on the first run after a database reset. The seed refuses to replace a different existing owner and blocks non-local Supabase URLs unless `PRISMA_SEED_ALLOW_REMOTE=true` is explicitly set. Even when that override is enabled, operational mock data is never written to a non-local target. Keep the flag off for normal development. Prisma tooling prefers `DIRECT_URL` and falls back to `DATABASE_URL`, while user creation still goes through the server-only Supabase Admin Auth API rather than writing directly to `auth.users`.
 
 ### Vercel database configuration
 
