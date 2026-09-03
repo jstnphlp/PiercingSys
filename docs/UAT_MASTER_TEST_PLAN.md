@@ -69,11 +69,11 @@ Run QG-001 through QG-010 for every release candidate. QG-007 passes only when e
 | Public booking | Catalog, multi-service selection, staff qualification, availability, customer details, photo, confirmation | `/book`, `/api/public/availability`, `/api/public/bookings` | services, service_staff, customers, bookings, booking_services, booking_photos |
 | Authentication | Email/password, prepared Google OAuth, callback, sign-out, protected workspace | `/login`, `/auth/callback`, `/app` | auth.users, staff_profiles |
 | Operations overview | Daily appointments, revenue, readiness, operational shortcuts | `/app` | bookings, sales, settings |
-| Calendar | Browse, create, reschedule, assign staff/station, status changes | `/app?view=calendar`, `/api/appointments*` | bookings, booking_services, customers, notification_deliveries |
-| Clients | Search, client profile, booking history | `/app?view=clients`, `/api/customers*` | customers, bookings, booking_services |
-| Sales | Walk-ins, draft sales, payments, completion, adjustments | `/app?view=sales`, `/api/sales*` | sales, sale_items, payments, sale_adjustments |
-| Reports | Date summaries, services/staff/payment breakdown, CSV | `/app?view=reports`, `/api/reports/export` | reporting RPC over bookings/sales/payments/adjustments |
-| Studio settings | Profile, hours, services, assignments, team, schedules, closures, stations, delivery log | `/app?view=settings`, settings/service/staff/schedule APIs | studio_settings, services, staff_profiles, service_staff, availability, closures, stations, notification_deliveries |
+| Calendar | Browse, create, reschedule, assign staff/station, status changes | `/app/calendar`, `/api/appointments*` | bookings, booking_services, customers, notification_deliveries |
+| Clients | Search, client profile, booking history | `/app/clients`, `/api/customers*` | customers, bookings, booking_services |
+| Sales | Walk-ins, draft sales, payments, completion, adjustments | `/app/sales`, `/api/sales*` | sales, sale_items, payments, sale_adjustments |
+| Reports | Date summaries, services/staff/payment breakdown, CSV | `/app/reports`, `/api/reports/export` | reporting RPC over bookings/sales/payments/adjustments |
+| Studio settings | Profile, hours, services, assignments, team, schedules, closures, stations, delivery log | `/app/settings`, settings/service/staff/schedule APIs | studio_settings, services, staff_profiles, service_staff, availability, closures, stations, notification_deliveries |
 | Consent | Database and RLS foundation only | No current product route | consent_forms |
 | Audit | Ownership/invitation events currently used | No current audit viewer | audit_events |
 
@@ -516,4 +516,3 @@ Suggested initial service-level targets must be approved against real hosting an
 | Engineering | | | | |
 | Security/privacy | | | | |
 | Release owner | | | | |
-

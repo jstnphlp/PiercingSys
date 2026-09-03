@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { revalidateTag } from "next/cache";
 import { getStaffSession, hasRole } from "@/lib/auth";
+import { invalidateCatalogAndStaffReferenceData } from "@/lib/cache-invalidation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { validationError } from "@/lib/validation";
 
@@ -18,6 +18,6 @@ export async function PATCH(request: Request) {
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase!.from("studio_settings").update(update).eq("id", 1);
   if (error) return Response.json({ error: { code: "UPDATE_FAILED", message: error.message } }, { status: 400 });
-  revalidateTag("public-catalog", { expire: 0 });
+  invalidateCatalogAndStaffReferenceData();
   return Response.json({ data: { saved: true } });
 }

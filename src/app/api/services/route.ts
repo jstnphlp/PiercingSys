@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { revalidateTag } from "next/cache";
 import { getStaffSession, hasRole } from "@/lib/auth";
+import { invalidateCatalogAndStaffReferenceData } from "@/lib/cache-invalidation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { validationError } from "@/lib/validation";
 
@@ -119,6 +119,6 @@ export async function POST(request: Request) {
       );
     }
   }
-  revalidateTag("public-catalog", { expire: 0 });
+  invalidateCatalogAndStaffReferenceData();
   return Response.json({ data }, { status: 201 });
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, type ReactNode } from "react";
 import { SWRConfig, useSWRConfig } from "swr";
 
@@ -33,13 +33,22 @@ export function WorkspaceRefreshProvider({ children }: { children: ReactNode }) 
 
 function RefreshCoordinator({ children }: { children: ReactNode }) {
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const pathname = usePathname();
   const { mutate } = useSWRConfig();
-  const view = searchParams.get("view") ?? "overview";
+  const view = pathname.split("/").filter(Boolean)[1] ?? "overview";
   const refresh = useCallback(() => {
-    void mutate(() => true);
-    router.refresh();
-  }, [mutate, router]);
+    const apiPrefix = view === "clients"
+      ? "/api/customers"
+      : view === "sales"
+        ? "/api/sales"
+        : view === "calendar"
+          ? "/api/appointments"
+          : null;
+    if (apiPrefix) {
+      void mutate((key) => typeof key === "string" && key.startsWith(apiPrefix));
+    }
+    if (view === "overview" || view === "settings") router.refresh();
+  }, [mutate, router, view]);
   const emitRefresh = useCallback(() => {
     window.dispatchEvent(new Event(WORKSPACE_REFRESH_EVENT));
   }, []);
