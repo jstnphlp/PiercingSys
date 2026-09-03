@@ -1,7 +1,15 @@
 "use client";
 
-import { Check, LoaderCircle, Plus, UserPlus } from "lucide-react";
+import { Check, LoaderCircle, Plus, UserPlus, X } from "lucide-react";
 import { useEffect, useState } from "react";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import {
   formatServicePrice,
   servicePriceBounds,
@@ -13,7 +21,7 @@ import {
 import type { SaleRecord, StaffRecord } from "@/lib/data/staff";
 import { CustomerSelect } from "./customer-select";
 import { requestWorkspaceRefresh } from "./workspace-refresh";
-import { dashButton, dashError, dashField, inlineForm, panelHead, settingSection } from "./dashboard-styles";
+import { dashButton, dashError, dashField, inlineForm, operationDialog, operationForm, operationGrid, panelHead, settingSection } from "./dashboard-styles";
 
 function useMutation() {
   const [busy, setBusy] = useState(false);
@@ -749,95 +757,100 @@ export function SaleForm({
     });
     if (ok) { setOpen(false); requestWorkspaceRefresh(); }
   }
-  if (!open)
-    return (
-      <button
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!mutation.busy || nextOpen) setOpen(nextOpen);
+      }}
+      disablePointerDismissal={mutation.busy}
+    >
+      <DialogTrigger
         className={dashButton({ variant: "primary" })}
         disabled={!activeServices.length}
-        onClick={() => setOpen(true)}
       >
         <Plus size={16} /> Record sale
-      </button>
-    );
-  return (
-    <form className={`${inlineForm} m-0`} onSubmit={submit}>
-      <label className={dashField}>
-        Client
-        <CustomerSelect />
-      </label>
-      <label className={dashField}>
-        Service
-        <select
-          name="serviceId"
-          required
-          value={serviceId}
-          onChange={(event) => setServiceId(event.target.value)}
-        >
-          {activeServices.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.name} · {formatServicePrice(item)}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className={dashField}>
-        Sale price (PHP)
-        <input
-          key={serviceId}
-          name="salePrice"
-          type="number"
-          min={priceBounds ? priceBounds.min / 100 : 0}
-          max={priceBounds ? priceBounds.max / 100 : undefined}
-          step="0.01"
-          defaultValue={priceBounds ? priceBounds.min / 100 : undefined}
-          required
-        />
-        {selectedService && <small>{formatServicePrice(selectedService)}</small>}
-      </label>
-      <label className={dashField}>
-        Payment received (PHP)
-        <input
-          name="amount"
-          type="number"
-          min="0"
-          step="0.01"
-          defaultValue="0"
-        />
-      </label>
-      <label className={dashField}>
-        Method
-        <select name="method">
-          <option value="cash">Cash</option>
-          <option value="gcash">GCash</option>
-          <option value="maya">Maya</option>
-          <option value="card">Card</option>
-          <option value="bank_transfer">Bank transfer</option>
-          <option value="other">Other</option>
-        </select>
-      </label>
-      {mutation.error && <p className={dashError}>{mutation.error}</p>}
-      <div>
-        <button
-          type="button"
-          className={dashButton({ variant: "secondary" })}
-          onClick={() => setOpen(false)}
-        >
-          Cancel
-        </button>
-        <button className={dashButton({ variant: "primary" })} disabled={mutation.busy}>
-          Save sale
-        </button>
-      </div>
-    </form>
+      </DialogTrigger>
+      <DialogContent className={`${operationDialog} gap-0 p-0 ring-0 sm:max-w-[720px]`} showCloseButton={false}>
+        <header>
+          <div>
+            <DialogTitle>Record sale</DialogTitle>
+            <DialogDescription>Capture the service, client, and payment received.</DialogDescription>
+          </div>
+          <DialogClose aria-label="Close record sale form" disabled={mutation.busy}><X /></DialogClose>
+        </header>
+        <form className={operationForm} onSubmit={submit}>
+          <div className={operationGrid}>
+            <label className={dashField}>
+              Client
+              <CustomerSelect />
+            </label>
+            <label className={dashField}>
+              Service
+              <select
+                name="serviceId"
+                required
+                value={serviceId}
+                onChange={(event) => setServiceId(event.target.value)}
+              >
+                {activeServices.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name} · {formatServicePrice(item)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className={dashField}>
+              Sale price (PHP)
+              <input
+                key={serviceId}
+                name="salePrice"
+                type="number"
+                min={priceBounds ? priceBounds.min / 100 : 0}
+                max={priceBounds ? priceBounds.max / 100 : undefined}
+                step="0.01"
+                defaultValue={priceBounds ? priceBounds.min / 100 : undefined}
+                required
+              />
+              {selectedService && <small>{formatServicePrice(selectedService)}</small>}
+            </label>
+            <label className={dashField}>
+              Payment received (PHP)
+              <input name="amount" type="number" min="0" step="0.01" defaultValue="0" />
+            </label>
+            <label className={dashField}>
+              Method
+              <select name="method">
+                <option value="cash">Cash</option>
+                <option value="gcash">GCash</option>
+                <option value="maya">Maya</option>
+                <option value="card">Card</option>
+                <option value="bank_transfer">Bank transfer</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+          </div>
+          {mutation.error && <p className={dashError} role="alert">{mutation.error}</p>}
+          <footer>
+            <DialogClose className={dashButton({ variant: "secondary" })} disabled={mutation.busy}>Cancel</DialogClose>
+            <button className={dashButton({ variant: "primary" })} disabled={mutation.busy}>
+              {mutation.busy ? "Saving…" : "Save sale"}
+            </button>
+          </footer>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
 export function SaleAdjustment({
   id,
   remainingCents,
+  onSaved,
 }: {
   id: string;
   remainingCents: number;
+  onSaved?: () => void;
 }) {
   const mutation = useMutation();
   const [open, setOpen] = useState(false);
@@ -854,8 +867,10 @@ export function SaleAdjustment({
           reason: String(form.get("reason")),
         }),
       })
-    )
+    ) {
       requestWorkspaceRefresh();
+      onSaved?.();
+    }
   }
   if (!open)
     return (
@@ -897,20 +912,20 @@ export function SaleAdjustment({
   );
 }
 
-export function DraftSaleActions({ sale }: { sale: SaleRecord }) {
+export function DraftSaleActions({ sale, onSaved }: { sale: SaleRecord; onSaved?: () => void }) {
   const mutation = useMutation();
   const [paymentOpen, setPaymentOpen] = useState(false);
   const unresolved = sale.items.filter((item) => item.unitPriceCents === null);
   async function resolve(event: React.FormEvent<HTMLFormElement>, itemId: string) {
     event.preventDefault(); const form = new FormData(event.currentTarget);
-    if (await mutation.run(`/api/sales/${sale.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "resolve_price", itemId, unitPriceCents: Math.round(Number(form.get("price")) * 100) }) })) requestWorkspaceRefresh();
+    if (await mutation.run(`/api/sales/${sale.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "resolve_price", itemId, unitPriceCents: Math.round(Number(form.get("price")) * 100) }) })) { requestWorkspaceRefresh(); onSaved?.(); }
   }
   async function payment(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault(); const form = new FormData(event.currentTarget);
-    if (await mutation.run(`/api/sales/${sale.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "add_payment", method: form.get("method"), amountCents: Math.round(Number(form.get("amount")) * 100), reference: form.get("reference") || null }) })) requestWorkspaceRefresh();
+    if (await mutation.run(`/api/sales/${sale.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "add_payment", method: form.get("method"), amountCents: Math.round(Number(form.get("amount")) * 100), reference: form.get("reference") || null }) })) { requestWorkspaceRefresh(); onSaved?.(); }
   }
   async function complete() {
-    if (await mutation.run(`/api/sales/${sale.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "complete" }) })) requestWorkspaceRefresh();
+    if (await mutation.run(`/api/sales/${sale.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "complete" }) })) { requestWorkspaceRefresh(); onSaved?.(); }
   }
   return <div className="mt-[7px] flex min-w-[210px] flex-col gap-[7px] [&>form]:grid [&>form]:grid-cols-[1fr_auto] [&>form]:gap-[5px] [&>form]:rounded-[9px] [&>form]:border [&>form]:border-dashed [&>form]:border-[#b76c4c] [&>form]:bg-[#fae1b8] [&>form]:p-[7px] [&>form>strong]:col-span-full [&>form>small]:col-span-full [&_input]:h-[30px] [&_input]:min-w-0 [&_input]:rounded-[7px] [&_input]:border [&_input]:border-hippy-ink [&_input]:bg-[#fff9eb] [&_input]:text-[9px] [&_select]:h-[30px] [&_select]:min-w-0 [&_select]:rounded-[7px] [&_select]:border [&_select]:border-hippy-ink [&_select]:bg-[#fff9eb] [&_select]:text-[9px] [&_button]:min-h-[29px] [&_button]:rounded-[7px] [&_button]:border [&_button]:border-hippy-ink [&_button]:bg-hippy-orange [&_button]:text-[9px] [&_button]:font-extrabold [&_button]:text-white">
     {unresolved.map((item) => <form key={item.id} onSubmit={(event) => void resolve(event, item.id)}>
