@@ -179,7 +179,7 @@ async function seedMockData(
           staff_id: person.userId,
           weekday,
           starts_at: new Date("1970-01-01T10:00:00.000Z"),
-          ends_at: new Date("1970-01-01T20:00:00.000Z"),
+          ends_at: new Date("1970-01-01T23:59:00.000Z"),
         })),
       ),
       skipDuplicates: true,
