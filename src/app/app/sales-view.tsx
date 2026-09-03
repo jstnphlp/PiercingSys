@@ -1,9 +1,10 @@
 "use client";
 
-import { CircleDollarSign, Clock3, LoaderCircle, ShoppingBag, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, CircleDollarSign, Clock3, LoaderCircle, ShoppingBag, X } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import useSWR from "swr";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogClose,
@@ -16,7 +17,7 @@ import type { SaleRecord } from "@/lib/data/staff";
 import type { PageMeta } from "@/lib/pagination";
 import { formatPaymentMethods, formatSaleItems } from "@/lib/sales-display";
 import { DraftSaleActions, SaleAdjustment, SaleForm } from "./controls";
-import { dashButton, dashField, featureView, metricCard, operationDialog, pagination, stateCard, statusClasses, tablePanel } from "./dashboard-styles";
+import { dashButton, dashField, featureView, metricCard, operationDialog, stateCard, statusClasses, tablePanel } from "./dashboard-styles";
 
 type SalesResponse = { data: SaleRecord[]; page: PageMeta };
 
@@ -57,7 +58,7 @@ export function SalesView({ initialSales, services }: { initialSales: SaleRecord
     {error && <State title="Sales could not be loaded" detail={error.message}><button className={dashButton({ variant: "secondary" })} onClick={() => void mutate()}>Retry</button></State>}
     {!error && isLoading && !response && <State title="Loading sales…" detail="Fetching the requested page." />}
     {!error && response && sales.length ? <section className={tablePanel}><table><thead><tr><th>Reference</th><th>Client</th><th>Total</th><th>Paid</th><th>Method</th><th>Status</th><th>Items</th></tr></thead><tbody>{sales.map((sale) => <tr key={sale.id} className="cursor-pointer focus:bg-[#f7dfb3] focus:outline-2 focus:-outline-offset-2 focus:outline-[#d66335]" tabIndex={0} onClick={() => setSelected(sale)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelected(sale); } }}>
-      <td><strong>{sale.reference}</strong><small>{formatDate(sale.createdAt)}</small></td><td>{sale.customerName}</td><td>{formatPhp(sale.totalCents)}</td><td>{formatPhp(sale.paidCents)}</td><td>{formatPaymentMethods(sale.methods)}</td><td><span className={statusClasses(sale.status)}>{sale.status.replace("_", " ")}</span></td>
+      <td><span className="flex flex-col gap-1"><strong>{sale.reference}</strong><small>{formatDate(sale.createdAt)}</small></span></td><td>{sale.customerName}</td><td>{formatPhp(sale.totalCents)}</td><td>{formatPhp(sale.paidCents)}</td><td>{formatPaymentMethods(sale.methods)}</td><td><span className={statusClasses(sale.status)}>{sale.status.replace("_", " ")}</span></td>
       <td><small>{formatSaleItems(sale.items)}</small></td>
     </tr>)}</tbody></table><Pagination meta={meta} onPage={setPage}/></section> : !error && response && !sales.length ? <State title="No sales found" detail={query ? "Try a different search." : "Record a sale to begin."} /> : null}
     <SaleDetailsDialog sale={selected} onClose={() => setSelected(null)} />
@@ -93,6 +94,23 @@ function State({ title, detail, children }: { title: string; detail: string; chi
 }
 function Pagination({ meta, onPage }: { meta?: PageMeta; onPage: (page: number) => void }) {
   if (!meta || meta.totalPages <= 1) return null;
-  return <nav className={pagination} aria-label="Sales pages"><button className={dashButton({ variant: "secondary" })} disabled={meta.number <= 1} onClick={() => onPage(meta.number - 1)}>Previous</button><span>Page {meta.number} of {meta.totalPages} · {meta.total} sales</span><button className={dashButton({ variant: "secondary" })} disabled={meta.number >= meta.totalPages} onClick={() => onPage(meta.number + 1)}>Next</button></nav>;
+  const first = (meta.number - 1) * meta.size + 1;
+  const last = Math.min(meta.number * meta.size, meta.total);
+  return <div className="flex min-h-14 items-center justify-between gap-3 border-t border-dashed border-[#d6a786] px-3 py-2 text-[9px] max-[760px]:flex-col max-[760px]:items-start [&>p]:m-0 [&>nav]:flex [&>nav]:items-center [&>nav]:gap-1 max-[760px]:[&>nav]:self-stretch max-[760px]:[&>nav]:justify-end">
+    <p>Showing {first}–{last} of {meta.total} sales</p>
+    <nav aria-label="Sales pages">
+      <Button variant="outline" size="icon-sm" disabled={meta.number === 1} aria-label="Previous sales page" onClick={() => onPage(meta.number - 1)}><ChevronLeft /></Button>
+      {paginationItems(meta.number, meta.totalPages).map((item, index) => item === "ellipsis"
+        ? <span className="px-1" aria-hidden="true" key={`ellipsis-${index}`}>…</span>
+        : <Button key={item} variant={item === meta.number ? "default" : "outline"} size="icon-sm" aria-label={`Sales page ${item}`} aria-current={item === meta.number ? "page" : undefined} onClick={() => onPage(item)}>{item}</Button>)}
+      <Button variant="outline" size="icon-sm" disabled={meta.number === meta.totalPages} aria-label="Next sales page" onClick={() => onPage(meta.number + 1)}><ChevronRight /></Button>
+    </nav>
+  </div>;
+}
+function paginationItems(current: number, total: number): Array<number | "ellipsis"> {
+  if (total <= 5) return Array.from({ length: total }, (_, index) => index + 1);
+  if (current <= 3) return [1, 2, 3, 4, "ellipsis", total];
+  if (current >= total - 2) return [1, "ellipsis", total - 3, total - 2, total - 1, total];
+  return [1, "ellipsis", current - 1, current, current + 1, "ellipsis", total];
 }
 function formatDate(value: string) { return new Intl.DateTimeFormat("en-PH", { dateStyle: "medium", timeZone: "Asia/Manila" }).format(new Date(value)); }

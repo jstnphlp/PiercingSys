@@ -4,9 +4,11 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { validationError } from "@/lib/validation";
 import { mapSaleRow, saleDetailSelect } from "@/lib/data/staff";
 import { pageMeta, parsePageQuery, safeSearchTerm } from "@/lib/pagination";
+import { walkInCustomerFields } from "@/lib/walk-in-customer";
 
 const schema = z.object({
   customerId: z.string().uuid().nullable().optional(),
+  walkInName: z.string().trim().min(1).max(160).nullable().optional(),
   bookingId: z.string().uuid().nullable().optional(),
   discountCents: z.number().int().min(0).default(0),
   items: z
@@ -38,6 +40,14 @@ const schema = z.object({
     )
     .default([]),
   complete: z.boolean().default(false),
+}).superRefine((value, context) => {
+  if (!value.customerId && !value.walkInName) {
+    context.addIssue({
+      code: "custom",
+      path: ["walkInName"],
+      message: "Enter the walk-in client's name.",
+    });
+  }
 });
 
 export async function GET(request: Request) {
@@ -92,8 +102,30 @@ export async function POST(request: Request) {
     return Response.json(validationError(parsed.error), { status: 422 });
   }
   const supabase = await createSupabaseServerClient();
+  let customerId = parsed.data.customerId ?? null;
+  let createdWalkInId: string | null = null;
+  if (!customerId && parsed.data.walkInName) {
+    createdWalkInId = crypto.randomUUID();
+    const customer = await supabase!
+      .from("customers")
+      .insert(walkInCustomerFields(parsed.data.walkInName, createdWalkInId))
+      .select("id")
+      .single();
+    if (customer.error || !customer.data) {
+      return Response.json(
+        {
+          error: {
+            code: "CUSTOMER_CREATE_FAILED",
+            message: customer.error?.message ?? "The walk-in client could not be created.",
+          },
+        },
+        { status: 400 },
+      );
+    }
+    customerId = customer.data.id;
+  }
   const { data, error } = await supabase!.rpc("create_sale", {
-    p_customer_id: parsed.data.customerId ?? null,
+    p_customer_id: customerId,
     p_booking_id: parsed.data.bookingId ?? null,
     p_discount_cents: parsed.data.discountCents,
     p_items: parsed.data.items,
@@ -101,6 +133,9 @@ export async function POST(request: Request) {
     p_complete: parsed.data.complete,
   });
   if (error) {
+    if (createdWalkInId) {
+      await supabase!.from("customers").delete().eq("id", createdWalkInId);
+    }
     const message = error.message;
     const code = message.includes("not_authorized")
       ? "FORBIDDEN"

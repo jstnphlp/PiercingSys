@@ -10,6 +10,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { StudioSelect } from "@/components/ui/studio-select";
 import {
   formatServicePrice,
   servicePriceBounds,
@@ -43,6 +44,15 @@ function useMutation() {
   }
   return { busy, message, error, run };
 }
+
+const paymentMethodOptions = [
+  { value: "cash", label: "Cash" },
+  { value: "gcash", label: "GCash" },
+  { value: "maya", label: "Maya" },
+  { value: "card", label: "Card" },
+  { value: "bank_transfer", label: "Bank transfer" },
+  { value: "other", label: "Other" },
+];
 
 export function BookingActions({
   id,
@@ -338,11 +348,11 @@ export function ServiceForm({ staff }: { staff: StaffRecord[] }) {
       </label>
       <label className={dashField}>
         Category
-        <select name="category" defaultValue="Ear Piercings">
-          <option>Ear Piercings</option>
-          <option>Face &amp; Body Piercings</option>
-          <option>Other Services</option>
-        </select>
+        <StudioSelect name="category" defaultValue="Ear Piercings" ariaLabel="Service category" options={[
+          { value: "Ear Piercings", label: "Ear Piercings" },
+          { value: "Face & Body Piercings", label: "Face & Body Piercings" },
+          { value: "Other Services", label: "Other Services" },
+        ]} />
       </label>
       <label className={dashField}>
         Duration (minutes)
@@ -429,17 +439,13 @@ export function ServiceAssignmentForm({
     <form className={inlineForm} onSubmit={submit}>
       <label className={dashField}>
         Service
-        <select
+        <StudioSelect
           name="serviceId"
           value={serviceId}
-          onChange={(event) => setServiceId(event.target.value)}
-        >
-          {services.map((service) => (
-            <option key={service.id} value={service.id}>
-              {service.name}
-            </option>
-          ))}
-        </select>
+          onValueChange={setServiceId}
+          ariaLabel="Service"
+          options={services.map((service) => ({ value: service.id, label: service.name }))}
+        />
       </label>
       <fieldset className="col-span-full flex flex-wrap gap-x-4 gap-y-[9px] rounded-[10px] border-[1.5px] border-dashed border-[#9e6748] bg-[#fff3d3] px-3 py-2.5 [&_legend]:px-[5px] [&_legend]:text-[9px] [&_legend]:font-extrabold [&_legend]:text-studio-muted [&_label]:text-[10px]" key={serviceId}>
         <legend>Qualified staff</legend>
@@ -517,25 +523,11 @@ export function AvailabilityForm({ staff }: { staff: StaffRecord[] }) {
     <form className={inlineForm} onSubmit={submit}>
       <label className={dashField}>
         Staff
-        <select name="staffId">
-          {staff
-            .filter((item) => item.active)
-            .map((item) => (
-              <option value={item.id} key={item.id}>
-                {item.displayName}
-              </option>
-            ))}
-        </select>
+        <StudioSelect name="staffId" defaultValue={staff.find((item) => item.active)?.id} ariaLabel="Staff" options={staff.filter((item) => item.active).map((item) => ({ value: item.id, label: item.displayName }))} />
       </label>
       <label className={dashField}>
         Day
-        <select name="weekday">
-          {days.map((day, index) => (
-            <option value={index} key={day}>
-              {day}
-            </option>
-          ))}
-        </select>
+        <StudioSelect name="weekday" defaultValue="0" ariaLabel="Day" options={days.map((day, index) => ({ value: String(index), label: day }))} />
       </label>
       <label className={dashField}>
         Starts
@@ -647,10 +639,7 @@ export function InviteForm() {
       </label>
       <label className={dashField}>
         Role
-        <select name="role">
-          <option value="piercer">Piercer</option>
-          <option value="manager">Manager</option>
-        </select>
+        <StudioSelect name="role" defaultValue="piercer" ariaLabel="Role" options={[{ value: "piercer", label: "Piercer" }, { value: "manager", label: "Manager" }]} />
       </label>
       {mutation.error && <p className={dashError}>{mutation.error}</p>}
       <div>
@@ -690,16 +679,14 @@ export function StaffActions({
   if (currentRole !== "owner" || person.role === "owner") return null;
   return (
     <span className="grid w-[min(100%,330px)] grid-cols-[minmax(145px,1fr)_minmax(88px,auto)] items-center justify-self-end gap-[7px] max-[450px]:grid-cols-1 [&>select]:h-[34px] [&>select]:min-w-0 [&>select]:w-full [&>select]:rounded-lg [&>select]:border [&>select]:border-hippy-ink [&>select]:bg-[#fff7e3] [&>select]:px-[9px] [&>select]:py-1 [&>select]:text-[9px] [&>select]:shadow-[1px_1px_0_#3b2923] [&>button]:h-[34px] [&>button]:w-full [&>button]:rounded-lg [&>button]:border [&>button]:border-hippy-ink [&>button]:bg-[#fff7e3] [&>button]:px-[9px] [&>button]:py-1 [&>button]:text-[9px] [&>button]:shadow-[1px_1px_0_#3b2923] [&>small]:col-span-full [&>small]:text-[7px] [&>small]:text-danger">
-      <select
-        aria-label={`Role for ${person.displayName}`}
-        defaultValue={person.role}
-        onChange={(event) => void update({ role: event.target.value })}
+      <StudioSelect
+        ariaLabel={`Role for ${person.displayName}`}
+        value={person.role}
+        onValueChange={(role) => void update({ role })}
         disabled={mutation.busy}
-      >
-        <option value="manager">Manager</option>
-        <option value="piercer">Piercer</option>
-        <option value="owner">Transfer ownership</option>
-      </select>
+        triggerClassName="h-[34px] min-h-[34px] text-[9px] shadow-[1px_1px_0_#3b2923]"
+        options={[{ value: "manager", label: "Manager" }, { value: "piercer", label: "Piercer" }, { value: "owner", label: "Transfer ownership" }]}
+      />
       <button
         type="button"
         onClick={() => void update({ active: !person.active })}
@@ -719,40 +706,37 @@ export function SaleForm({
 }) {
   const mutation = useMutation();
   const [open, setOpen] = useState(false);
+  const [clientMode, setClientMode] = useState<"walk-in" | "existing">("walk-in");
   const activeServices = services.filter((item) => item.isActive);
-  const [serviceId, setServiceId] = useState(activeServices[0]?.id ?? "");
-  const selectedService = activeServices.find((item) => item.id === serviceId);
-  const priceBounds = selectedService
-    ? servicePriceBounds(selectedService)
-    : null;
+  const [serviceIds, setServiceIds] = useState<string[]>(activeServices[0] ? [activeServices[0].id] : []);
+  const selectedServices = activeServices.filter((item) => serviceIds.includes(item.id));
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    const service = services.find((item) => item.id === form.get("serviceId"));
-    if (!service) return;
-    const unitPriceCents = Math.round(Number(form.get("salePrice")) * 100);
+    if (!selectedServices.length) return;
+    const items = selectedServices.map((service) => ({
+      type: "service",
+      sourceId: service.id,
+      description: service.name,
+      quantity: 1,
+      unitPriceCents: Math.round(Number(form.get(`salePrice:${service.id}`)) * 100),
+      discountCents: 0,
+    }));
+    const totalCents = items.reduce((sum, item) => sum + item.unitPriceCents, 0);
     const amount = Math.round(Number(form.get("amount")) * 100);
     const ok = await mutation.run("/api/sales", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        customerId: form.get("customerId") || null,
-        items: [
-          {
-            type: "service",
-            sourceId: service.id,
-            description: service.name,
-            quantity: 1,
-            unitPriceCents,
-            discountCents: 0,
-          },
-        ],
+        customerId: clientMode === "existing" ? form.get("customerId") || null : null,
+        walkInName: clientMode === "walk-in" ? form.get("walkInName") : null,
+        items,
         discountCents: 0,
         payments:
           amount > 0
             ? [{ method: form.get("method"), amountCents: amount }]
             : [],
-        complete: amount >= unitPriceCents,
+        complete: amount >= totalCents,
       }),
     });
     if (ok) { setOpen(false); requestWorkspaceRefresh(); }
@@ -781,59 +765,45 @@ export function SaleForm({
         </header>
         <form className={operationForm} onSubmit={submit}>
           <div className={operationGrid}>
-            <label className={dashField}>
+            <div className="col-span-full grid grid-cols-2 rounded-xl border-[1.5px] border-hippy-ink bg-[#d9ac83] p-[3px] [&>button]:rounded-lg [&>button]:border-0 [&>button]:bg-transparent [&>button]:p-2.5 [&>button]:text-[10px] [&>button]:font-extrabold">
+              <button type="button" className={clientMode === "walk-in" ? "bg-[#fff4d7]! shadow-[1px_1px_0_#3b2923]" : ""} onClick={() => setClientMode("walk-in")}>Walk-in</button>
+              <button type="button" className={clientMode === "existing" ? "bg-[#fff4d7]! shadow-[1px_1px_0_#3b2923]" : ""} onClick={() => setClientMode("existing")}>Existing client</button>
+            </div>
+            {clientMode === "walk-in" ? <label className={`${dashField} col-span-full`}>
+              Walk-in name
+              <input name="walkInName" maxLength={160} placeholder="Client name" required />
+            </label> : <label className={`${dashField} col-span-full`}>
               Client
-              <CustomerSelect />
-            </label>
-            <label className={dashField}>
-              Service
-              <select
-                name="serviceId"
-                required
-                value={serviceId}
-                onChange={(event) => setServiceId(event.target.value)}
-              >
-                {activeServices.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name} · {formatServicePrice(item)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className={dashField}>
-              Sale price (PHP)
-              <input
-                key={serviceId}
-                name="salePrice"
-                type="number"
-                min={priceBounds ? priceBounds.min / 100 : 0}
-                max={priceBounds ? priceBounds.max / 100 : undefined}
-                step="0.01"
-                defaultValue={priceBounds ? priceBounds.min / 100 : undefined}
-                required
-              />
-              {selectedService && <small>{formatServicePrice(selectedService)}</small>}
-            </label>
+              <CustomerSelect required />
+            </label>}
+            <fieldset className="col-span-full grid max-h-[230px] grid-cols-2 gap-[7px] overflow-auto rounded-[14px] border-[1.5px] border-hippy-ink bg-[#fae5bf] p-2.5 max-[700px]:grid-cols-1 [&>legend]:px-[7px] [&>legend]:font-black [&>label]:flex [&>label]:cursor-pointer [&>label]:items-center [&>label]:gap-2 [&>label]:rounded-[10px] [&>label]:border [&>label]:border-[#bc7c57] [&>label]:bg-[#fff8e8] [&>label]:p-2 [&>label>span]:flex [&>label>span]:flex-1 [&>label>span]:justify-between [&>label>span]:gap-1.5 [&>label>span]:text-[10px] [&_small]:text-[#81665c]">
+              <legend>Services</legend>
+              {activeServices.map((service) => <label key={service.id}>
+                <input type="checkbox" checked={serviceIds.includes(service.id)} onChange={(event) => setServiceIds((current) => event.target.checked ? [...current, service.id] : current.filter((id) => id !== service.id))} />
+                <span><strong>{service.name}</strong><small>{formatServicePrice(service)}</small></span>
+              </label>)}
+            </fieldset>
+            {selectedServices.map((service) => {
+              const bounds = servicePriceBounds(service);
+              return <label className={dashField} key={service.id}>
+                {service.name} price (PHP)
+                <input name={`salePrice:${service.id}`} type="number" min={bounds ? bounds.min / 100 : 0} max={bounds ? bounds.max / 100 : undefined} step="0.01" defaultValue={bounds ? bounds.min / 100 : undefined} required />
+                <small>{formatServicePrice(service)}</small>
+              </label>;
+            })}
             <label className={dashField}>
               Payment received (PHP)
               <input name="amount" type="number" min="0" step="0.01" defaultValue="0" />
             </label>
             <label className={dashField}>
               Method
-              <select name="method">
-                <option value="cash">Cash</option>
-                <option value="gcash">GCash</option>
-                <option value="maya">Maya</option>
-                <option value="card">Card</option>
-                <option value="bank_transfer">Bank transfer</option>
-                <option value="other">Other</option>
-              </select>
+              <StudioSelect name="method" defaultValue="cash" ariaLabel="Payment method" options={paymentMethodOptions} />
             </label>
           </div>
           {mutation.error && <p className={dashError} role="alert">{mutation.error}</p>}
           <footer>
             <DialogClose className={dashButton({ variant: "secondary" })} disabled={mutation.busy}>Cancel</DialogClose>
-            <button className={dashButton({ variant: "primary" })} disabled={mutation.busy}>
+            <button className={dashButton({ variant: "primary" })} disabled={mutation.busy || !serviceIds.length}>
               {mutation.busy ? "Saving…" : "Save sale"}
             </button>
           </footer>
@@ -884,10 +854,7 @@ export function SaleAdjustment({
     );
   return (
     <form className="grid min-w-[250px] grid-cols-[70px_75px_1fr] gap-[5px] [&>select]:h-[29px] [&>select]:min-w-0 [&>select]:rounded-md [&>select]:border [&>select]:border-hippy-ink [&>select]:bg-white [&>select]:p-1 [&>select]:text-[8px] [&>input]:h-[29px] [&>input]:min-w-0 [&>input]:rounded-md [&>input]:border [&>input]:border-hippy-ink [&>input]:bg-white [&>input]:p-1 [&>input]:text-[8px] [&>button]:h-[29px] [&>button]:rounded-md [&>button]:border [&>button]:border-hippy-ink [&>button]:bg-white [&>button]:p-1 [&>button]:text-[8px] [&>button]:font-extrabold [&>button]:text-seafoam-dark [&>small]:col-span-full [&>small]:text-danger" onSubmit={submit}>
-      <select name="kind">
-        <option value="refund">Refund</option>
-        <option value="void">Void</option>
-      </select>
+      <StudioSelect name="kind" defaultValue="refund" ariaLabel="Adjustment type" triggerClassName="h-[29px] min-h-[29px] px-2 py-1 text-[8px]" options={[{ value: "refund", label: "Refund" }, { value: "void", label: "Void" }]} />
       <input
         name="amount"
         aria-label="Adjustment amount in PHP"
@@ -924,16 +891,19 @@ export function DraftSaleActions({ sale, onSaved }: { sale: SaleRecord; onSaved?
     event.preventDefault(); const form = new FormData(event.currentTarget);
     if (await mutation.run(`/api/sales/${sale.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "add_payment", method: form.get("method"), amountCents: Math.round(Number(form.get("amount")) * 100), reference: form.get("reference") || null }) })) { requestWorkspaceRefresh(); onSaved?.(); }
   }
-  async function complete() {
-    if (await mutation.run(`/api/sales/${sale.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "complete" }) })) { requestWorkspaceRefresh(); onSaved?.(); }
-  }
-  return <div className="mt-[7px] flex min-w-[210px] flex-col gap-[7px] [&>form]:grid [&>form]:grid-cols-[1fr_auto] [&>form]:gap-[5px] [&>form]:rounded-[9px] [&>form]:border [&>form]:border-dashed [&>form]:border-[#b76c4c] [&>form]:bg-[#fae1b8] [&>form]:p-[7px] [&>form>strong]:col-span-full [&>form>small]:col-span-full [&_input]:h-[30px] [&_input]:min-w-0 [&_input]:rounded-[7px] [&_input]:border [&_input]:border-hippy-ink [&_input]:bg-[#fff9eb] [&_input]:text-[9px] [&_select]:h-[30px] [&_select]:min-w-0 [&_select]:rounded-[7px] [&_select]:border [&_select]:border-hippy-ink [&_select]:bg-[#fff9eb] [&_select]:text-[9px] [&_button]:min-h-[29px] [&_button]:rounded-[7px] [&_button]:border [&_button]:border-hippy-ink [&_button]:bg-hippy-orange [&_button]:text-[9px] [&_button]:font-extrabold [&_button]:text-white">
-    {unresolved.map((item) => <form key={item.id} onSubmit={(event) => void resolve(event, item.id)}>
-      <strong>{item.description}</strong><small>Pricing required · {formatServicePrice({ priceCents: null, minPriceCents: item.minPriceCents, maxPriceCents: item.maxPriceCents, priceUnit: null })}</small>
-      <input name="price" aria-label={`Price for ${item.description} in PHP`} type="number" min={(item.minPriceCents ?? 0) / 100} max={(item.maxPriceCents ?? 0) / 100} step="0.01" required/><button disabled={mutation.busy}>Set price</button>
+  return <div className="mt-2 flex min-w-0 flex-col gap-3">
+    {unresolved.map((item) => <form className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 rounded-xl border-[1.5px] border-dashed border-[#b76c4c] bg-[#fae1b8] p-3" key={item.id} onSubmit={(event) => void resolve(event, item.id)}>
+      <div className="col-span-full flex flex-col gap-1"><strong className="text-[11px]">{item.description}</strong><small className="text-[9px] text-studio-muted">Pricing required · {formatServicePrice({ priceCents: null, minPriceCents: item.minPriceCents, maxPriceCents: item.maxPriceCents, priceUnit: null })}</small></div>
+      <input className="min-h-[36px] min-w-0 rounded-[9px] border-[1.5px] border-hippy-ink bg-[#fff9eb] px-3 text-[10px]" name="price" aria-label={`Price for ${item.description} in PHP`} type="number" min={(item.minPriceCents ?? 0) / 100} max={(item.maxPriceCents ?? 0) / 100} step="0.01" required/>
+      <button className={dashButton({ variant: "primary" })} disabled={mutation.busy}>Set price</button>
     </form>)}
-    {!unresolved.length && <div className="flex gap-[5px]"><button onClick={() => setPaymentOpen((current) => !current)}>Add payment</button><button disabled={sale.paidCents < sale.totalCents || mutation.busy} onClick={() => void complete()}>Complete sale</button></div>}
-    {paymentOpen && <form onSubmit={payment}><input name="amount" aria-label="Payment amount in PHP" type="number" min="0.01" max={((sale.totalCents - sale.paidCents) / 100).toFixed(2)} step="0.01" required/><select name="method"><option value="cash">Cash</option><option value="gcash">GCash</option><option value="maya">Maya</option><option value="card">Card</option><option value="bank_transfer">Bank transfer</option><option value="other">Other</option></select><input name="reference" aria-label="Payment reference" placeholder="Reference (optional)"/><button disabled={mutation.busy}>Save payment</button></form>}
+    {!unresolved.length && !paymentOpen && <button className={`${dashButton({ variant: "primary" })} self-start`} onClick={() => setPaymentOpen(true)}><Plus size={15} /> Add payment</button>}
+    {paymentOpen && <form className="grid grid-cols-2 gap-3 rounded-xl border-[1.5px] border-dashed border-[#b76c4c] bg-[#fae1b8] p-3 max-[600px]:grid-cols-1" onSubmit={payment}>
+      <label className={dashField}>Amount (PHP)<input name="amount" type="number" min="0.01" max={((sale.totalCents - sale.paidCents) / 100).toFixed(2)} step="0.01" required/></label>
+      <label className={dashField}>Method<StudioSelect name="method" defaultValue="cash" ariaLabel="Payment method" options={paymentMethodOptions} /></label>
+      <label className={`${dashField} col-span-full max-[600px]:col-auto`}>Reference (optional)<input name="reference" /></label>
+      <div className="col-span-full flex justify-end gap-2 max-[600px]:col-auto"><button type="button" className={dashButton({ variant: "secondary" })} disabled={mutation.busy} onClick={() => setPaymentOpen(false)}>Cancel</button><button className={dashButton({ variant: "primary" })} disabled={mutation.busy}>{mutation.busy ? "Saving…" : "Save payment"}</button></div>
+    </form>}
     {mutation.error && <small className={dashError} role="alert">{mutation.error}</small>}
   </div>;
 }
