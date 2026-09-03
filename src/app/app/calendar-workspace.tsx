@@ -223,7 +223,7 @@ function AppointmentFormDialog(props: Props & { initialDate: string; onClose: ()
             const selected = serviceIds.includes(service.id);
             return <label className={cn("grid min-h-[54px] cursor-pointer grid-cols-[22px_minmax(0,1fr)_auto] items-center gap-2 rounded-[12px_9px_13px_10px] border-[1.5px] border-[#bc7c57] bg-[#fff8e8] p-2 text-[10px] transition", selected && "-translate-x-px -translate-y-px border-2 border-hippy-ink bg-[#f0c66e] shadow-[3px_3px_0_#3b2923]")} key={service.id}>
               <input className="peer sr-only" type="checkbox" checked={selected} onChange={(event) => setServiceIds((current) => event.target.checked ? [...current, service.id] : current.filter((id) => id !== service.id))}/>
-              <span className="grid size-5 place-items-center rounded-[6px_4px_7px_5px] border-2 border-hippy-ink bg-white text-transparent peer-checked:bg-hippy-orange peer-checked:text-white"><Check className="w-[11px]"/></span>
+              <span className="grid size-5 place-items-center rounded-[6px_4px_7px_5px] border-2 border-hippy-ink bg-white text-transparent leading-none peer-checked:bg-hippy-orange peer-checked:text-white [&>svg]:block [&>svg]:size-[11px]"><Check/></span>
               <span className="min-w-0"><strong className="block overflow-hidden text-ellipsis whitespace-nowrap">{service.name}</strong><small className="mt-1 block text-[8px] text-[#81665c]">{qualifiedNames(service.id, props).join(", ") || "No eligible piercer"}</small></span>
               <small className="rounded-full border border-dashed border-[#9f6a4d] bg-[#fff5df] px-2 py-1 text-[8px] font-black whitespace-nowrap">{service.durationMinutes} min</small>
             </label>;
@@ -245,7 +245,7 @@ function AppointmentFormDialog(props: Props & { initialDate: string; onClose: ()
         <section className="border-t border-dashed border-[#c88f6e] pt-4 opacity-90">
           <SectionHead index="4" title="Notes / additional details"/>
           <label className={dashField}>Notes<textarea name="notes" maxLength={2000} value={notes} onChange={(event) => setNotes(event.target.value)}/></label>
-          <label className="relative mt-2 flex min-h-auto cursor-pointer items-center gap-2 p-[9px_11px] text-[9px] text-[#71594f]"><input className="peer absolute opacity-0" name="sendConfirmation" type="checkbox" checked={sendConfirmation} onChange={(event) => setSendConfirmation(event.target.checked)}/><span className="grid size-[18px] place-items-center rounded-[5px] border-2 border-hippy-ink bg-white text-transparent peer-checked:bg-hippy-orange peer-checked:text-white [&>svg]:w-[11px]"><Check/></span> Email a confirmation to the client</label>
+          <label className="relative mt-2 flex min-h-auto cursor-pointer items-center gap-2 p-[9px_11px] text-[9px] text-[#71594f]"><input className="peer absolute opacity-0" name="sendConfirmation" type="checkbox" checked={sendConfirmation} onChange={(event) => setSendConfirmation(event.target.checked)}/><span className="grid size-[18px] place-items-center rounded-[5px] border-2 border-hippy-ink bg-white text-transparent leading-none peer-checked:bg-hippy-orange peer-checked:text-white [&>svg]:block [&>svg]:size-[11px]"><Check/></span> Email a confirmation to the client</label>
           {error && <p className={dashError} role="alert">{error}</p>}
         </section>
       </div>
