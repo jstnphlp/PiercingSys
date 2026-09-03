@@ -69,7 +69,11 @@ function OverviewSkeleton() {
 }
 
 function SalesSkeleton() {
-  return <><div className={`${metricGrid} grid-cols-3`}>{Array.from({ length: 3 }, (_, index) => <MetricSkeleton compact key={index}/>)}</div><Skeleton className="ml-auto" width={132} height={38}/><TableSkeleton columns={8}/></>;
+  return <>
+    <div className="grid w-full grid-cols-3 gap-[15px] max-[1100px]:grid-cols-2 max-[450px]:grid-cols-1">{Array.from({ length: 3 }, (_, index) => <MetricSkeleton key={index}/>)}</div>
+    <div className="grid grid-cols-[minmax(220px,1fr)_132px] items-end gap-3 max-[640px]:grid-cols-1"><div className="flex flex-col gap-1.5"><Skeleton width={72} height={9}/><Skeleton width="100%" height={42}/></div><Skeleton className="max-[640px]:w-full" width={132} height={38}/></div>
+    <TableSkeleton columns={7}/>
+  </>;
 }
 
 function ReportsSkeleton() {

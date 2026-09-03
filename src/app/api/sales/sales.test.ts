@@ -56,6 +56,41 @@ describe("POST /api/sales", () => {
     expect(status).toBe(422);
   });
 
+  it("requires and records a named client for a walk-in sale", async () => {
+    getStaffSession.mockResolvedValue(sessions.manager);
+    const invalid = await readJson(await createSale(jsonRequest("http://localhost/api/sales", {
+      ...saleBody,
+      customerId: null,
+    })));
+    expect(invalid.status).toBe(422);
+
+    const customer = createQuery({ data: { id: IDS.customer }, error: null });
+    const rpc = vi.fn(async () => ({
+      data: [{ id: IDS.sale, reference: "S-1", total_cents: 50000, balance_cents: 0 }],
+      error: null,
+    }));
+    createSupabaseServerClient.mockResolvedValue({
+      from: vi.fn(() => customer),
+      rpc,
+    });
+    const created = await readJson(await createSale(jsonRequest("http://localhost/api/sales", {
+      ...saleBody,
+      customerId: null,
+      walkInName: " Kai Rivera ",
+    })));
+
+    expect(created.status).toBe(201);
+    expect(customer.insert).toHaveBeenCalledWith(expect.objectContaining({
+      first_name: "Kai Rivera",
+      last_name: "",
+      email: expect.stringMatching(/^walk-in-.+@piercingcorner\.local$/),
+      phone: expect.stringMatching(/^walk-in-/),
+    }));
+    expect(rpc).toHaveBeenCalledWith("create_sale", expect.objectContaining({
+      p_customer_id: IDS.customer,
+    }));
+  });
+
   it("maps database business errors to API codes", async () => {
     getStaffSession.mockResolvedValue(sessions.manager);
     const cases = [
@@ -169,6 +204,7 @@ describe("PATCH /api/sales/:id", () => {
   it("records a payment that does not exceed the total", async () => {
     getStaffSession.mockResolvedValue(sessions.manager);
     const payments = createQuery({ data: { id: "pay" }, error: null });
+    const rpc = vi.fn(async () => ({ data: null, error: null }));
     createSupabaseServerClient.mockResolvedValue({
       from: vi.fn((table: string) => table === "payments"
         ? payments
@@ -176,6 +212,7 @@ describe("PATCH /api/sales/:id", () => {
           data: { id: IDS.sale, status: "draft", total_cents: 50000, payments: [{ amount_cents: 20000 }] },
           error: null,
         })),
+      rpc,
     });
     const { status } = await readJson(await patchSale(
       jsonRequest("http://localhost/api/sales/x", { action: "add_payment", method: "gcash", amountCents: 30000 }),
@@ -187,6 +224,7 @@ describe("PATCH /api/sales/:id", () => {
       amount_cents: 30000,
       received_by: IDS.manager,
     }));
+    expect(rpc).toHaveBeenCalledWith("complete_draft_sale", { p_sale_id: IDS.sale });
   });
 });
 

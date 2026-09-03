@@ -13,6 +13,7 @@ import {
   Sparkles,
   Upload,
 } from "lucide-react";
+import { StudioSelect } from "@/components/ui/studio-select";
 import { useMemo, useState } from "react";
 import {
   canNavigateToNextBookingWeek,
@@ -333,7 +334,7 @@ export function BookingForm({
             <button type="button" onClick={() => { setDate(minDate); void loadSlots(serviceIds, minDate, piercerId); }}>Today</button>
             <button type="button" aria-label="Next week" disabled={!canNavigateNextWeek} onClick={() => { if (!canNavigateNextWeek) return; const next = shiftManilaDate(date, 7); setDate(next); void loadSlots(serviceIds, next, piercerId); }}><ChevronRight/></button>
             <strong>{formatWeekRange(visibleDates)}</strong>
-            <label><span>Piercer</span><select value={piercerId} onChange={(event) => { const value = event.target.value; setPiercerId(value); void loadSlots(serviceIds, date, value); }}><option value="">Any qualified piercer</option>{eligiblePiercers.map((person) => <option value={person.id} key={person.id}>{person.name}</option>)}</select></label>
+            <label><span>Piercer</span><StudioSelect value={piercerId} onValueChange={(value) => { setPiercerId(value); void loadSlots(serviceIds, date, value); }} ariaLabel="Piercer" triggerClassName="h-[37px] min-h-[37px] min-w-[170px]" options={[{ value: "", label: "Any qualified piercer" }, ...eligiblePiercers.map((person) => ({ value: person.id, label: person.name }))]} /></label>
           </div>
           <div className="relative mt-[11px] overflow-hidden rounded-[17px_12px_19px_14px] border-2 border-hippy-ink bg-[#fff8e7] shadow-[3px_3px_0_#3b2923]" aria-live="polite" aria-busy={loadingSlots}>
             {loadingSlots ? <><span className="sr-only" role="status">Calculating the week’s openings</span><div className="max-h-[520px] overflow-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden max-[630px]:max-h-[65vh]"><CalendarGridSkeleton publicCalendar/></div></> : <div className="max-h-[520px] overflow-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden max-[630px]:max-h-[65vh]"><div className={publicCalendarGrid}>

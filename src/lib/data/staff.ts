@@ -9,6 +9,7 @@ import type {
 } from "@/lib/domain";
 import { manilaDayBounds } from "@/lib/domain";
 import { seededStudio } from "@/lib/data/public";
+import { customerDisplayContact, customerDisplayName } from "@/lib/walk-in-customer";
 
 export type BookingRecord = {
   id: string;
@@ -110,7 +111,7 @@ export function mapSaleRow(row: Record<string, unknown>): SaleRecord {
     status: row.status as SaleStatus,
     totalCents: Number(row.total_cents),
     createdAt: String(row.created_at),
-    customerName: customer ? `${customer.first_name} ${customer.last_name}` : "Walk-in",
+    customerName: customer ? customerDisplayName(customer.first_name, customer.last_name) : "Walk-in",
     methods: payments.map((item) => item.method),
     paidCents: payments.reduce((sum, item) => sum + item.amount_cents, 0),
     adjustmentCents: adjustments.reduce((sum, item) => sum + item.amount_cents, 0),
@@ -338,15 +339,17 @@ export async function getStaffData(
     isActive: row.is_active,
   }));
   const bookings: BookingRecord[] = (bookingsResult.data ?? []).map((row) => mapBookingRow(row as Record<string, unknown>));
-  const directoryCustomers: CustomerRecord[] = (directoryResult.data ?? []).map((row) => ({
-    id: row.id,
-    name: `${row.first_name} ${row.last_name}`,
-    email: row.email,
-    phone: row.phone,
-    createdAt: row.created_at,
-    appointmentCount: Number(row.appointment_count ?? 0),
-    lastActivityAt: row.last_appointment_at ?? null,
-  }));
+  const directoryCustomers: CustomerRecord[] = (directoryResult.data ?? []).map((row) => {
+    const contact = customerDisplayContact(row.email, row.phone);
+    return {
+      id: row.id,
+      name: customerDisplayName(row.first_name, row.last_name),
+      ...contact,
+      createdAt: row.created_at,
+      appointmentCount: Number(row.appointment_count ?? 0),
+      lastActivityAt: row.last_appointment_at ?? null,
+    };
+  });
   const sales: SaleRecord[] = (salesResult.data ?? []).map((row) => mapSaleRow(row as Record<string, unknown>));
   const staff: StaffRecord[] = (staffResult.data ?? []).map((row) => ({
     id: row.user_id,

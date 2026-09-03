@@ -42,6 +42,15 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       reference: parsed.data.reference ?? null, received_by: session.userId,
     });
     if (insert.error) return Response.json({ error: { code: "PAYMENT_FAILED", message: insert.error.message } }, { status: 400 });
+    if (paid + parsed.data.amountCents === sale.data.total_cents) {
+      const completion = await supabase!.rpc("complete_draft_sale", { p_sale_id: id });
+      if (completion.error) {
+        const message = completion.error.message.includes("pricing_required")
+          ? "Set every service price before recording the final payment."
+          : completion.error.message;
+        return Response.json({ error: { code: "COMPLETION_FAILED", message } }, { status: 422 });
+      }
+    }
   } else {
     const completion = await supabase!.rpc("complete_draft_sale", { p_sale_id: id });
     if (completion.error) {
