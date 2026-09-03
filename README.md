@@ -87,7 +87,7 @@ Runtime page and API requests use the Supabase HTTPS API through `@supabase/supa
 
 If Prisma is later used in a serverless runtime, set `DATABASE_URL` to the Supabase transaction pooler on port `6543` with `?pgbouncer=true`. Set `DIRECT_URL` to the direct Postgres endpoint on port `5432` for Prisma inspection and seed operations. The current Prisma CLI configuration automatically prefers `DIRECT_URL`, and local development can use the same direct URL for both variables.
 
-The public studio/service/piercer catalog is cached for 60 seconds and is invalidated immediately by settings, service, assignment, invitation, and staff-status mutations. Authenticated dashboard data remains uncached so RLS-protected operational records are always current.
+The public catalog and authenticated studio reference data use Next.js's five-minute `minutes` cache profile and are invalidated immediately by supported configuration mutations. Operational bookings, customers, sales, reports, delivery status, and counts remain uncached so staff work stays current.
 
 To inspect the local database with Prisma Studio, run `npm run prisma:studio`. Prisma introspects the Supabase-managed `auth` schema only because the public staff tables reference it; application code should continue managing authentication through Supabase Auth.
 

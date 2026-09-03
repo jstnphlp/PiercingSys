@@ -38,7 +38,7 @@ export function ReportPeriodControls({
       preset: "custom",
       from: customFrom,
       to: customTo,
-      href: `/app?view=reports&period=custom&from=${encodeURIComponent(customFrom)}&to=${encodeURIComponent(customTo)}`,
+      href: `/app/reports?period=custom&from=${encodeURIComponent(customFrom)}&to=${encodeURIComponent(customTo)}`,
     });
   }
 

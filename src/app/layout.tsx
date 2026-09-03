@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { DM_Sans, Fraunces } from "next/font/google";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 
 const dmSans = DM_Sans({ subsets: ["latin"], variable: "--font-body" });
@@ -18,5 +19,5 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
-  return <html lang="en"><body className={`${dmSans.variable} ${fraunces.variable}`}>{children}</body></html>;
+  return <html lang="en"><body className={`${dmSans.variable} ${fraunces.variable}`}>{children}<SpeedInsights /></body></html>;
 }

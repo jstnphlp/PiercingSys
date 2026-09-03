@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { revalidateTag } from "next/cache";
 import { getStaffSession, hasRole } from "@/lib/auth";
+import { invalidateCatalogAndStaffReferenceData } from "@/lib/cache-invalidation";
 import type { StudioSettings } from "@/lib/domain";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { validationError } from "@/lib/validation";
@@ -40,6 +40,6 @@ async function saveHours(weekday: number, hours: { open: string; close: string }
   else delete businessHours[String(weekday)];
   const update = await supabase!.from("studio_settings").update({ business_hours: businessHours, updated_at: new Date().toISOString() }).eq("id", 1);
   if (update.error) return Response.json({ error: { code: "UPDATE_FAILED", message: update.error.message } }, { status: 400 });
-  revalidateTag("public-catalog", { expire: 0 });
+  invalidateCatalogAndStaffReferenceData();
   return Response.json({ data: { updated: true, recurringWeekday: weekday } });
 }

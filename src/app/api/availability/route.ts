@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { getStaffSession, hasRole } from "@/lib/auth";
+import { invalidateStaffReferenceData } from "@/lib/cache-invalidation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { validationError } from "@/lib/validation";
 
@@ -37,10 +38,12 @@ export async function POST(request: Request) {
     }));
     const { data, error } = await supabase!.from("staff_availability").insert(rows).select("id");
     if (error) return Response.json({ error: { code: "CREATE_FAILED", message: error.message } }, { status: 400 });
+    invalidateStaffReferenceData();
     return Response.json({ data }, { status: 201 });
   }
   const { data, error } = await supabase!.from("staff_availability").insert({ staff_id: value.staffId, weekday: value.weekday, availability_date: null, starts_at: value.startsAt, ends_at: value.endsAt }).select("id").single();
   if (error) return Response.json({ error: { code: "CREATE_FAILED", message: error.message } }, { status: 400 });
+  invalidateStaffReferenceData();
   return Response.json({ data }, { status: 201 });
 }
 

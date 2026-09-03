@@ -7,6 +7,7 @@ import { BookingForm } from "./booking-form";
 import { bookingHeading, bookingLayout, bookingPage, bookingPanel, bookingStory, storyTitle } from "./booking-styles";
 
 export const metadata: Metadata = { title: "Book an appointment" };
+export const instant = true;
 const instagramUrl = "https://www.instagram.com/piercing.corner/";
 
 export default async function BookingPage() {

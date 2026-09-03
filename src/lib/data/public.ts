@@ -1,5 +1,5 @@
 import "server-only";
-import { unstable_cache } from "next/cache";
+import { cacheLife, cacheTag } from "next/cache";
 import {
   combinedServiceDuration,
   commonQualifiedPiercerIds,
@@ -134,11 +134,12 @@ async function loadPublicCatalog() {
   };
 }
 
-export const getPublicCatalog = unstable_cache(
-  loadPublicCatalog,
-  ["piercing-corner-public-catalog-v1"],
-  { revalidate: 60, tags: ["public-catalog"] },
-);
+export async function getPublicCatalog() {
+  "use cache";
+  cacheLife("minutes");
+  cacheTag("public-catalog");
+  return loadPublicCatalog();
+}
 
 export async function getAvailableSlots(input: {
   serviceIds: string[];

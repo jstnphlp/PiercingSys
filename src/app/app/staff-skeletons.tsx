@@ -106,9 +106,25 @@ export function StaffViewSkeleton({ view = "overview", label = "Loading workspac
     <LoadingStatus label={label}/>
     {view === "overview" && <OverviewSkeleton/>}
     {view === "calendar" && <><div className="flex gap-2 overflow-hidden rounded-[17px] border-2 border-hippy-ink bg-[#f1d39c] p-2.5">{Array.from({ length: 7 }, (_, index) => <Skeleton key={index} width={index > 2 ? 110 : 39} height={38}/>)}</div><section className={panel}><div className="overflow-x-auto"><CalendarGridSkeleton/></div></section></>}
-    {view === "clients" && <TableSkeleton/>}
+    {view === "clients" && <><div className="flex items-end gap-3 max-[640px]:flex-col"><span className="flex flex-1 flex-col gap-2 max-[640px]:w-full"><Skeleton width={78} height={9}/><Skeleton className="w-full" height={42}/></span><Skeleton className="max-[640px]:w-full" width={118} height={38}/></div><TableSkeleton/></>}
     {view === "sales" && <SalesSkeleton/>}
     {view === "reports" && <ReportsSkeleton/>}
     {view === "settings" && <SettingsSkeleton/>}
   </div>;
+}
+
+export function StaffShellSkeleton({ view = "overview" }: { view?: StaffView }) {
+  return (
+    <div className="relative flex h-screen min-h-[620px] gap-[15px] overflow-hidden bg-hippy-sand p-3.5 text-hippy-ink max-[760px]:block max-[760px]:h-auto max-[760px]:min-h-screen max-[760px]:p-2.5" aria-busy="true">
+      <aside className="flex h-full w-[230px] shrink-0 flex-col rounded-[24px_14px_20px_17px] border-2 border-hippy-ink bg-[#f9ecd1] px-3.5 pt-[21px] pb-4 shadow-[6px_6px_0_#3b2923] max-[760px]:mb-3 max-[760px]:h-auto max-[760px]:w-full">
+        <div className="flex items-center gap-2.5 px-2 pb-[27px]"><Skeleton className="size-[42px]" radius="50%"/><span className="flex flex-1 flex-col gap-2"><Skeleton width="74%" height={16}/><Skeleton width="48%" height={7}/></span></div>
+        <div className="flex flex-col gap-2 max-[760px]:flex-row max-[760px]:overflow-hidden">{Array.from({ length: 6 }, (_, index) => <Skeleton className="h-[42px] w-full max-[760px]:min-w-[105px]" key={index}/>)}</div>
+        <div className="mt-auto rounded-[15px] border border-hippy-ink bg-[#fff7e7] p-3 max-[760px]:hidden"><Skeleton width="82%" height={38}/></div>
+      </aside>
+      <main className="h-full min-w-0 flex-1 overflow-hidden rounded-[18px_26px_17px_23px] border-2 border-hippy-ink bg-hippy-cream shadow-[7px_7px_0_#3b2923] max-[760px]:min-h-[calc(100vh-110px)] max-[760px]:w-full">
+        <header className="flex min-h-[92px] items-center border-b border-dashed border-[#c9825a] px-[clamp(24px,4vw,52px)]"><span className="flex w-full max-w-[280px] flex-col gap-2"><Skeleton width="48%" height={8}/><Skeleton width="88%" height={27}/></span></header>
+        <div className="mx-auto max-w-[1450px] px-[clamp(22px,4vw,52px)] pt-[30px] pb-[72px]"><StaffViewSkeleton view={view} label={`Loading ${view}`}/></div>
+      </main>
+    </div>
+  );
 }
