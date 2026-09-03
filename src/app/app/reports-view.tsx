@@ -6,7 +6,7 @@ import { formatPhp } from "@/lib/domain";
 import { validateReportRange, type ReportPeriod, type ReportPreset } from "@/lib/report-period";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { ReportPeriodControls, type PresetLink } from "./report-period-controls";
-import { dashError, emptyState, featureView, metricCard, metricGrid, panel, panelHead, twoPanel } from "./dashboard-styles";
+import { dashError, emptyState, featureView, metricCard, metricGridThree, panel, panelHead, twoPanel } from "./dashboard-styles";
 import { WORKSPACE_REFRESH_EVENT } from "./workspace-refresh";
 
 export type ReportSummary = {
@@ -117,7 +117,7 @@ export function ReportsView({ initialPeriod, initialSummary, presets }: {
         onSelect={(selection) => void selectPeriod(selection)}
       />
       {error && <p className={dashError} role="alert">{error}</p>}
-      <div className={`${metricGrid} grid-cols-3`} aria-live="polite">
+      <div className={metricGridThree} aria-live="polite">
         <Metric icon={<CircleDollarSign />} label="Revenue" value={formatPhp(revenue)} note={`${period.from} to ${period.to}`} />
         <Metric icon={<ShoppingBag />} label="Transactions" value={String(completedCount)} note="Completed" />
         <Metric icon={<CalendarDays />} label="Procedures" value={String(bookingStatuses.completed ?? 0)} note={`${bookingStatuses.no_show ?? 0} no-shows`} />

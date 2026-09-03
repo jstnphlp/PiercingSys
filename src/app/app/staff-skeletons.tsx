@@ -1,6 +1,6 @@
 import { LoadingStatus, Skeleton } from "@/components/skeleton";
 import { cn } from "@/lib/utils";
-import { featureView, metricCard, metricGrid, panel, panelHead, settingSection, settingsStack, tablePanel, twoPanel } from "./dashboard-styles";
+import { featureView, metricCard, metricGrid, metricGridThree, panel, panelHead, settingSection, settingsStack, tablePanel, twoPanel } from "./dashboard-styles";
 import type { StaffView } from "./view-config";
 
 function MetricSkeleton({ compact = false }: { compact?: boolean }) {
@@ -70,14 +70,26 @@ function OverviewSkeleton() {
 
 function SalesSkeleton() {
   return <>
-    <div className="grid w-full grid-cols-3 gap-[15px] max-[1100px]:grid-cols-2 max-[450px]:grid-cols-1">{Array.from({ length: 3 }, (_, index) => <MetricSkeleton key={index}/>)}</div>
+    <div className={metricGridThree}>{Array.from({ length: 3 }, (_, index) => <MetricSkeleton key={index}/>)}</div>
     <div className="grid grid-cols-[minmax(220px,1fr)_132px] items-end gap-3 max-[640px]:grid-cols-1"><div className="flex flex-col gap-1.5"><Skeleton width={72} height={9}/><Skeleton width="100%" height={42}/></div><Skeleton className="max-[640px]:w-full" width={132} height={38}/></div>
     <TableSkeleton columns={7}/>
   </>;
 }
 
 function ReportsSkeleton() {
-  return <><div className="flex min-h-16 items-center gap-3 rounded-[14px] border-2 border-hippy-ink p-[13px]"><Skeleton width="48%" height={38}/><Skeleton width="36%" height={38}/><Skeleton width={132} height={38}/></div><div className={`${metricGrid} grid-cols-3`}>{Array.from({ length: 3 }, (_, index) => <MetricSkeleton compact key={index}/>)}</div><div className={twoPanel}>{Array.from({ length: 2 }, (_, index) => <section className={panel} key={index}><PanelHeadingSkeleton/>{Array.from({ length: 5 }, (_, row) => <RowSkeleton key={row} columns={2}/>)}</section>)}</div></>;
+  return <>
+    <div className="grid grid-cols-1 items-end gap-3.5 rounded-[18px_12px_17px_13px] border-2 border-hippy-ink bg-[#fff8e9] p-3.5 shadow-[4px_4px_0_#3b2923] min-[880px]:grid-cols-[1fr_auto] min-[1380px]:grid-cols-[minmax(420px,1fr)_auto_auto]">
+      <Skeleton className="h-[49px] w-full rounded-[14px_10px_13px_11px] min-[880px]:col-span-full min-[1380px]:col-span-1" />
+      <div className="flex flex-wrap items-end gap-2 border-l-2 border-dashed border-[#c78e6a] pl-3.5 max-[1379px]:border-l-0 max-[1379px]:pl-0 max-[500px]:w-full">
+        <Skeleton className="h-[39px] flex-1 min-w-[120px]" />
+        <Skeleton className="h-[39px] flex-1 min-w-[120px]" />
+        <Skeleton className="h-[39px] w-[62px] max-[500px]:w-full" />
+      </div>
+      <Skeleton className="h-[43px] w-full min-[880px]:w-[136px] shrink-0" />
+    </div>
+    <div className={metricGridThree}>{Array.from({ length: 3 }, (_, index) => <MetricSkeleton key={index}/>)}</div>
+    <div className={twoPanel}>{Array.from({ length: 2 }, (_, index) => <section className={panel} key={index}><PanelHeadingSkeleton/>{Array.from({ length: 5 }, (_, row) => <RowSkeleton key={row} columns={2}/>)}</section>)}</div>
+  </>;
 }
 
 function SettingsSkeleton() {
