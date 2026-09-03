@@ -17,7 +17,7 @@ import type { SaleRecord } from "@/lib/data/staff";
 import type { PageMeta } from "@/lib/pagination";
 import { formatPaymentMethods, formatSaleItems } from "@/lib/sales-display";
 import { DraftSaleActions, SaleAdjustment, SaleForm } from "./controls";
-import { dashButton, dashField, featureView, metricCard, operationDialog, stateCard, statusClasses, tablePanel } from "./dashboard-styles";
+import { dashButton, dashField, featureView, metricCard, metricGridThree, operationDialog, stateCard, statusClasses, tablePanel } from "./dashboard-styles";
 
 type SalesResponse = { data: SaleRecord[]; page: PageMeta };
 
@@ -46,7 +46,7 @@ export function SalesView({ initialSales, services }: { initialSales: SaleRecord
   const meta = response?.page;
 
   return <div className={featureView}>
-    <div className="grid w-full grid-cols-3 gap-[15px] max-[1100px]:grid-cols-2 max-[450px]:grid-cols-1">
+    <div className={metricGridThree}>
       <Metric icon={<CircleDollarSign />} label="Completed revenue" value={formatPhp(total)} note="Current page" />
       <Metric icon={<ShoppingBag />} label="Transactions" value={String(meta?.total ?? sales.length)} note="Matching records" />
       <Metric icon={<Clock3 />} label="Outstanding" value={formatPhp(outstanding)} note="Current page" />
