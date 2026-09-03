@@ -296,7 +296,9 @@ function AppointmentDetails({
                 label={statuses.completionLabel}
               />
             </Detail>
-            <Detail label="Notes">{booking.notes || "No notes"}</Detail>
+            <Detail label="Notes" className="col-span-2 max-[700px]:col-span-1">
+              {booking.notes || "No notes"}
+            </Detail>
           </dl>
           <section className="rounded-[14px] border-[1.5px] border-hippy-ink bg-[#fff9eb] p-3 shadow-[2px_2px_0_#3b2923]">
             <h3 className="mt-0 mb-2 text-[10px] font-black tracking-[.7px] text-[#a34d30] uppercase">
@@ -328,12 +330,14 @@ function AppointmentDetails({
 function Detail({
   label,
   children,
+  className,
 }: {
   label: string;
   children: ReactNode;
+  className?: string;
 }) {
   return (
-    <div>
+    <div className={className}>
       <dt>{label}</dt>
       <dd>{children}</dd>
     </div>
