@@ -2,7 +2,7 @@ import { z } from "zod";
 import { getStaffSession } from "@/lib/auth";
 import { queueBookingEmail } from "@/lib/booking-side-effects";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { validationError } from "@/lib/validation";
+import { philippineMobilePhone, validationError } from "@/lib/validation";
 
 const createSchema = z.object({
   serviceIds: z.array(z.string().uuid()).min(1).max(12),
@@ -14,7 +14,7 @@ const createSchema = z.object({
     firstName: z.string().trim().min(1).max(80),
     lastName: z.string().trim().min(1).max(80),
     email: z.string().trim().email().max(254),
-    phone: z.string().trim().min(7).max(30),
+    phone: philippineMobilePhone,
   }).nullable().optional(),
   notes: z.string().trim().max(2000).nullable().optional(),
   sendConfirmation: z.boolean().default(true),

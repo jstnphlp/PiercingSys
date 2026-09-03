@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { availabilityQuerySchema, publicBookingSchema, validateBookingPhoto, validationError } from "./validation";
+import { availabilityQuerySchema, isValidPhilippineMobilePhone, publicBookingSchema, validateBookingPhoto, validationError } from "./validation";
 import { z } from "zod";
 
 describe("public booking validation", () => {
@@ -38,6 +38,21 @@ describe("public booking validation", () => {
       serviceId: undefined,
       serviceIds: serviceIds.slice(0, 12),
     }).success).toBe(true);
+  });
+});
+
+describe("Philippine mobile validation", () => {
+  it("accepts Philippine mobile numbers with safe formatting characters", () => {
+    expect(isValidPhilippineMobilePhone("09171234567")).toBe(true);
+    expect(isValidPhilippineMobilePhone("+639171234567")).toBe(true);
+    expect(isValidPhilippineMobilePhone("+63 917-123-4567")).toBe(true);
+  });
+
+  it("rejects malformed contact values", () => {
+    expect(isValidPhilippineMobilePhone("abcdefg")).toBe(false);
+    expect(isValidPhilippineMobilePhone("123")).toBe(false);
+    expect(isValidPhilippineMobilePhone("0917abc4567")).toBe(false);
+    expect(isValidPhilippineMobilePhone("091712345678")).toBe(false);
   });
 });
 

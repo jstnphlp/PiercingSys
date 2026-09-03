@@ -8,6 +8,16 @@ const serviceIds = z.array(z.string().uuid()).min(1).max(12).superRefine((value,
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
+export function isValidPhilippineMobilePhone(value: string) {
+  const normalized = value.trim().replace(/[\s()-]/g, "");
+  return /^(?:09\d{9}|\+639\d{9})$/.test(normalized);
+}
+
+export const philippineMobilePhone = z.string().trim().max(30).refine(
+  isValidPhilippineMobilePhone,
+  "Enter a valid Philippine mobile number, such as 09171234567 or +639171234567.",
+);
+
 export const availabilityQuerySchema = z.object({
   serviceIds: serviceIds.optional(),
   serviceId: z.string().uuid().optional(),
@@ -37,7 +47,7 @@ export const publicBookingSchema = z.object({
   firstName: z.string().trim().min(1).max(80),
   lastName: z.string().trim().min(1).max(80),
   email: z.string().trim().email().max(254),
-  phone: z.string().trim().min(7).max(30),
+  phone: philippineMobilePhone,
   notes: z.string().trim().max(2000).nullable().optional(),
   idempotencyKey: z.string().trim().uuid().optional(),
   ageConfirmed: z.union([z.boolean(), z.literal("true"), z.literal("on")]).transform((value) => value === true || value === "true" || value === "on").pipe(z.literal(true)),
