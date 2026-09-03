@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PiercingSys Calendar 11:59 PM Prototype</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    :root {
+      --ink: #3b2923;
+      --paper: #fff9eb;
+      --paper-2: #fff7e5;
+      --gold: #f0d09d;
+      --orange: #dc6733;
+      --line: #c79370;
+      --muted: #80675d;
+      --sage: #538679;
+      --lilac: #795d8e;
+      --start-hour: 8;
+      --end-minutes: 1440;
+      --hour-height: 60px;
+      --header-height: 64px;
+      --calendar-height: 960px;
+    }
+    body {
+      margin: 0;
+      background: #f5dfb5;
+      color: var(--ink);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+    }
+    main { max-width: 1260px; margin: 0 auto; padding: 24px; }
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { font-size: 30px; line-height: 1.08; margin-bottom: 8px; }
+    h2 { font-size: 17px; margin-bottom: 10px; }
+    h3 { font-size: 13px; margin-bottom: 6px; }
+    p, li, td, th { font-size: 12px; line-height: 1.5; }
+    code { background: #fff3d0; border: 1px solid #d5aa89; border-radius: 6px; padding: 1px 5px; }
+    .intro { display: grid; gap: 16px; grid-template-columns: minmax(0, 1.2fr) minmax(280px, .8fr); align-items: start; margin-bottom: 18px; }
+    .panel {
+      background: var(--paper);
+      border: 2px solid var(--ink);
+      border-radius: 19px 14px 20px 16px;
+      box-shadow: 4px 4px 0 var(--ink);
+      overflow: hidden;
+    }
+    .pad { padding: 16px; }
+    .note { background: #f8dcae; border: 1px dashed #ba7652; border-radius: 11px; padding: 10px 12px; color: #60463c; }
+    .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 18px; }
+    .stat { background: #fff8e8; border: 1.5px solid var(--ink); border-radius: 14px 10px 15px 12px; padding: 12px; box-shadow: 2px 2px 0 var(--ink); min-width: 0; }
+    .stat strong { display: block; font-size: 18px; margin: 2px 0; }
+    .stat span { color: #765c52; font-size: 10px; font-weight: 800; text-transform: uppercase; }
+    .toolbar {
+      display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+      background: #f1d39c; border: 2px solid var(--ink); border-radius: 17px 13px 18px 14px;
+      padding: 9px 10px; box-shadow: 3px 3px 0 var(--ink); margin-bottom: 14px;
+    }
+    button, .select-like {
+      min-height: 38px; border: 1.5px solid var(--ink); border-radius: 10px 8px 11px 9px;
+      background: #fff7e3; box-shadow: 1px 2px 0 var(--ink); color: #4c352e;
+      font-weight: 850; cursor: pointer; padding: 7px 12px;
+    }
+    button.active { background: #fff3d0; color: #b74827; box-shadow: inset 0 0 0 1px var(--ink); }
+    .calendar-shell { overflow-x: auto; scrollbar-color: #d5aa89 transparent; scrollbar-width: thin; }
+    .calendar {
+      position: relative;
+      display: grid;
+      min-width: 1000px;
+      grid-template-columns: 64px repeat(var(--days), minmax(132px, 1fr));
+      grid-template-rows: var(--header-height) var(--calendar-height);
+      background: var(--paper);
+    }
+    .corner, .day-head {
+      position: sticky; top: 0; z-index: 5; min-width: 0;
+      background: var(--gold); border-bottom: 1.5px solid var(--ink);
+      display: flex; align-items: center; justify-content: center; flex-direction: column;
+    }
+    .corner { color: #a24429; font-size: 8px; font-weight: 900; }
+    .day-head { border-left: 1px dashed #bb7f5d; color: #4b342c; gap: 2px; }
+    .day-head.active { background: var(--orange); color: #fff4dd; }
+    .day-head small, .day-head span { font-size: 8px; font-weight: 800; color: #80675d; }
+    .day-head.active small, .day-head.active span { color: #fff4dd; }
+    .day-head strong { display: grid; place-items: center; width: 29px; height: 29px; border-radius: 50%; font-size: 13px; }
+    .day-head.active strong { background: #fff4d7; color: #9f3d22; box-shadow: 2px 2px 0 var(--ink); }
+    .time-col { position: relative; border-right: 1.5px solid var(--ink); background: #f7e4bd; z-index: 2; }
+    .time-label { position: absolute; right: 10px; transform: translateY(5px); font-size: 8px; font-weight: 700; color: #8b7166; white-space: nowrap; }
+    .time-label.end { transform: translateY(-100%); color: #b74827; font-weight: 950; }
+    .day-col {
+      position: relative; border-left: 1px dashed var(--line); min-width: 0;
+      background-color: var(--paper);
+      background-image: repeating-linear-gradient(to bottom, transparent 0, transparent 59px, #d9b493 60px);
+    }
+    .day-col.today { background-color: #f9edcf; }
+    .day-col.selected { background-color: #fbe5c9; }
+    .end-rule { position: absolute; left: 0; right: 0; bottom: 0; border-bottom: 2px solid #b74827; pointer-events: none; }
+    .event {
+      position: absolute; left: calc((100% / var(--lanes)) * var(--lane) + 4px);
+      width: calc(100% / var(--lanes) - 8px); min-height: 34px; overflow: hidden;
+      border: 1px solid var(--ink); border-left: 5px solid var(--color);
+      border-radius: 10px 7px 11px 8px; background: color-mix(in srgb, var(--color) 25%, #fff6df);
+      color: #432e27; text-align: left; padding: 6px 8px; box-shadow: 2px 2px 0 var(--ink); z-index: 2;
+    }
+    .event strong, .event small, .event i { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .event strong { font-size: 9px; }
+    .event small, .event i { font-size: 8px; color: #765d53; font-style: normal; margin-top: 2px; }
+    .now { position: absolute; right: 0; left: 60px; z-index: 8; height: 2px; background: #b94735; }
+    .now::before { content: ""; position: absolute; left: 0; top: 50%; width: 10px; height: 10px; transform: translateY(-50%); border-radius: 50%; border: 1.5px solid var(--ink); background: var(--orange); }
+    .day-list { display: grid; grid-template-columns: 112px minmax(0, 1fr); background: var(--paper); min-height: 330px; }
+    .day-aside { background: #f0c875; border-right: 1.5px dashed #a96749; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+    .day-rows header { min-height: 74px; display: flex; align-items: center; justify-content: space-between; background: #f8e3bc; border-bottom: 1px dashed #c88f6e; padding: 13px 18px; }
+    .list-item { display: grid; grid-template-columns: 80px 38px minmax(150px, 1fr) minmax(135px, .65fr) 92px; align-items: center; gap: 11px; min-height: 78px; border-bottom: 1px dashed #d7a47f; border-left: 5px solid transparent; background: var(--paper); padding: 10px 17px; text-align: left; box-shadow: none; border-radius: 0; }
+    .avatar { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50% 42% 50% 45%; border: 1.5px solid var(--ink); background: color-mix(in srgb, var(--color) 34%, #f7d69c); font-size: 9px; font-weight: 950; box-shadow: 1px 1px 0 var(--ink); }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; min-width: 760px; }
+    th { text-align: left; background: #f5ddba; color: #795346; text-transform: uppercase; font-size: 9px; }
+    th, td { padding: 9px 10px; border-bottom: 1px dashed #dab08f; vertical-align: top; }
+    .mobile-frame { max-width: 390px; border: 2px solid var(--ink); box-shadow: 3px 3px 0 var(--ink); border-radius: 16px; overflow: hidden; background: var(--paper); }
+    @media (max-width: 760px) {
+      main { padding: 14px; }
+      .intro, .stats { grid-template-columns: 1fr; }
+      .calendar { min-width: 884px; grid-template-columns: 58px repeat(var(--days), minmax(118px, 1fr)); }
+      .toolbar { flex-wrap: nowrap; overflow-x: auto; }
+      .day-list { grid-template-columns: 70px minmax(0, 1fr); }
+      .list-item { grid-template-columns: 63px 34px minmax(0, 1fr); }
+      .list-item .hide-mobile { display: none; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <section class="intro">
+    <div>
+      <h1>System Observations Item 3: Calendar Ends at 11:59 PM</h1>
+      <p class="note">Review-only prototype for <code>/app?view=calendar</code>. Production files are not modified. The proposed behavior keeps 60px hourly rhythm, extends the visible grid to the midnight boundary internally, and labels the bottom boundary as <strong>11:59 PM</strong> with no <strong>12 AM</strong> row.</p>
+    </div>
+    <div class="panel pad">
+      <h2>Recommendation</h2>
+      <p>Use <code>calendarStartMinutes = 8 * 60</code>, <code>calendarEndMinutes = 24 * 60</code>, <code>hourHeight = 60</code>, and <code>calendarHeight = (end - start) * pixelsPerMinute = 960px</code>. Render hourly labels from 8 AM through 11 PM, then render a separate end marker at the bottom as 11:59 PM.</p>
+    </div>
+  </section>
+
+  <section class="stats">
+    <div class="stat"><span>Current end</span><strong>9 PM</strong><p><code>gridEndHour = 21</code></p></div>
+    <div class="stat"><span>Current body</span><strong>780px</strong><p>Hard-coded week row height.</p></div>
+    <div class="stat"><span>Proposed body</span><strong>960px</strong><p>16 hours × 60px.</p></div>
+    <div class="stat"><span>Visible end</span><strong>11:59 PM</strong><p>No 12 AM label.</p></div>
+  </section>
+
+  <section class="panel pad" style="margin-bottom:18px">
+    <h2>Inspection Findings</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Question</th><th>Verified Finding</th><th>Recommended Production Treatment</th></tr></thead>
+        <tbody>
+          <tr><td>Cause of cutoff</td><td><code>gridEndHour = 21</code> and <code>grid-rows-[64px_780px]</code> limit the week grid to 8 AM through 9 PM.</td><td>Replace hour-only range constants with minute-based constants and derive height.</td></tr>
+          <tr><td>Range constants</td><td><code>gridStartHour</code>, <code>gridEndHour</code>, <code>hourHeight</code> live in <code>calendar-workspace.tsx</code>.</td><td>Use one source of truth for start, exclusive end, pixels-per-minute, labels, and height.</td></tr>
+          <tr><td>WeekCalendar</td><td>Labels are generated with <code>gridEndHour - gridStartHour + 1</code>. Event top/height use raw Manila minutes and are not clipped.</td><td>Labels should stop at 11 PM, final marker should sit at bottom. Clamp event top/end to visible minutes.</td></tr>
+          <tr><td>DayCalendar</td><td>Current Day view is a list, not a timeline, so it has no grid cutoff.</td><td>No required geometry change unless product wants Day view to become timeline-based. Keep date filtering Manila-safe.</td></tr>
+          <tr><td>Skeletons</td><td><code>CalendarGridSkeleton</code> uses hard-coded <code>h-[896px]</code>, body <code>h-[832px]</code>, and 9 label placeholders.</td><td>Pass/derive the same calendar body height and label count to avoid load-time shrink/grow.</td></tr>
+          <tr><td>Timezone boundary</td><td><code>manilaMinutes</code> and <code>manilaDate</code> preserve Asia/Manila display and filtering.</td><td>Keep those helpers. Do not shift appointment dates when clipping visual height.</td></tr>
+          <tr><td>Tests</td><td>Existing tests cover overlap lanes only, not visual range math.</td><td>Add tests for time-to-pixel conversion, 11:59 clipping, current-time visibility, and generated labels.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="toolbar" aria-label="Prototype controls">
+    <button id="weekBtn" class="active" type="button">Week</button>
+    <button id="dayBtn" type="button">Day</button>
+    <span class="select-like">All piercers</span>
+    <span class="select-like">All stations</span>
+    <span class="select-like">Asia/Manila</span>
+  </div>
+
+  <section id="weekView" class="panel">
+    <div class="calendar-shell">
+      <div class="calendar" style="--days:7">
+        <div class="corner">CLOCK<br>GMT+8</div>
+        <div class="day-head"><span>SUN</span><strong>30</strong><small>Aug</small></div>
+        <div class="day-head"><span>MON</span><strong>31</strong><small>Aug</small></div>
+        <div class="day-head active"><span>TUE</span><strong>01</strong><small>Sep</small></div>
+        <div class="day-head"><span>WED</span><strong>02</strong><small>Sep</small></div>
+        <div class="day-head"><span>THU</span><strong>03</strong><small>Sep</small></div>
+        <div class="day-head"><span>FRI</span><strong>04</strong><small>Sep</small></div>
+        <div class="day-head"><span>SAT</span><strong>05</strong><small>Sep</small></div>
+        <div class="time-col" id="timeCol"></div>
+        <div class="day-col"></div>
+        <div class="day-col today">
+          <button class="event" style="top:120px;height:60px;--color:#e86f2c;--lane:0;--lanes:1" aria-label="10:00 AM to 11:00 AM, normal daytime appointment"><strong>10:00 AM · Mara Cruz</strong><small>Ana · Station 1</small><i>Lobe piercing</i></button>
+        </div>
+        <div class="day-col selected">
+          <button class="event" style="top:775px;height:50px;--color:#538679;--lane:0;--lanes:1" aria-label="8:55 PM to 9:45 PM, evening appointment"><strong>8:55 PM · Ken Santos</strong><small>Rico · Station 2</small><i>Jewelry change</i></button>
+          <button class="event" style="top:850px;height:65px;--color:#795d8e;--lane:0;--lanes:2" aria-label="10:10 PM to 11:15 PM, late appointment"><strong>10:10 PM · Bea Lim</strong><small>Jo · Station 3</small><i>Helix piercing</i></button>
+          <button class="event" style="top:895px;height:64px;--color:#dc6733;--lane:1;--lanes:2" aria-label="10:55 PM to 11:59 PM, end boundary appointment"><strong>10:55 PM · Nico Reyes</strong><small>Ana · Station 1</small><i>Downsize check</i></button>
+        </div>
+        <div class="day-col"></div>
+        <div class="day-col">
+          <button class="event" style="top:910px;height:50px;--color:#538679;--lane:0;--lanes:1" aria-label="11:10 PM to 11:59 PM, appointment clipped at visible boundary"><strong>11:10 PM · Lia Ong</strong><small>Rico · Station 2</small><i>Late consult</i></button>
+        </div>
+        <div class="day-col"></div>
+        <div class="day-col"></div>
+        <div class="now" style="top:754px" aria-hidden="true"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="dayView" class="panel" style="display:none">
+    <div class="day-list">
+      <aside class="day-aside"><span>TUE</span><strong style="font-size:34px">01</strong><small>Sep</small></aside>
+      <div class="day-rows">
+        <header><div><h3>Tuesday, September 1, 2026</h3><p>Daily appointment list · Asia/Manila · same operating range metadata</p></div><span class="select-like">5 appointments</span></header>
+        <button class="list-item" style="--color:#e86f2c"><span><strong>10:00 AM</strong><small>11:00 AM</small></span><span class="avatar">MC</span><span><strong>Mara Cruz</strong><small>Lobe piercing · PC-1001</small></span><span class="hide-mobile">Ana<br><small>Station 1</small></span><span class="hide-mobile">confirmed</span></button>
+        <button class="list-item" style="--color:#538679"><span><strong>8:55 PM</strong><small>9:45 PM</small></span><span class="avatar">KS</span><span><strong>Ken Santos</strong><small>Jewelry change · PC-1002</small></span><span class="hide-mobile">Rico<br><small>Station 2</small></span><span class="hide-mobile">confirmed</span></button>
+        <button class="list-item" style="--color:#795d8e"><span><strong>10:10 PM</strong><small>11:15 PM</small></span><span class="avatar">BL</span><span><strong>Bea Lim</strong><small>Helix piercing · PC-1003</small></span><span class="hide-mobile">Jo<br><small>Station 3</small></span><span class="hide-mobile">confirmed</span></button>
+        <button class="list-item" style="--color:#dc6733"><span><strong>10:55 PM</strong><small>11:59 PM</small></span><span class="avatar">NR</span><span><strong>Nico Reyes</strong><small>Downsize check · PC-1004</small></span><span class="hide-mobile">Ana<br><small>Station 1</small></span><span class="hide-mobile">confirmed</span></button>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel pad" style="margin-top:18px">
+    <h2>Likely Production Files</h2>
+    <p><code>src/app/app/calendar-workspace.tsx</code> for range constants, labels, current-time logic, and event clipping. <code>src/app/app/staff-skeletons.tsx</code> for synchronized skeleton height/rows. <code>src/app/app/calendar-layout.test.ts</code> or a new focused calendar geometry test file for range and clipping helpers. Day view only needs changes if the list receives operating-range metadata or a timeline treatment.</p>
+  </section>
+</main>
+<script>
+  const startHour = 8;
+  const hourHeight = 60;
+  const timeCol = document.querySelector("#timeCol");
+  for (let hour = 8; hour <= 23; hour += 1) {
+    const label = document.createElement("span");
+    label.className = "time-label";
+    label.style.top = `${(hour - startHour) * hourHeight}px`;
+    const date = new Date(Date.UTC(2020, 0, 1, hour));
+    label.textContent = new Intl.DateTimeFormat("en-PH", { hour: "numeric", timeZone: "UTC" }).format(date);
+    timeCol.append(label);
+  }
+  const end = document.createElement("span");
+  end.className = "time-label end";
+  end.style.top = "960px";
+  end.textContent = "11:59 PM";
+  timeCol.append(end);
+  document.querySelectorAll(".day-col").forEach((col) => {
+    const rule = document.createElement("div");
+    rule.className = "end-rule";
+    col.append(rule);
+  });
+  const weekBtn = document.querySelector("#weekBtn");
+  const dayBtn = document.querySelector("#dayBtn");
+  const weekView = document.querySelector("#weekView");
+  const dayView = document.querySelector("#dayView");
+  weekBtn.addEventListener("click", () => {
+    weekBtn.classList.add("active"); dayBtn.classList.remove("active");
+    weekView.style.display = ""; dayView.style.display = "none";
+  });
+  dayBtn.addEventListener("click", () => {
+    dayBtn.classList.add("active"); weekBtn.classList.remove("active");
+    dayView.style.display = ""; weekView.style.display = "none";
+  });
+</script>
+</body>
+</html>

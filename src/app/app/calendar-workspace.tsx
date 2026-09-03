@@ -6,6 +6,7 @@ import { combinedServiceDuration, manilaDate, shiftManilaDate, type BookingStatu
 import type { StaffRecord } from "@/lib/data/staff";
 import { CustomerSelect } from "./customer-select";
 import { WORKSPACE_REFRESH_EVENT } from "./workspace-refresh";
+import { calendarBodyHeight, calendarEndLabel, calendarEventStyle, calendarHeaderHeight, calendarHourLabels, calendarMinuteTop, isCalendarMinuteVisible } from "./calendar-geometry";
 import { layoutOverlappingAppointments } from "./calendar-layout";
 import { CalendarGridSkeleton, DayListSkeleton } from "./staff-skeletons";
 import { cn } from "@/lib/utils";
@@ -32,9 +33,6 @@ type Props = {
 };
 
 const dayNames = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
-const gridStartHour = 8;
-const gridEndHour = 21;
-const hourHeight = 60;
 
 export function CalendarWorkspace(props: Props) {
   const [mode, setMode] = useState<"week" | "day">("week");
@@ -115,23 +113,24 @@ function WeekCalendar({ days, anchor, appointments, now, onSelectDate, onSelectA
 }) {
   const today = manilaDate(now);
   const currentMinutes = manilaMinutes(now.toISOString());
-  const showNow = days.includes(today) && currentMinutes >= gridStartHour * 60 && currentMinutes <= gridEndHour * 60;
+  const showNow = days.includes(today) && isCalendarMinuteVisible(currentMinutes);
   return <div className="overflow-x-auto [scrollbar-color:#d5aa89_transparent] [scrollbar-width:thin]">
-    <div className="relative grid min-w-[1000px] grid-cols-[64px_repeat(var(--calendar-days),minmax(132px,1fr))] grid-rows-[64px_780px] bg-[#fff9eb] max-[760px]:min-w-[884px] max-[760px]:grid-cols-[58px_repeat(var(--calendar-days),minmax(118px,1fr))]" style={{ "--calendar-days": days.length } as React.CSSProperties}>
+    <div className="relative grid min-w-[1000px] grid-cols-[64px_repeat(var(--calendar-days),minmax(132px,1fr))] bg-[#fff9eb] max-[760px]:min-w-[884px] max-[760px]:grid-cols-[58px_repeat(var(--calendar-days),minmax(118px,1fr))]" style={{ "--calendar-days": days.length, gridTemplateRows: `${calendarHeaderHeight}px ${calendarBodyHeight}px` } as React.CSSProperties}>
       <div className="sticky top-0 z-5 flex flex-col items-center justify-center gap-0.5 border-b-[1.5px] border-hippy-ink bg-[#f0d09d] text-[#a24429] [&>svg]:w-4 [&>span]:text-[7px] [&>span]:font-extrabold [&>span]:tracking-[.5px]"><Clock3/><span>GMT+8</span></div>
       {days.map((date) => <button type="button" className={cn("sticky top-0 z-5 flex cursor-pointer flex-col items-center justify-center border-0 border-b-[1.5px] border-l border-dashed border-b-hippy-ink border-l-[#bb7f5d] bg-[#f0d09d] text-[#4b342c] transition hover:bg-[#f7bc73] [&>span]:text-[8px] [&>span]:font-[750] [&>span]:tracking-[.6px] [&>span]:text-[#80675d] [&>small]:text-[8px] [&>small]:font-[750] [&>small]:tracking-[.6px] [&>small]:text-[#80675d] [&>strong]:my-0.5 [&>strong]:grid [&>strong]:size-[29px] [&>strong]:place-items-center [&>strong]:rounded-full [&>strong]:text-[13px] [&>strong]:font-[750]", date === today && "bg-[#f5dd9d] [&>strong]:text-[#b54c28] [&>strong]:shadow-[inset_0_0_0_1.5px_#d96032]", date === anchor && "bg-hippy-orange [&>span]:text-[#fff4dd] [&>small]:text-[#fff4dd] [&>strong]:bg-[#fff4d7] [&>strong]:text-[#9f3d22] [&>strong]:shadow-[2px_2px_0_#3b2923]")} key={date} onClick={() => onSelectDate(date)} aria-label={`Open day view for ${formatLongDate(date)}`}>
         <span>{dayNames[weekday(date)]}</span><strong>{date.slice(8)}</strong><small>{formatMonth(date)}</small>
       </button>)}
-      <div className="relative z-2 border-r-[1.5px] border-hippy-ink bg-[#f7e4bd]">{Array.from({ length: gridEndHour - gridStartHour + 1 }, (_, index) => <span className="absolute right-2.5 translate-y-[5px] text-[8px] font-[650] text-[#8b7166]" key={index} style={{ top: index * hourHeight }}>{formatHour(gridStartHour + index)}</span>)}</div>
+      <div className="relative z-2 border-r-[1.5px] border-hippy-ink bg-[#f7e4bd]">{calendarHourLabels().map(({ hour, top }) => <span className="absolute right-2.5 translate-y-[5px] text-[8px] font-[650] text-[#8b7166]" key={hour} style={{ top }}>{formatHour(hour)}</span>)}<span className="absolute right-2.5 -translate-y-full text-[8px] font-black text-[#b74827]" style={{ top: calendarBodyHeight }}>{calendarEndLabel}</span></div>
       {days.map((date) => {
         const positionedAppointments = layoutOverlappingAppointments(appointments.filter((item) => manilaDate(item.starts_at) === date));
         return <div className={cn("relative border-l border-dashed border-[#c79370] bg-[#fff9eb] bg-[repeating-linear-gradient(to_bottom,transparent_0,transparent_59px,#d9b493_60px)]", date === today && "bg-[#f9edcf]", date === anchor && "bg-[#fbe5c9]")} key={date}>
         {positionedAppointments.map(({ item, lane, laneCount }) => {
           const start = manilaMinutes(item.starts_at); const end = manilaMinutes(item.ends_at); const piercer = one(item.staff_profiles); const station = one(item.stations);
           const accessibleLabel = `${formatTime(item.starts_at)} to ${formatTime(item.ends_at)}, ${clientName(item)}, ${servicesLabel(item)}, ${piercer?.display_name ?? "Unassigned"}, ${station?.name ?? "No station"}`;
+          const eventStyle = calendarEventStyle(start, end);
           return <button type="button" key={item.id} className={cn("absolute left-[calc((100%/var(--event-lanes))*var(--event-lane)+4px)] z-2 min-h-[34px] w-[calc(100%/var(--event-lanes)-8px)] cursor-pointer overflow-hidden rounded-[10px_7px_11px_8px] border border-l-[5px] border-hippy-ink border-l-[var(--event-color)] bg-[color-mix(in_srgb,var(--event-color)_25%,#fff6df)] px-2 py-1.5 text-left text-[#432e27] shadow-[2px_2px_0_#3b2923] transition hover:z-7 hover:-translate-x-px hover:-translate-y-0.5 hover:shadow-[4px_5px_0_#3b2923] focus-visible:z-7 focus-visible:-translate-x-px focus-visible:-translate-y-0.5 focus-visible:shadow-[4px_5px_0_#3b2923] [&>strong]:block [&>strong]:overflow-hidden [&>strong]:text-[9px] [&>strong]:text-ellipsis [&>strong]:whitespace-nowrap [&>small]:mt-0.5 [&>small]:block [&>small]:overflow-hidden [&>small]:text-[8px] [&>small]:text-ellipsis [&>small]:whitespace-nowrap [&>i]:mt-0.5 [&>i]:block [&>i]:overflow-hidden [&>i]:text-[8px] [&>i]:text-ellipsis [&>i]:whitespace-nowrap [&>i]:not-italic [&>i]:text-[#765d53]", item.status === "completed" && "opacity-70")} style={{
-            top: Math.max(0, (start - gridStartHour * 60) * hourHeight / 60),
-            height: Math.max(34, (end - start) * hourHeight / 60),
+            top: eventStyle.top,
+            height: eventStyle.height,
             "--event-color": piercer?.color ?? "#e86f2c",
             "--event-lane": lane,
             "--event-lanes": laneCount,
@@ -142,7 +141,7 @@ function WeekCalendar({ days, anchor, appointments, now, onSelectDate, onSelectA
           </button>;
         })}
       </div>;})}
-      {showNow && <div className="pointer-events-none absolute right-0 left-[60px] z-8 h-0.5 bg-[#b94735] max-[760px]:left-[54px]" style={{ top: 64 + (currentMinutes - gridStartHour * 60) * hourHeight / 60 }} aria-hidden="true"><span className="absolute top-1/2 left-0 size-2.5 -translate-y-1/2 rounded-full border-[1.5px] border-hippy-ink bg-hippy-orange"/></div>}
+      {showNow && <div className="pointer-events-none absolute right-0 left-[60px] z-8 h-0.5 bg-[#b94735] max-[760px]:left-[54px]" style={{ top: calendarHeaderHeight + calendarMinuteTop(currentMinutes) }} aria-hidden="true"><span className="absolute top-1/2 left-0 size-2.5 -translate-y-1/2 rounded-full border-[1.5px] border-hippy-ink bg-hippy-orange"/></div>}
     </div>
   </div>;
 }
