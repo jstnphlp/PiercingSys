@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(55);
+select plan(57);
 
 select has_table('public', 'studio_settings', 'singleton studio settings exists');
 select has_table('public', 'staff_profiles', 'staff profiles replace memberships');
@@ -14,6 +14,13 @@ select has_function('public', 'reschedule_booking', array['uuid','timestamp with
 select has_function('public', 'complete_booking_and_create_sale', array['uuid'], 'appointment completion creates a sale atomically');
 select has_function('public', 'complete_draft_sale', array['uuid'], 'draft completion validation exists');
 select has_function('public', 'current_staff_role', array[]::text[], 'role helper exists');
+select has_function('public', 'staff_reference_data', array[]::text[], 'staff reference bundle exists');
+select ok(
+  not has_function_privilege('anon', 'public.staff_reference_data()', 'execute')
+    and not has_function_privilege('authenticated', 'public.staff_reference_data()', 'execute')
+    and has_function_privilege('service_role', 'public.staff_reference_data()', 'execute'),
+  'staff reference bundle is server-only'
+);
 select policies_are('public', 'sales', array['management_manage_sales'], 'sales are management-only under RLS');
 select policies_are('public', 'bookings', array['management_manage_bookings','permitted_booking_read','piercer_update_own_bookings'], 'booking policies cover management and assigned piercers');
 select has_table('public', 'booking_services', 'ordered appointment service snapshots exist');

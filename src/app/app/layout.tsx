@@ -9,6 +9,9 @@ import { StaffShellLoading } from "./staff-shell-loading";
 import { WorkspaceRefreshProvider } from "./workspace-refresh";
 
 export const metadata: Metadata = { title: "Studio operations" };
+// Authentication is request-time and may redirect before an app shell can be
+// prerendered. Child pages remain opted into sibling-navigation validation.
+export const instant = false;
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   return (

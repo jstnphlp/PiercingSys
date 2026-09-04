@@ -1,5 +1,6 @@
 import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
+import { cache } from "react";
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
 import type {
   BookingStatus,
@@ -202,171 +203,159 @@ function errors(...values: Array<QueryError | string>) {
     .join(" ") || null;
 }
 
-async function getStudioReference(): Promise<DataResult<{ studio: StudioSettings }>> {
+type StaffReferenceBundleRow = {
+  studio: {
+    id: number;
+    name: string;
+    location: string;
+    address: string;
+    email: string;
+    phone: string;
+    instagram_url: string;
+    business_hours: StudioSettings["businessHours"];
+    booking_interval_minutes: number;
+    minimum_lead_hours: number;
+    booking_horizon_days: number;
+    minimum_age: number;
+    cancellation_policy: string;
+  } | null;
+  services: Array<{
+    id: string;
+    name: string;
+    description: string;
+    body_area: string;
+    category: Service["category"];
+    duration_minutes: number;
+    price_cents: number | null;
+    min_price_cents: number | null;
+    max_price_cents: number | null;
+    price_unit: string | null;
+    is_active: boolean;
+  }>;
+  staff: Array<{
+    user_id: string;
+    display_name: string;
+    role: string;
+    active: boolean;
+    color: string;
+  }>;
+  assignments: Array<{ service_id: string; staff_id: string }>;
+  stations: Array<{ id: string; name: string }>;
+  availability: Array<{
+    id: string;
+    staff_id: string;
+    weekday: number;
+    starts_at: string;
+    ends_at: string;
+    availability_date: string | null;
+  }>;
+  closures: Array<{
+    id: string;
+    starts_at: string;
+    ends_at: string;
+    reason: string | null;
+  }>;
+};
+
+type StaffReferenceBundle = DataResult<{
+  studio: StudioSettings;
+  services: Service[];
+  staff: StaffRecord[];
+  serviceAssignments: Array<{ serviceId: string; staffId: string }>;
+  stations: Array<{ id: string; name: string }>;
+  availability: AvailabilityRecord[];
+  closures: ClosureRecord[];
+}>;
+
+async function getStaffReferenceBundle(): Promise<StaffReferenceBundle> {
   "use cache";
-  cacheLife("minutes");
+  cacheLife("hours");
   cacheTag("staff-reference");
 
   const admin = createSupabaseAdminClient();
-  if (!admin) return { studio: seededStudio, error: "Supabase is not configured." };
-  const result = await measureServerTiming("staff.reference.studio", () => admin
-    .from("studio_settings")
-    .select("id,name,location,address,email,phone,instagram_url,business_hours,booking_interval_minutes,minimum_lead_hours,booking_horizon_days,minimum_age,cancellation_policy")
-    .eq("id", 1)
-    .single());
-  const row = result.data;
+  if (!admin) return {
+    studio: seededStudio,
+    services: [],
+    staff: [],
+    serviceAssignments: [],
+    stations: [],
+    availability: [],
+    closures: [],
+    error: "Supabase is not configured.",
+  };
+  const result = await measureServerTiming(
+    "staff.reference.bundle.load",
+    () => admin.rpc("staff_reference_data"),
+  );
+  const row = result.data as unknown as StaffReferenceBundleRow | null;
+  const studio = row?.studio;
   return {
-    studio: row ? {
-      id: row.id,
-      name: row.name,
-      location: row.location,
-      address: row.address,
-      email: row.email,
-      phone: row.phone,
-      instagramUrl: row.instagram_url,
+    studio: studio ? {
+      id: studio.id,
+      name: studio.name,
+      location: studio.location,
+      address: studio.address,
+      email: studio.email,
+      phone: studio.phone,
+      instagramUrl: studio.instagram_url,
       timezone: "Asia/Manila" as const,
       currency: "PHP" as const,
-      businessHours: row.business_hours,
-      bookingIntervalMinutes: row.booking_interval_minutes,
-      minimumLeadHours: row.minimum_lead_hours,
-      bookingHorizonDays: row.booking_horizon_days,
-      minimumAge: row.minimum_age,
-      cancellationPolicy: row.cancellation_policy,
+      businessHours: studio.business_hours,
+      bookingIntervalMinutes: studio.booking_interval_minutes,
+      minimumLeadHours: studio.minimum_lead_hours,
+      bookingHorizonDays: studio.booking_horizon_days,
+      minimumAge: studio.minimum_age,
+      cancellationPolicy: studio.cancellation_policy,
     } : seededStudio,
-    error: errors(result.error),
-  };
-}
-
-async function getServicesReference(): Promise<DataResult<{ services: Service[] }>> {
-  "use cache";
-  cacheLife("minutes");
-  cacheTag("staff-reference");
-
-  const admin = createSupabaseAdminClient();
-  if (!admin) return { services: [], error: "Supabase is not configured." };
-  const result = await measureServerTiming("staff.reference.services", () => admin
-    .from("services")
-    .select("id,name,description,body_area,category,duration_minutes,price_cents,min_price_cents,max_price_cents,price_unit,is_active,sort_order")
-    .order("sort_order"));
-  return {
-    services: (result.data ?? []).map((row) => ({
-      id: row.id,
-      name: row.name,
-      description: row.description,
-      bodyArea: row.body_area,
-      category: row.category as Service["category"],
-      durationMinutes: row.duration_minutes,
-      priceCents: row.price_cents,
-      minPriceCents: row.min_price_cents,
-      maxPriceCents: row.max_price_cents,
-      priceUnit: row.price_unit,
-      isActive: row.is_active,
+    services: (row?.services ?? []).map((service) => ({
+      id: service.id,
+      name: service.name,
+      description: service.description,
+      bodyArea: service.body_area,
+      category: service.category,
+      durationMinutes: service.duration_minutes,
+      priceCents: service.price_cents,
+      minPriceCents: service.min_price_cents,
+      maxPriceCents: service.max_price_cents,
+      priceUnit: service.price_unit,
+      isActive: service.is_active,
+    })),
+    staff: (row?.staff ?? []).map((person) => ({
+      id: person.user_id,
+      displayName: person.display_name,
+      role: person.role,
+      active: person.active,
+      color: person.color,
+    })),
+    serviceAssignments: (row?.assignments ?? []).map((assignment) => ({
+      serviceId: assignment.service_id,
+      staffId: assignment.staff_id,
+    })),
+    stations: row?.stations ?? [],
+    availability: (row?.availability ?? []).map((entry) => ({
+      id: entry.id,
+      staffId: entry.staff_id,
+      weekday: entry.weekday,
+      startsAt: entry.starts_at,
+      endsAt: entry.ends_at,
+      availabilityDate: entry.availability_date,
+    })),
+    closures: (row?.closures ?? []).map((closure) => ({
+      id: closure.id,
+      startsAt: closure.starts_at,
+      endsAt: closure.ends_at,
+      reason: closure.reason,
     })),
     error: errors(result.error),
   };
 }
 
-async function getStaffReference(): Promise<DataResult<{ staff: StaffRecord[] }>> {
-  "use cache";
-  cacheLife("minutes");
-  cacheTag("staff-reference");
-
-  const admin = createSupabaseAdminClient();
-  if (!admin) return { staff: [], error: "Supabase is not configured." };
-  const result = await measureServerTiming("staff.reference.team", () => admin
-    .from("staff_profiles")
-    .select("user_id,display_name,role,active,color")
-    .order("created_at"));
-  return {
-    staff: (result.data ?? []).map((row) => ({
-      id: row.user_id,
-      displayName: row.display_name,
-      role: row.role,
-      active: row.active,
-      color: row.color,
-    })),
-    error: errors(result.error),
-  };
-}
-
-async function getServiceAssignmentsReference(): Promise<DataResult<{ serviceAssignments: Array<{ serviceId: string; staffId: string }> }>> {
-  "use cache";
-  cacheLife("minutes");
-  cacheTag("staff-reference");
-
-  const admin = createSupabaseAdminClient();
-  if (!admin) return { serviceAssignments: [], error: "Supabase is not configured." };
-  const result = await measureServerTiming("staff.reference.assignments", () => admin
-    .from("service_staff")
-    .select("service_id,staff_id"));
-  return {
-    serviceAssignments: (result.data ?? []).map((row) => ({ serviceId: row.service_id, staffId: row.staff_id })),
-    error: errors(result.error),
-  };
-}
-
-async function getStationsReference(): Promise<DataResult<{ stations: Array<{ id: string; name: string }> }>> {
-  "use cache";
-  cacheLife("minutes");
-  cacheTag("staff-reference");
-
-  const admin = createSupabaseAdminClient();
-  if (!admin) return { stations: [], error: "Supabase is not configured." };
-  const result = await measureServerTiming("staff.reference.stations", () => admin
-    .from("stations")
-    .select("id,name")
-    .eq("active", true)
-    .order("name"));
-  return { stations: result.data ?? [], error: errors(result.error) };
-}
-
-async function getAvailabilityReference(): Promise<DataResult<{ availability: AvailabilityRecord[] }>> {
-  "use cache";
-  cacheLife("minutes");
-  cacheTag("staff-reference");
-
-  const admin = createSupabaseAdminClient();
-  if (!admin) return { availability: [], error: "Supabase is not configured." };
-  const result = await measureServerTiming("staff.reference.availability", () => admin
-    .from("staff_availability")
-    .select("id,staff_id,weekday,starts_at,ends_at,availability_date")
-    .order("weekday")
-    .order("starts_at"));
-  return {
-    availability: (result.data ?? []).map((row) => ({
-      id: row.id,
-      staffId: row.staff_id,
-      weekday: row.weekday,
-      startsAt: row.starts_at,
-      endsAt: row.ends_at,
-      availabilityDate: row.availability_date,
-    })),
-    error: errors(result.error),
-  };
-}
-
-async function getClosuresReference(): Promise<DataResult<{ closures: ClosureRecord[] }>> {
-  "use cache";
-  cacheLife("minutes");
-  cacheTag("staff-reference");
-
-  const admin = createSupabaseAdminClient();
-  if (!admin) return { closures: [], error: "Supabase is not configured." };
-  const result = await measureServerTiming("staff.reference.closures", () => admin
-    .from("closures")
-    .select("id,starts_at,ends_at,reason")
-    .order("starts_at", { ascending: false })
-    .limit(100));
-  return {
-    closures: (result.data ?? []).map((row) => ({
-      id: row.id,
-      startsAt: row.starts_at,
-      endsAt: row.ends_at,
-      reason: row.reason,
-    })),
-    error: errors(result.error),
-  };
-}
+const readStaffReferenceBundle = cache(function readStaffReferenceBundle() {
+  return measureServerTiming(
+    "staff.reference.bundle.cacheRead",
+    getStaffReferenceBundle,
+  );
+});
 
 export async function getOverviewBookings(): Promise<DataResult<{ bookings: BookingRecord[] }>> {
   const supabase = await createSupabaseServerClient();
@@ -431,20 +420,17 @@ export async function getOverviewReadiness(
   const deliveryPromise = includeNotifications
     ? getPendingDeliveryCount()
     : Promise.resolve({ pendingDeliveryCount: 0, error: null });
-  const [studio, services, staff, assignments, deliveries] = await Promise.all([
-    getStudioReference(),
-    getServicesReference(),
-    getStaffReference(),
-    getServiceAssignmentsReference(),
+  const [reference, deliveries] = await Promise.all([
+    readStaffReferenceBundle(),
     deliveryPromise,
   ]);
   return {
-    studio: studio.studio,
-    services: services.services,
-    staff: staff.staff,
-    serviceAssignments: assignments.serviceAssignments,
+    studio: reference.studio,
+    services: reference.services,
+    staff: reference.staff,
+    serviceAssignments: reference.serviceAssignments,
     pendingDeliveryCount: deliveries.pendingDeliveryCount,
-    error: errors(studio.error ?? "", services.error ?? "", staff.error ?? "", assignments.error ?? "", deliveries.error ?? ""),
+    error: errors(reference.error ?? "", deliveries.error ?? ""),
   };
 }
 
@@ -459,22 +445,15 @@ async function getPendingDeliveryCount(): Promise<DataResult<{ pendingDeliveryCo
 }
 
 export async function getCalendarReferenceData() {
-  const [studio, services, staff, assignments, stations, availability] = await Promise.all([
-    getStudioReference(),
-    getServicesReference(),
-    getStaffReference(),
-    getServiceAssignmentsReference(),
-    getStationsReference(),
-    getAvailabilityReference(),
-  ]);
+  const reference = await readStaffReferenceBundle();
   return {
-    studio: studio.studio,
-    services: services.services,
-    staff: staff.staff,
-    serviceAssignments: assignments.serviceAssignments,
-    stations: stations.stations,
-    availability: availability.availability,
-    error: errors(studio.error ?? "", services.error ?? "", staff.error ?? "", assignments.error ?? "", stations.error ?? "", availability.error ?? ""),
+    studio: reference.studio,
+    services: reference.services,
+    staff: reference.staff,
+    serviceAssignments: reference.serviceAssignments,
+    stations: reference.stations,
+    availability: reference.availability,
+    error: reference.error,
   };
 }
 
@@ -532,8 +511,8 @@ export async function getClientsPage(): Promise<DataResult<{ customers: Customer
 export async function getSalesPage(): Promise<DataResult<{ sales: SaleRecord[]; services: Service[]; page: PageMeta }>> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return { sales: [], services: [], page: pageMeta(1, 25, 0), error: "Supabase is not configured." };
-  const [services, salesResult] = await Promise.all([
-    getServicesReference(),
+  const [reference, salesResult] = await Promise.all([
+    readStaffReferenceBundle(),
     measureServerTiming("staff.sales.page", () => supabase
       .from("sales")
       .select(saleDetailSelect, { count: "exact" })
@@ -542,10 +521,10 @@ export async function getSalesPage(): Promise<DataResult<{ sales: SaleRecord[]; 
       .range(0, 24)),
   ]);
   return {
-    services: services.services,
+    services: reference.services,
     sales: (salesResult.data ?? []).map((row) => mapSaleRow(row as Record<string, unknown>)),
     page: pageMeta(1, 25, salesResult.count ?? 0),
-    error: errors(services.error ?? "", salesResult.error),
+    error: errors(reference.error ?? "", salesResult.error),
   };
 }
 
@@ -595,48 +574,37 @@ export async function getReportsData(
 }
 
 export async function getSettingsStudioData() {
-  return getStudioReference();
+  const reference = await readStaffReferenceBundle();
+  return { studio: reference.studio, error: reference.error };
 }
 
 export async function getSettingsScheduleData() {
-  const [studio, staff, availability, closures] = await Promise.all([
-    getStudioReference(),
-    getStaffReference(),
-    getAvailabilityReference(),
-    getClosuresReference(),
-  ]);
+  const reference = await readStaffReferenceBundle();
   return {
-    studio: studio.studio,
-    staff: staff.staff,
-    availability: availability.availability,
-    closures: closures.closures,
-    error: errors(studio.error ?? "", staff.error ?? "", availability.error ?? "", closures.error ?? ""),
+    studio: reference.studio,
+    staff: reference.staff,
+    availability: reference.availability,
+    closures: reference.closures,
+    error: reference.error,
   };
 }
 
 export async function getSettingsServicesData() {
-  const [services, staff, assignments] = await Promise.all([
-    getServicesReference(),
-    getStaffReference(),
-    getServiceAssignmentsReference(),
-  ]);
+  const reference = await readStaffReferenceBundle();
   return {
-    services: services.services,
-    staff: staff.staff,
-    serviceAssignments: assignments.serviceAssignments,
-    error: errors(services.error ?? "", staff.error ?? "", assignments.error ?? ""),
+    services: reference.services,
+    staff: reference.staff,
+    serviceAssignments: reference.serviceAssignments,
+    error: reference.error,
   };
 }
 
 export async function getSettingsTeamData() {
-  const [staff, stations] = await Promise.all([
-    getStaffReference(),
-    getStationsReference(),
-  ]);
+  const reference = await readStaffReferenceBundle();
   return {
-    staff: staff.staff,
-    stations: stations.stations,
-    error: errors(staff.error ?? "", stations.error ?? ""),
+    staff: reference.staff,
+    stations: reference.stations,
+    error: reference.error,
   };
 }
 

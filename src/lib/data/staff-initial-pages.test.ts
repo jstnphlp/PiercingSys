@@ -54,8 +54,31 @@ describe("initial staff page data", () => {
   });
 
   it("returns authoritative first-page metadata with sales", async () => {
-    const serviceQuery = createQuery({ data: [], error: null });
-    createSupabaseAdminClient.mockReturnValue({ from: vi.fn(() => serviceQuery) });
+    const referenceRpc = vi.fn().mockResolvedValue({
+      data: {
+        studio: null,
+        services: [{
+          id: "service-1",
+          name: "Lobe",
+          description: "",
+          body_area: "Ear",
+          category: "Ear Piercings",
+          duration_minutes: 30,
+          price_cents: 50_000,
+          min_price_cents: null,
+          max_price_cents: null,
+          price_unit: null,
+          is_active: true,
+        }],
+        staff: [],
+        assignments: [],
+        stations: [],
+        availability: [],
+        closures: [],
+      },
+      error: null,
+    });
+    createSupabaseAdminClient.mockReturnValue({ rpc: referenceRpc });
     const salesQuery = createQuery({ data: [], error: null, count: 27 });
     createSupabaseServerClient.mockResolvedValue({ from: vi.fn(() => salesQuery) });
 
@@ -63,6 +86,12 @@ describe("initial staff page data", () => {
 
     expect(salesQuery.select).toHaveBeenCalledWith(saleDetailSelect, { count: "exact" });
     expect(salesQuery.range).toHaveBeenCalledWith(0, 24);
+    expect(referenceRpc).toHaveBeenCalledWith("staff_reference_data");
+    expect(data.services).toEqual([expect.objectContaining({
+      id: "service-1",
+      durationMinutes: 30,
+      priceCents: 50_000,
+    })]);
     expect(data.page).toEqual({ number: 1, size: 25, total: 27, totalPages: 2 });
   });
 
