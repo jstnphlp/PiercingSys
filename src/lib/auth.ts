@@ -7,7 +7,7 @@ import { measureServerTiming } from "@/lib/server-timing";
 export type StaffSession = { userId: string; email: string; displayName: string; role: StaffRole };
 
 export const getStaffSession = cache(async (): Promise<StaffSession | null> => {
-  return measureServerTiming("auth.session", async () => {
+  return measureServerTiming("auth.session.total", async () => {
     const supabase = await createSupabaseServerClient();
     if (!supabase) return null;
     const { data: claimsData } = await measureServerTiming(

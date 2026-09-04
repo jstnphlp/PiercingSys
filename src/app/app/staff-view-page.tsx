@@ -35,6 +35,7 @@ import {
   getSettingsTeamData,
 } from "@/lib/data/staff";
 import { resolveReportPeriod, type ReportPeriod, type ReportPreset } from "@/lib/report-period";
+import { measureServerTiming, measureServerTimingGroup } from "@/lib/server-timing";
 import {
   InviteForm,
   ServiceAssignmentForm,
@@ -121,11 +122,17 @@ function viewContent(
 }
 
 function Overview({ role }: { role: string }) {
-  const bookings = getOverviewBookings();
-  const customerCount = getOverviewCustomerCount();
-  const revenue = role === "piercer"
-    ? Promise.resolve({ completedRevenueCents: 0, completedSaleCount: 0, error: null })
-    : getOverviewRevenue();
+  const [bookings, customerCount, revenue, readiness] = measureServerTimingGroup(
+    "staff.page.overview.total",
+    () => [
+      getOverviewBookings(),
+      getOverviewCustomerCount(),
+      role === "piercer"
+        ? Promise.resolve({ completedRevenueCents: 0, completedSaleCount: 0, error: null })
+        : getOverviewRevenue(),
+      getOverviewReadiness(role !== "piercer"),
+    ] as const,
+  );
 
   return (
     <div className={featureView}>
@@ -137,7 +144,7 @@ function Overview({ role }: { role: string }) {
           <OverviewAppointments bookings={bookings} role={role} />
         </Suspense>
         <Suspense fallback={<OverviewReadinessSkeleton />}>
-          <OverviewReadiness role={role} />
+          <OverviewReadiness data={readiness} role={role} />
         </Suspense>
       </div>
     </div>
@@ -184,8 +191,14 @@ async function OverviewAppointments({
     : <TodayAppointments bookings={data.bookings} role={role} />;
 }
 
-async function OverviewReadiness({ role }: { role: string }) {
-  const data = await getOverviewReadiness(role !== "piercer");
+async function OverviewReadiness({
+  data: readiness,
+  role,
+}: {
+  data: ReturnType<typeof getOverviewReadiness>;
+  role: string;
+}) {
+  const data = await readiness;
   if (data.error) return <StateCard title="Studio readiness could not be loaded" detail={data.error} />;
   const activeServices = data.services.filter((item) => item.isActive);
   const hasActiveServices = activeServices.length > 0;
@@ -248,21 +261,24 @@ async function Calendar({ role, userId }: { role: string; userId: string }) {
   const initialFrom = manilaDateTime(initialDays[0], "00:00").toISOString();
   const nextDay = shiftManilaDate(initialDays.at(-1)!, 1);
   const initialTo = new Date(manilaDateTime(nextDay, "00:00").getTime() - 1).toISOString();
-  const [data, appointmentData] = await Promise.all([
-    getCalendarReferenceData(),
-    getCalendarAppointments({
-      from: initialFrom,
-      to: initialTo,
-      piercerId: role === "piercer" ? userId : undefined,
-    }),
-  ]);
+  const [data, appointmentData] = await measureServerTiming(
+    "staff.page.calendar.total",
+    () => Promise.all([
+      getCalendarReferenceData(),
+      getCalendarAppointments({
+        from: initialFrom,
+        to: initialTo,
+        piercerId: role === "piercer" ? userId : undefined,
+      }),
+    ]),
+  );
   const error = [data.error, appointmentData.error].filter(Boolean).join(" ");
   if (error) return <StateCard title="Calendar could not be loaded" detail={error} />;
   return <CalendarWorkspace role={role} userId={userId} services={data.services} staff={data.staff} assignments={data.serviceAssignments} stations={data.stations} studio={data.studio} availability={data.availability} initialDate={initialDate} initialNow={now.toISOString()} initialAppointments={appointmentData.appointments} />;
 }
 
 async function Clients({ role }: { role: string }) {
-  const data = await getClientsPage();
+  const data = await measureServerTiming("staff.page.clients.total", getClientsPage);
   if (data.error) return <StateCard title="Clients could not be loaded" detail={data.error} />;
   return (
     <div className={featureView}>
@@ -276,7 +292,7 @@ async function Clients({ role }: { role: string }) {
 }
 
 async function Sales() {
-  const data = await getSalesPage();
+  const data = await measureServerTiming("staff.page.sales.total", getSalesPage);
   if (data.error) return <StateCard title="Sales could not be loaded" detail={data.error} />;
   return <SalesView initialSales={data.sales} initialPage={data.page} services={data.services} />;
 }
@@ -290,7 +306,10 @@ const reportPresets: Array<{ value: ReportPreset; label: string }> = [
 ];
 
 async function Reports({ period }: { period: ReportPeriod }) {
-  const data = await getReportsData(period);
+  const data = await measureServerTiming(
+    "staff.page.reports.total",
+    () => getReportsData(period),
+  );
   if (data.error) return <StateCard title="Reports could not be loaded" detail={data.error} />;
   const presetLinks = reportPresets.map((item) => {
     const resolved = resolveReportPeriod({ period: item.value });
@@ -322,14 +341,25 @@ function StudioSettings({
   role: string;
   section: SettingsSection | null;
 }) {
+  const [studio, schedule, services, team, deliveries] = measureServerTimingGroup(
+    "staff.page.settings.total",
+    () => [
+      getSettingsStudioData(),
+      getSettingsScheduleData(),
+      getSettingsServicesData(),
+      getSettingsTeamData(),
+      getSettingsDeliveries(),
+    ] as const,
+  );
+
   return (
     <div className={featureView}>
       <SettingsSectionFocus section={section} />
       <div className={settingsStack}>
-        <Suspense fallback={<SettingsFormSkeleton />}><SettingsGeneral /></Suspense>
-        <Suspense fallback={<SettingsScheduleSkeleton />}><SettingsSchedule /></Suspense>
-        <Suspense fallback={<SettingsListSkeleton />}><SettingsServices /></Suspense>
-        <Suspense fallback={<SettingsListSkeleton rows={5} />}><SettingsTeam role={role} /></Suspense>
+        <Suspense fallback={<SettingsFormSkeleton />}><SettingsGeneral data={studio} /></Suspense>
+        <Suspense fallback={<SettingsScheduleSkeleton />}><SettingsSchedule data={schedule} /></Suspense>
+        <Suspense fallback={<SettingsListSkeleton />}><SettingsServices data={services} /></Suspense>
+        <Suspense fallback={<SettingsListSkeleton rows={5} />}><SettingsTeam data={team} role={role} /></Suspense>
         <section className={twoPanel}>
           <div id="studio-settings-notifications" className={settingSection} tabIndex={-1}>
             <PanelHead
@@ -341,29 +371,41 @@ function StudioSettings({
               appointment once submitted.
             </p>
           </div>
-          <Suspense fallback={<SettingsNotificationSkeleton />}><SettingsNotifications /></Suspense>
+          <Suspense fallback={<SettingsNotificationSkeleton />}><SettingsNotifications data={deliveries} /></Suspense>
         </section>
       </div>
     </div>
   );
 }
 
-async function SettingsGeneral() {
-  const data = await getSettingsStudioData();
+async function SettingsGeneral({
+  data: pending,
+}: {
+  data: ReturnType<typeof getSettingsStudioData>;
+}) {
+  const data = await pending;
   return data.error
     ? <StateCard title="Studio settings could not be loaded" detail={data.error} />
     : <SettingsForm studio={data.studio} />;
 }
 
-async function SettingsSchedule() {
-  const data = await getSettingsScheduleData();
+async function SettingsSchedule({
+  data: pending,
+}: {
+  data: ReturnType<typeof getSettingsScheduleData>;
+}) {
+  const data = await pending;
   return data.error
     ? <StateCard title="Schedule settings could not be loaded" detail={data.error} />
     : <ScheduleSettings studio={data.studio} staff={data.staff} availability={data.availability} closures={data.closures} sectionId="studio-settings-hours" initialDate={manilaDate(new Date())} />;
 }
 
-async function SettingsServices() {
-  const data = await getSettingsServicesData();
+async function SettingsServices({
+  data: pending,
+}: {
+  data: ReturnType<typeof getSettingsServicesData>;
+}) {
+  const data = await pending;
   if (data.error) return <StateCard title="Services could not be loaded" detail={data.error} />;
   return <section id="studio-settings-services" className={settingSection} tabIndex={-1}>
           <PanelHead
@@ -382,8 +424,14 @@ async function SettingsServices() {
         </section>;
 }
 
-async function SettingsTeam({ role }: { role: string }) {
-  const data = await getSettingsTeamData();
+async function SettingsTeam({
+  data: pending,
+  role,
+}: {
+  data: ReturnType<typeof getSettingsTeamData>;
+  role: string;
+}) {
+  const data = await pending;
   if (data.error) return <StateCard title="Team settings could not be loaded" detail={data.error} />;
   return <section id="studio-settings-team" className={settingSection} tabIndex={-1}>
           <PanelHead
@@ -414,8 +462,12 @@ async function SettingsTeam({ role }: { role: string }) {
         </section>;
 }
 
-async function SettingsNotifications() {
-  const data = await getSettingsDeliveries();
+async function SettingsNotifications({
+  data: pending,
+}: {
+  data: ReturnType<typeof getSettingsDeliveries>;
+}) {
+  const data = await pending;
   if (data.error) return <StateCard title="Notification deliveries could not be loaded" detail={data.error} />;
   return <div className={settingSection}>
             <PanelHead
