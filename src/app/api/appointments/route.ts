@@ -4,6 +4,7 @@ import { queueBookingEmail } from "@/lib/booking-side-effects";
 import { getCalendarAppointments } from "@/lib/data/staff";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { philippineMobilePhone, validationError } from "@/lib/validation";
+import { measureServerTiming } from "@/lib/server-timing";
 
 const createSchema = z.object({
   serviceIds: z.array(z.string().uuid()).min(1).max(12),
@@ -36,6 +37,7 @@ function parseBoundary(value: string | null, end = false) {
 }
 
 export async function GET(request: Request) {
+  return measureServerTiming("api.appointments.total", async () => {
   const session = await getStaffSession();
   if (!session) return Response.json({ error: { code: "UNAUTHORIZED", message: "Sign in is required." } }, { status: 401 });
   const url = new URL(request.url);
@@ -57,9 +59,11 @@ export async function GET(request: Request) {
   });
   if (result.error) return Response.json({ error: { code: "LOOKUP_FAILED", message: result.error } }, { status: 400 });
   return Response.json({ data: result.appointments, meta: { timezone: "Asia/Manila", from: from.toISOString(), to: to.toISOString() } });
+  });
 }
 
 export async function POST(request: Request) {
+  return measureServerTiming("api.appointments.total", async () => {
   const session = await getStaffSession();
   if (!session) return Response.json({ error: { code: "UNAUTHORIZED", message: "Sign in is required." } }, { status: 401 });
   const parsed = createSchema.safeParse(await request.json().catch(() => null));
@@ -98,6 +102,7 @@ export async function POST(request: Request) {
     if (delivery.data) queueBookingEmail(delivery.data.id);
   }
   return Response.json({ data: booking }, { status: 201 });
+  });
 }
 
 function scheduleMessage(message: string) {

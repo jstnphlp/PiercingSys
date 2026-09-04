@@ -48,21 +48,31 @@ export function CalendarWorkspace(props: Props) {
   const requestUrl = useMemo(() => appointmentRequestUrl(days, piercerId, stationId), [days, piercerId, stationId]);
   const loadedRequest = useRef(requestUrl);
   const requestSequence = useRef(0);
+  const inFlightRequests = useRef(new Map<string, Promise<void>>());
   const visibleAppointments = useMemo(() => appointments.filter(isVisibleAppointment), [appointments]);
 
   async function load(background = false, url = requestUrl) {
+    const existingRequest = inFlightRequests.current.get(url);
+    if (existingRequest) return existingRequest;
     const sequence = ++requestSequence.current;
     if (!background) setLoading(true); setError("");
-    try {
-      const response = await fetch(url, { cache: "no-store" });
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error?.message ?? "Calendar could not be loaded.");
-      if (sequence === requestSequence.current) setAppointments(body.data ?? []);
-    } catch (reason) {
-      if (sequence === requestSequence.current) setError(reason instanceof Error ? reason.message : "Calendar could not be loaded.");
-    } finally {
-      if (sequence === requestSequence.current) setLoading(false);
-    }
+    const request = (async () => {
+      try {
+        const response = await fetch(url, { cache: "no-store" });
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error?.message ?? "Calendar could not be loaded.");
+        if (sequence === requestSequence.current) setAppointments(body.data ?? []);
+      } catch (reason) {
+        if (sequence === requestSequence.current) setError(reason instanceof Error ? reason.message : "Calendar could not be loaded.");
+      } finally {
+        if (sequence === requestSequence.current) setLoading(false);
+      }
+    })();
+    const trackedRequest = request.finally(() => {
+      if (inFlightRequests.current.get(url) === trackedRequest) inFlightRequests.current.delete(url);
+    });
+    inFlightRequests.current.set(url, trackedRequest);
+    return trackedRequest;
   }
   useEffect(() => {
     if (loadedRequest.current === requestUrl) return;

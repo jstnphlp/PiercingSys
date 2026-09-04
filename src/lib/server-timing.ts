@@ -9,6 +9,7 @@ export type ServerTimingLabel =
   | "auth.staffProfile"
   | "api.customers.total"
   | "api.sales.total"
+  | "api.appointments.total"
   | "staff.calendar.appointments"
   | "staff.clients.page"
   | "staff.overview.bookings"
