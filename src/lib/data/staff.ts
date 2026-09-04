@@ -1,7 +1,5 @@
 import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
-import { cache } from "react";
-import { AsyncLocalStorage } from "node:async_hooks";
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
 import type {
   BookingStatus,
@@ -268,17 +266,12 @@ type StaffReferenceBundle = DataResult<{
   closures: ClosureRecord[];
 }>;
 
-const referenceCacheState = new AsyncLocalStorage<{ cacheMiss: boolean }>();
-
 async function getStaffReferenceBundle(): Promise<StaffReferenceBundle> {
-  "use cache";
-  const state = referenceCacheState.getStore();
-  if (state) {
-    state.cacheMiss = true;
-    logServerTimingMarker("staff.reference.bundle.cacheMiss");
-  }
+  "use cache: remote";
   cacheLife("hours");
   cacheTag("staff-reference");
+  // This body runs only for a cold, expired, or invalidated cache entry.
+  logServerTimingMarker("staff.reference.bundle.cacheMiss");
 
   const admin = createSupabaseAdminClient();
   if (!admin) return {
@@ -358,19 +351,12 @@ async function getStaffReferenceBundle(): Promise<StaffReferenceBundle> {
   };
 }
 
-const readStaffReferenceBundle = cache(function readStaffReferenceBundle() {
-  const state = { cacheMiss: false };
-  return referenceCacheState.run(state, async () => {
-    const result = await measureServerTiming(
-      "staff.reference.bundle.cacheRead",
-      getStaffReferenceBundle,
-    );
-    if (!state.cacheMiss) {
-      logServerTimingMarker("staff.reference.bundle.cacheHit");
-    }
-    return result;
-  });
-});
+function readStaffReferenceBundle() {
+  return measureServerTiming(
+    "staff.reference.bundle.cacheRead",
+    getStaffReferenceBundle,
+  );
+}
 
 export async function getOverviewBookings(): Promise<DataResult<{ bookings: BookingRecord[] }>> {
   const supabase = await createSupabaseServerClient();
@@ -588,39 +574,8 @@ export async function getReportsData(
   };
 }
 
-export async function getSettingsStudioData() {
-  const reference = await readStaffReferenceBundle();
-  return { studio: reference.studio, error: reference.error };
-}
-
-export async function getSettingsScheduleData() {
-  const reference = await readStaffReferenceBundle();
-  return {
-    studio: reference.studio,
-    staff: reference.staff,
-    availability: reference.availability,
-    closures: reference.closures,
-    error: reference.error,
-  };
-}
-
-export async function getSettingsServicesData() {
-  const reference = await readStaffReferenceBundle();
-  return {
-    services: reference.services,
-    staff: reference.staff,
-    serviceAssignments: reference.serviceAssignments,
-    error: reference.error,
-  };
-}
-
-export async function getSettingsTeamData() {
-  const reference = await readStaffReferenceBundle();
-  return {
-    staff: reference.staff,
-    stations: reference.stations,
-    error: reference.error,
-  };
+export function getSettingsReferenceData() {
+  return readStaffReferenceBundle();
 }
 
 export async function getSettingsDeliveries(): Promise<DataResult<{ deliveries: DeliveryRecord[] }>> {

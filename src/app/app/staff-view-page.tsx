@@ -29,10 +29,7 @@ import {
   getReportsData,
   getSalesPage,
   getSettingsDeliveries,
-  getSettingsScheduleData,
-  getSettingsServicesData,
-  getSettingsStudioData,
-  getSettingsTeamData,
+  getSettingsReferenceData,
 } from "@/lib/data/staff";
 import { resolveReportPeriod, type ReportPeriod, type ReportPreset } from "@/lib/report-period";
 import { measureServerTiming, measureServerTimingGroup } from "@/lib/server-timing";
@@ -341,13 +338,10 @@ function StudioSettings({
   role: string;
   section: SettingsSection | null;
 }) {
-  const [studio, schedule, services, team, deliveries] = measureServerTimingGroup(
+  const [reference, deliveries] = measureServerTimingGroup(
     "staff.page.settings.total",
     () => [
-      getSettingsStudioData(),
-      getSettingsScheduleData(),
-      getSettingsServicesData(),
-      getSettingsTeamData(),
+      getSettingsReferenceData(),
       getSettingsDeliveries(),
     ] as const,
   );
@@ -356,10 +350,10 @@ function StudioSettings({
     <div className={featureView}>
       <SettingsSectionFocus section={section} />
       <div className={settingsStack}>
-        <Suspense fallback={<SettingsFormSkeleton />}><SettingsGeneral data={studio} /></Suspense>
-        <Suspense fallback={<SettingsScheduleSkeleton />}><SettingsSchedule data={schedule} /></Suspense>
-        <Suspense fallback={<SettingsListSkeleton />}><SettingsServices data={services} /></Suspense>
-        <Suspense fallback={<SettingsListSkeleton rows={5} />}><SettingsTeam data={team} role={role} /></Suspense>
+        <Suspense fallback={<SettingsFormSkeleton />}><SettingsGeneral data={reference} /></Suspense>
+        <Suspense fallback={<SettingsScheduleSkeleton />}><SettingsSchedule data={reference} /></Suspense>
+        <Suspense fallback={<SettingsListSkeleton />}><SettingsServices data={reference} /></Suspense>
+        <Suspense fallback={<SettingsListSkeleton rows={5} />}><SettingsTeam data={reference} role={role} /></Suspense>
         <section className={twoPanel}>
           <div id="studio-settings-notifications" className={settingSection} tabIndex={-1}>
             <PanelHead
@@ -381,7 +375,7 @@ function StudioSettings({
 async function SettingsGeneral({
   data: pending,
 }: {
-  data: ReturnType<typeof getSettingsStudioData>;
+  data: ReturnType<typeof getSettingsReferenceData>;
 }) {
   const data = await pending;
   return data.error
@@ -392,7 +386,7 @@ async function SettingsGeneral({
 async function SettingsSchedule({
   data: pending,
 }: {
-  data: ReturnType<typeof getSettingsScheduleData>;
+  data: ReturnType<typeof getSettingsReferenceData>;
 }) {
   const data = await pending;
   return data.error
@@ -403,7 +397,7 @@ async function SettingsSchedule({
 async function SettingsServices({
   data: pending,
 }: {
-  data: ReturnType<typeof getSettingsServicesData>;
+  data: ReturnType<typeof getSettingsReferenceData>;
 }) {
   const data = await pending;
   if (data.error) return <StateCard title="Services could not be loaded" detail={data.error} />;
@@ -428,7 +422,7 @@ async function SettingsTeam({
   data: pending,
   role,
 }: {
-  data: ReturnType<typeof getSettingsTeamData>;
+  data: ReturnType<typeof getSettingsReferenceData>;
   role: string;
 }) {
   const data = await pending;
