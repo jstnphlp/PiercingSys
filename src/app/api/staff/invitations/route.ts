@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { getStaffSession } from "@/lib/auth";
-import { invalidateCatalogAndStaffReferenceData } from "@/lib/cache-invalidation";
+import { invalidateStaffReferenceData } from "@/lib/cache-invalidation";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import { validationError } from "@/lib/validation";
 
@@ -34,6 +34,6 @@ export async function POST(request: Request) {
   const profile = await admin.from("staff_profiles").upsert({ user_id: invitedUserId, display_name: parsed.data.displayName, role: parsed.data.role, active: true });
   if (profile.error) return Response.json({ error: { code: "PROFILE_FAILED", message: profile.error.message } }, { status: 400 });
   await admin.from("audit_events").insert({ actor_id: session.userId, event_type: "staff.invited", entity_type: "staff_profile", entity_id: invitedUserId, metadata: { role: parsed.data.role } });
-  invalidateCatalogAndStaffReferenceData();
+  invalidateStaffReferenceData();
   return Response.json({ data: { userId: invitedUserId, invited: Boolean(data?.user) } }, { status: 201 });
 }

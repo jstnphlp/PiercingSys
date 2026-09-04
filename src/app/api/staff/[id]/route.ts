@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { getStaffSession } from "@/lib/auth";
-import { invalidateCatalogAndStaffReferenceData } from "@/lib/cache-invalidation";
+import { invalidateStaffReferenceData } from "@/lib/cache-invalidation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { validationError } from "@/lib/validation";
 
@@ -15,12 +15,12 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   if (parsed.data.role === "owner") {
     const transfer = await supabase!.rpc("transfer_ownership", { new_owner_id: id });
     if (transfer.error) return Response.json({ error: { code: "TRANSFER_FAILED", message: transfer.error.message } }, { status: 400 });
-    invalidateCatalogAndStaffReferenceData();
+    invalidateStaffReferenceData();
     return Response.json({ data: { updated: true } });
   }
   const update = { ...(parsed.data.role && { role: parsed.data.role }), ...(parsed.data.active !== undefined && { active: parsed.data.active }), ...(parsed.data.displayName && { display_name: parsed.data.displayName }), updated_at: new Date().toISOString() };
   const result = await supabase!.from("staff_profiles").update(update).eq("user_id", id);
   if (result.error) return Response.json({ error: { code: "UPDATE_FAILED", message: result.error.message } }, { status: 400 });
-  invalidateCatalogAndStaffReferenceData();
+  invalidateStaffReferenceData();
   return Response.json({ data: { updated: true } });
 }

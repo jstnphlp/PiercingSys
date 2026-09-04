@@ -1,6 +1,7 @@
 import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
 import { cache } from "react";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
 import type {
   BookingStatus,
@@ -13,7 +14,7 @@ import { manilaDayBounds } from "@/lib/domain";
 import { pageMeta, type PageMeta } from "@/lib/pagination";
 import { seededStudio } from "@/lib/data/public";
 import type { ReportPeriod } from "@/lib/report-period";
-import { measureServerTiming } from "@/lib/server-timing";
+import { logServerTimingMarker, measureServerTiming } from "@/lib/server-timing";
 import { customerDisplayContact, customerDisplayName } from "@/lib/walk-in-customer";
 
 export type BookingRecord = {
@@ -267,8 +268,15 @@ type StaffReferenceBundle = DataResult<{
   closures: ClosureRecord[];
 }>;
 
+const referenceCacheState = new AsyncLocalStorage<{ cacheMiss: boolean }>();
+
 async function getStaffReferenceBundle(): Promise<StaffReferenceBundle> {
   "use cache";
+  const state = referenceCacheState.getStore();
+  if (state) {
+    state.cacheMiss = true;
+    logServerTimingMarker("staff.reference.bundle.cacheMiss");
+  }
   cacheLife("hours");
   cacheTag("staff-reference");
 
@@ -351,10 +359,17 @@ async function getStaffReferenceBundle(): Promise<StaffReferenceBundle> {
 }
 
 const readStaffReferenceBundle = cache(function readStaffReferenceBundle() {
-  return measureServerTiming(
-    "staff.reference.bundle.cacheRead",
-    getStaffReferenceBundle,
-  );
+  const state = { cacheMiss: false };
+  return referenceCacheState.run(state, async () => {
+    const result = await measureServerTiming(
+      "staff.reference.bundle.cacheRead",
+      getStaffReferenceBundle,
+    );
+    if (!state.cacheMiss) {
+      logServerTimingMarker("staff.reference.bundle.cacheHit");
+    }
+    return result;
+  });
 });
 
 export async function getOverviewBookings(): Promise<DataResult<{ bookings: BookingRecord[] }>> {

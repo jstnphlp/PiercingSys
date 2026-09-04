@@ -10,6 +10,8 @@ export type ServerTimingLabel =
   | "api.customers.total"
   | "api.sales.total"
   | "api.appointments.total"
+  | "staff.reference.bundle.cacheHit"
+  | "staff.reference.bundle.cacheMiss"
   | "staff.calendar.appointments"
   | "staff.clients.page"
   | "staff.overview.bookings"
