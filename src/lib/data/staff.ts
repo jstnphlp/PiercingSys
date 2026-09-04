@@ -1,15 +1,17 @@
 import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
-import type { StaffSession } from "@/lib/auth";
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
 import type {
   BookingStatus,
   PaymentMethod,
   SaleStatus,
   Service,
+  StudioSettings,
 } from "@/lib/domain";
 import { manilaDayBounds } from "@/lib/domain";
 import { seededStudio } from "@/lib/data/public";
+import type { ReportPeriod } from "@/lib/report-period";
+import { measureServerTiming } from "@/lib/server-timing";
 import { customerDisplayContact, customerDisplayName } from "@/lib/walk-in-customer";
 
 export type BookingRecord = {
@@ -97,6 +99,9 @@ export const saleDetailSelect =
 export const bookingDetailSelect =
   "id,reference,status,starts_at,ends_at,notes,customers(id,first_name,last_name,email,phone),booking_services(id,service_id,position,name,price_cents,min_price_cents,max_price_cents,price_unit,duration_minutes),staff_profiles!bookings_assigned_piercer_id_fkey(user_id,display_name,color),stations(name),sales(id,status)";
 
+const overviewBookingSelect =
+  "id,reference,status,starts_at,ends_at,notes,customers(id,first_name,last_name,email,phone),booking_services(service_id,position,name),staff_profiles!bookings_assigned_piercer_id_fkey(user_id,display_name,color),stations(name),sales(status)";
+
 type Relation = Record<string, unknown> | Array<Record<string, unknown>> | null;
 function one(value: Relation) {
   return Array.isArray(value) ? value[0] : value;
@@ -168,100 +173,64 @@ export function mapBookingRow(row: Record<string, unknown>): BookingRecord {
   };
 }
 
-export type StaffDataScope =
-  | "overview"
-  | "calendar"
-  | "clients"
-  | "sales"
-  | "reports"
-  | "settings"
-  | "all";
+type DataResult<T> = T & { error: string | null };
+type QueryError = { message: string } | null | undefined;
 
-const emptyData = {
-  studio: seededStudio,
-  services: [] as Service[],
-  bookings: [] as BookingRecord[],
-  customers: [] as CustomerRecord[],
-  sales: [] as SaleRecord[],
-  staff: [] as StaffRecord[],
-  serviceAssignments: [] as Array<{ serviceId: string; staffId: string }>,
-  deliveries: [] as DeliveryRecord[],
-  stations: [] as Array<{ id: string; name: string }>,
-  closures: [] as ClosureRecord[],
-  availability: [] as AvailabilityRecord[],
-  customerCount: 0,
-  bookingStatusCounts: {} as Record<string, number>,
-  paymentMethodTotals: {} as Record<string, number>,
-  completedRevenueCents: 0,
-  completedSaleCount: 0,
-  reportSaleCount: 0,
-  reportBookingCount: 0,
-  error: null as string | null,
-};
+function errors(...values: Array<QueryError | string>) {
+  return values
+    .map((value) => typeof value === "string" ? value : value?.message)
+    .filter(Boolean)
+    .join(" ") || null;
+}
 
-const emptyReferenceData = {
-  studio: seededStudio,
-  services: [] as Service[],
-  staff: [] as StaffRecord[],
-  serviceAssignments: [] as Array<{ serviceId: string; staffId: string }>,
-  stations: [] as Array<{ id: string; name: string }>,
-  closures: [] as ClosureRecord[],
-  availability: [] as AvailabilityRecord[],
-  error: null as string | null,
-};
-
-async function getCachedStaffReferenceData(scope: StaffDataScope) {
+async function getStudioReference(): Promise<DataResult<{ studio: StudioSettings }>> {
   "use cache";
   cacheLife("minutes");
   cacheTag("staff-reference");
 
   const admin = createSupabaseAdminClient();
-  if (!admin) return { ...emptyReferenceData, error: "Supabase is not configured." };
-  const includes = (...scopes: StaffDataScope[]) => scope === "all" || scopes.includes(scope);
-  const [settingsResult, servicesResult, staffResult, assignmentResult, stationResult, availabilityResult, closureResult] = await Promise.all([
-    includes("overview", "calendar", "settings")
-      ? admin.from("studio_settings").select("id,name,location,address,email,phone,instagram_url,business_hours,booking_interval_minutes,minimum_lead_hours,booking_horizon_days,minimum_age,cancellation_policy").eq("id", 1).single()
-      : Promise.resolve({ data: null, error: null }),
-    includes("overview", "calendar", "sales", "settings")
-      ? admin.from("services").select("id,name,description,body_area,category,duration_minutes,price_cents,min_price_cents,max_price_cents,price_unit,is_active,sort_order").order("sort_order")
-      : Promise.resolve({ data: [], error: null }),
-    includes("overview", "calendar", "settings")
-      ? admin.from("staff_profiles").select("user_id,display_name,role,active,color").order("created_at")
-      : Promise.resolve({ data: [], error: null }),
-    includes("overview", "calendar", "settings")
-      ? admin.from("service_staff").select("service_id,staff_id")
-      : Promise.resolve({ data: [], error: null }),
-    includes("calendar", "settings")
-      ? admin.from("stations").select("id,name").eq("active", true).order("name")
-      : Promise.resolve({ data: [], error: null }),
-    includes("calendar", "settings")
-      ? admin.from("staff_availability").select("id,staff_id,weekday,starts_at,ends_at,availability_date").order("weekday").order("starts_at")
-      : Promise.resolve({ data: [], error: null }),
-    includes("settings")
-      ? admin.from("closures").select("id,starts_at,ends_at,reason").order("starts_at", { ascending: false }).limit(100)
-      : Promise.resolve({ data: [], error: null }),
-  ]);
-  const settingsRow = settingsResult.data;
-  const errors = [settingsResult.error, servicesResult.error, staffResult.error, assignmentResult.error, stationResult.error, availabilityResult.error, closureResult.error].filter(Boolean);
+  if (!admin) return { studio: seededStudio, error: "Supabase is not configured." };
+  const result = await measureServerTiming("staff.reference.studio", () => admin
+    .from("studio_settings")
+    .select("id,name,location,address,email,phone,instagram_url,business_hours,booking_interval_minutes,minimum_lead_hours,booking_horizon_days,minimum_age,cancellation_policy")
+    .eq("id", 1)
+    .single());
+  const row = result.data;
   return {
-    studio: settingsRow ? {
-      id: settingsRow.id,
-      name: settingsRow.name,
-      location: settingsRow.location,
-      address: settingsRow.address,
-      email: settingsRow.email,
-      phone: settingsRow.phone,
-      instagramUrl: settingsRow.instagram_url,
+    studio: row ? {
+      id: row.id,
+      name: row.name,
+      location: row.location,
+      address: row.address,
+      email: row.email,
+      phone: row.phone,
+      instagramUrl: row.instagram_url,
       timezone: "Asia/Manila" as const,
       currency: "PHP" as const,
-      businessHours: settingsRow.business_hours,
-      bookingIntervalMinutes: settingsRow.booking_interval_minutes,
-      minimumLeadHours: settingsRow.minimum_lead_hours,
-      bookingHorizonDays: settingsRow.booking_horizon_days,
-      minimumAge: settingsRow.minimum_age,
-      cancellationPolicy: settingsRow.cancellation_policy,
+      businessHours: row.business_hours,
+      bookingIntervalMinutes: row.booking_interval_minutes,
+      minimumLeadHours: row.minimum_lead_hours,
+      bookingHorizonDays: row.booking_horizon_days,
+      minimumAge: row.minimum_age,
+      cancellationPolicy: row.cancellation_policy,
     } : seededStudio,
-    services: (servicesResult.data ?? []).map((row) => ({
+    error: errors(result.error),
+  };
+}
+
+async function getServicesReference(): Promise<DataResult<{ services: Service[] }>> {
+  "use cache";
+  cacheLife("minutes");
+  cacheTag("staff-reference");
+
+  const admin = createSupabaseAdminClient();
+  if (!admin) return { services: [], error: "Supabase is not configured." };
+  const result = await measureServerTiming("staff.reference.services", () => admin
+    .from("services")
+    .select("id,name,description,body_area,category,duration_minutes,price_cents,min_price_cents,max_price_cents,price_unit,is_active,sort_order")
+    .order("sort_order"));
+  return {
+    services: (result.data ?? []).map((row) => ({
       id: row.id,
       name: row.name,
       description: row.description,
@@ -274,99 +243,231 @@ async function getCachedStaffReferenceData(scope: StaffDataScope) {
       priceUnit: row.price_unit,
       isActive: row.is_active,
     })),
-    staff: (staffResult.data ?? []).map((row) => ({
+    error: errors(result.error),
+  };
+}
+
+async function getStaffReference(): Promise<DataResult<{ staff: StaffRecord[] }>> {
+  "use cache";
+  cacheLife("minutes");
+  cacheTag("staff-reference");
+
+  const admin = createSupabaseAdminClient();
+  if (!admin) return { staff: [], error: "Supabase is not configured." };
+  const result = await measureServerTiming("staff.reference.team", () => admin
+    .from("staff_profiles")
+    .select("user_id,display_name,role,active,color")
+    .order("created_at"));
+  return {
+    staff: (result.data ?? []).map((row) => ({
       id: row.user_id,
       displayName: row.display_name,
       role: row.role,
       active: row.active,
       color: row.color,
     })),
-    serviceAssignments: (assignmentResult.data ?? []).map((row) => ({ serviceId: row.service_id, staffId: row.staff_id })),
-    stations: stationResult.data ?? [],
-    closures: (closureResult.data ?? []).map((row) => ({ id: row.id, startsAt: row.starts_at, endsAt: row.ends_at, reason: row.reason })),
-    availability: (availabilityResult.data ?? []).map((row) => ({ id: row.id, staffId: row.staff_id, weekday: row.weekday, startsAt: row.starts_at, endsAt: row.ends_at, availabilityDate: row.availability_date })),
-    error: errors.map((error) => error?.message).filter(Boolean).join(" ") || null,
+    error: errors(result.error),
   };
 }
 
-export async function getStaffData(
-  scope: StaffDataScope = "all",
-  reportRange?: { startUtc: string; endUtc: string },
-  session?: Pick<StaffSession, "userId" | "role">,
-) {
+async function getServiceAssignmentsReference(): Promise<DataResult<{ serviceAssignments: Array<{ serviceId: string; staffId: string }> }>> {
+  "use cache";
+  cacheLife("minutes");
+  cacheTag("staff-reference");
+
+  const admin = createSupabaseAdminClient();
+  if (!admin) return { serviceAssignments: [], error: "Supabase is not configured." };
+  const result = await measureServerTiming("staff.reference.assignments", () => admin
+    .from("service_staff")
+    .select("service_id,staff_id"));
+  return {
+    serviceAssignments: (result.data ?? []).map((row) => ({ serviceId: row.service_id, staffId: row.staff_id })),
+    error: errors(result.error),
+  };
+}
+
+async function getStationsReference(): Promise<DataResult<{ stations: Array<{ id: string; name: string }> }>> {
+  "use cache";
+  cacheLife("minutes");
+  cacheTag("staff-reference");
+
+  const admin = createSupabaseAdminClient();
+  if (!admin) return { stations: [], error: "Supabase is not configured." };
+  const result = await measureServerTiming("staff.reference.stations", () => admin
+    .from("stations")
+    .select("id,name")
+    .eq("active", true)
+    .order("name"));
+  return { stations: result.data ?? [], error: errors(result.error) };
+}
+
+async function getAvailabilityReference(): Promise<DataResult<{ availability: AvailabilityRecord[] }>> {
+  "use cache";
+  cacheLife("minutes");
+  cacheTag("staff-reference");
+
+  const admin = createSupabaseAdminClient();
+  if (!admin) return { availability: [], error: "Supabase is not configured." };
+  const result = await measureServerTiming("staff.reference.availability", () => admin
+    .from("staff_availability")
+    .select("id,staff_id,weekday,starts_at,ends_at,availability_date")
+    .order("weekday")
+    .order("starts_at"));
+  return {
+    availability: (result.data ?? []).map((row) => ({
+      id: row.id,
+      staffId: row.staff_id,
+      weekday: row.weekday,
+      startsAt: row.starts_at,
+      endsAt: row.ends_at,
+      availabilityDate: row.availability_date,
+    })),
+    error: errors(result.error),
+  };
+}
+
+async function getClosuresReference(): Promise<DataResult<{ closures: ClosureRecord[] }>> {
+  "use cache";
+  cacheLife("minutes");
+  cacheTag("staff-reference");
+
+  const admin = createSupabaseAdminClient();
+  if (!admin) return { closures: [], error: "Supabase is not configured." };
+  const result = await measureServerTiming("staff.reference.closures", () => admin
+    .from("closures")
+    .select("id,starts_at,ends_at,reason")
+    .order("starts_at", { ascending: false })
+    .limit(100));
+  return {
+    closures: (result.data ?? []).map((row) => ({
+      id: row.id,
+      startsAt: row.starts_at,
+      endsAt: row.ends_at,
+      reason: row.reason,
+    })),
+    error: errors(result.error),
+  };
+}
+
+export async function getOverviewBookings(): Promise<DataResult<{ bookings: BookingRecord[] }>> {
   const supabase = await createSupabaseServerClient();
-  if (!supabase)
-    return {
-      ...emptyData,
-      error: "Supabase is not configured. Add the required environment values and restart the application.",
-    };
-  const includes = (...scopes: StaffDataScope[]) =>
-    scope === "all" || scopes.includes(scope);
-  const needsReferenceData = includes("overview", "calendar", "sales", "settings");
-  const emptyMany = Promise.resolve({ data: [] as never[], error: null, count: null });
-  const emptySingle = Promise.resolve({ data: null, error: null, count: null });
+  if (!supabase) return { bookings: [], error: "Supabase is not configured." };
   const today = manilaDayBounds();
-  const [
-    referenceData,
-    bookingsResult,
-    customersResult,
-    customerCountResult,
-    directoryResult,
-    salesResult,
-    deliveryResult,
-    reportResult,
-  ] = await Promise.all([
-    needsReferenceData
-      ? session
-        ? getCachedStaffReferenceData(scope)
-        : Promise.resolve({ ...emptyReferenceData, error: "An active staff session is required." })
-      : Promise.resolve(emptyReferenceData),
-    includes("overview")
-      ? supabase
-          .from("bookings")
-          .select(bookingDetailSelect)
-          .gte("starts_at", today.start)
-          .lt("starts_at", today.end)
-          .order("starts_at")
-          .limit(200)
-      : emptyMany,
-    emptyMany,
-    includes("overview")
-      ? supabase.from("customers").select("id", { count: "exact", head: true })
-      : emptySingle,
-    includes("clients")
-      ? supabase
-          .from("customer_directory")
-          .select("id,first_name,last_name,email,phone,created_at,appointment_count,last_appointment_at")
-          .order("created_at", { ascending: false })
-          .limit(25)
-      : emptyMany,
-    includes("overview", "sales")
-      ? supabase
-          .from("sales")
-          .select(saleDetailSelect)
-          .gte("created_at", scope === "overview" ? today.start : "1970-01-01T00:00:00.000Z")
-          .order("created_at", { ascending: false })
-          .limit(scope === "overview" ? 100 : 25)
-      : emptyMany,
-    includes("overview", "settings")
-      ? supabase
-          .from("notification_deliveries")
-          .select("id,kind,recipient,status,last_error,created_at")
-          .order("created_at", { ascending: false })
-          .limit(25)
-      : emptyMany,
-    includes("reports")
-      ? reportRange
-        ? supabase.rpc("studio_report", {
-            p_start: reportRange.startUtc,
-            p_end: reportRange.endUtc,
-          })
-        : supabase.rpc("studio_report")
-      : emptySingle,
+  const result = await measureServerTiming("staff.overview.bookings", () => supabase
+    .from("bookings")
+    .select(overviewBookingSelect)
+    .gte("starts_at", today.start)
+    .lt("starts_at", today.end)
+    .order("starts_at")
+    .limit(200));
+  return {
+    bookings: (result.data ?? []).map((row) => mapBookingRow(row as Record<string, unknown>)),
+    error: errors(result.error),
+  };
+}
+
+export async function getOverviewCustomerCount(): Promise<DataResult<{ customerCount: number }>> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return { customerCount: 0, error: "Supabase is not configured." };
+  const result = await measureServerTiming("staff.overview.customerCount", () => supabase
+    .from("customers")
+    .select("id", { count: "exact", head: true }));
+  return { customerCount: result.count ?? 0, error: errors(result.error) };
+}
+
+export async function getOverviewRevenue(): Promise<DataResult<{ completedRevenueCents: number; completedSaleCount: number }>> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return { completedRevenueCents: 0, completedSaleCount: 0, error: "Supabase is not configured." };
+  const today = manilaDayBounds();
+  const result = await measureServerTiming("staff.overview.revenue", () => supabase
+    .from("sales")
+    .select("total_cents,sale_adjustments(amount_cents)")
+    .eq("status", "completed")
+    .gte("created_at", today.start)
+    .lt("created_at", today.end));
+  const rows = result.data ?? [];
+  const completedRevenueCents = rows.reduce((total, row) => {
+    const adjusted = (row.sale_adjustments ?? []).reduce(
+      (sum, adjustment) => sum + adjustment.amount_cents,
+      0,
+    );
+    return total + row.total_cents - adjusted;
+  }, 0);
+  return {
+    completedRevenueCents,
+    completedSaleCount: rows.length,
+    error: errors(result.error),
+  };
+}
+
+export async function getOverviewReadiness(
+  includeNotifications: boolean,
+): Promise<DataResult<{
+  studio: StudioSettings;
+  services: Service[];
+  staff: StaffRecord[];
+  serviceAssignments: Array<{ serviceId: string; staffId: string }>;
+  pendingDeliveryCount: number;
+}>> {
+  const deliveryPromise = includeNotifications
+    ? getPendingDeliveryCount()
+    : Promise.resolve({ pendingDeliveryCount: 0, error: null });
+  const [studio, services, staff, assignments, deliveries] = await Promise.all([
+    getStudioReference(),
+    getServicesReference(),
+    getStaffReference(),
+    getServiceAssignmentsReference(),
+    deliveryPromise,
   ]);
-  const bookings: BookingRecord[] = (bookingsResult.data ?? []).map((row) => mapBookingRow(row as Record<string, unknown>));
-  const directoryCustomers: CustomerRecord[] = (directoryResult.data ?? []).map((row) => {
+  return {
+    studio: studio.studio,
+    services: services.services,
+    staff: staff.staff,
+    serviceAssignments: assignments.serviceAssignments,
+    pendingDeliveryCount: deliveries.pendingDeliveryCount,
+    error: errors(studio.error ?? "", services.error ?? "", staff.error ?? "", assignments.error ?? "", deliveries.error ?? ""),
+  };
+}
+
+async function getPendingDeliveryCount(): Promise<DataResult<{ pendingDeliveryCount: number }>> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return { pendingDeliveryCount: 0, error: "Supabase is not configured." };
+  const result = await measureServerTiming("staff.overview.deliveryCount", () => supabase
+    .from("notification_deliveries")
+    .select("id", { count: "exact", head: true })
+    .in("status", ["pending", "failed"]));
+  return { pendingDeliveryCount: result.count ?? 0, error: errors(result.error) };
+}
+
+export async function getCalendarReferenceData() {
+  const [studio, services, staff, assignments, stations, availability] = await Promise.all([
+    getStudioReference(),
+    getServicesReference(),
+    getStaffReference(),
+    getServiceAssignmentsReference(),
+    getStationsReference(),
+    getAvailabilityReference(),
+  ]);
+  return {
+    studio: studio.studio,
+    services: services.services,
+    staff: staff.staff,
+    serviceAssignments: assignments.serviceAssignments,
+    stations: stations.stations,
+    availability: availability.availability,
+    error: errors(studio.error ?? "", services.error ?? "", staff.error ?? "", assignments.error ?? "", stations.error ?? "", availability.error ?? ""),
+  };
+}
+
+export async function getClientsPage(): Promise<DataResult<{ customers: CustomerRecord[] }>> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return { customers: [], error: "Supabase is not configured." };
+  const result = await measureServerTiming("staff.clients.page", () => supabase
+    .from("customer_directory")
+    .select("id,first_name,last_name,email,phone,created_at,appointment_count,last_appointment_at")
+    .order("created_at", { ascending: false })
+    .limit(25));
+  const customers: CustomerRecord[] = (result.data ?? []).map((row) => {
     const contact = customerDisplayContact(row.email, row.phone);
     return {
       id: row.id,
@@ -377,18 +478,54 @@ export async function getStaffData(
       lastActivityAt: row.last_appointment_at ?? null,
     };
   });
-  const sales: SaleRecord[] = (salesResult.data ?? []).map((row) => mapSaleRow(row as Record<string, unknown>));
-  const deliveries: DeliveryRecord[] = (deliveryResult.data ?? []).map(
-    (row) => ({
-      id: row.id,
-      kind: row.kind,
-      recipient: row.recipient,
-      status: row.status,
-      lastError: row.last_error,
-      createdAt: row.created_at,
-    }),
-  );
-  const report = (reportResult.data ?? null) as {
+  return { customers, error: errors(result.error) };
+}
+
+export async function getSalesPage(): Promise<DataResult<{ sales: SaleRecord[]; services: Service[] }>> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return { sales: [], services: [], error: "Supabase is not configured." };
+  const [services, salesResult] = await Promise.all([
+    getServicesReference(),
+    measureServerTiming("staff.sales.page", () => supabase
+      .from("sales")
+      .select(saleDetailSelect)
+      .order("created_at", { ascending: false })
+      .limit(25)),
+  ]);
+  return {
+    services: services.services,
+    sales: (salesResult.data ?? []).map((row) => mapSaleRow(row as Record<string, unknown>)),
+    error: errors(services.error ?? "", salesResult.error),
+  };
+}
+
+export type StaffReportData = {
+  bookingStatusCounts: Record<string, number>;
+  paymentMethodTotals: Record<string, number>;
+  completedRevenueCents: number;
+  completedSaleCount: number;
+  reportSaleCount: number;
+  reportBookingCount: number;
+};
+
+export async function getReportsData(
+  reportRange: Pick<ReportPeriod, "startUtc" | "endUtc">,
+): Promise<DataResult<StaffReportData>> {
+  const supabase = await createSupabaseServerClient();
+  const emptyReport = {
+    bookingStatusCounts: {},
+    paymentMethodTotals: {},
+    completedRevenueCents: 0,
+    completedSaleCount: 0,
+    reportSaleCount: 0,
+    reportBookingCount: 0,
+  };
+  if (!supabase) return { ...emptyReport, error: "Supabase is not configured." };
+  const result = await measureServerTiming("staff.reports.summary", () => supabase.rpc("studio_report", {
+    p_start: reportRange.startUtc,
+    p_end: reportRange.endUtc,
+  }));
+  const report = (result.data ?? null) as {
     revenue_cents?: number;
     completed_sales?: number;
     sale_count?: number;
@@ -396,34 +533,80 @@ export async function getStaffData(
     booking_statuses?: Record<string, number>;
     methods?: Record<string, number>;
   } | null;
-  const queryErrors = [
-    bookingsResult.error,
-    customersResult.error,
-    customerCountResult.error,
-    directoryResult.error,
-    salesResult.error,
-    deliveryResult.error,
-    reportResult.error,
-  ].filter((error): error is NonNullable<typeof error> => Boolean(error));
   return {
-    studio: referenceData.studio,
-    services: referenceData.services,
-    bookings,
-    customers: directoryCustomers,
-    sales,
-    staff: referenceData.staff,
-    serviceAssignments: referenceData.serviceAssignments,
-    deliveries,
-    stations: referenceData.stations,
-    closures: referenceData.closures,
-    availability: referenceData.availability,
-    customerCount: customerCountResult.count ?? directoryCustomers.length,
     bookingStatusCounts: report?.booking_statuses ?? {},
     paymentMethodTotals: report?.methods ?? {},
     completedRevenueCents: Number(report?.revenue_cents ?? 0),
     completedSaleCount: Number(report?.completed_sales ?? 0),
     reportSaleCount: Number(report?.sale_count ?? 0),
     reportBookingCount: Number(report?.booking_count ?? 0),
-    error: [referenceData.error, ...queryErrors.map((error) => error.message)].filter(Boolean).join(" ") || null,
+    error: errors(result.error),
+  };
+}
+
+export async function getSettingsStudioData() {
+  return getStudioReference();
+}
+
+export async function getSettingsScheduleData() {
+  const [studio, staff, availability, closures] = await Promise.all([
+    getStudioReference(),
+    getStaffReference(),
+    getAvailabilityReference(),
+    getClosuresReference(),
+  ]);
+  return {
+    studio: studio.studio,
+    staff: staff.staff,
+    availability: availability.availability,
+    closures: closures.closures,
+    error: errors(studio.error ?? "", staff.error ?? "", availability.error ?? "", closures.error ?? ""),
+  };
+}
+
+export async function getSettingsServicesData() {
+  const [services, staff, assignments] = await Promise.all([
+    getServicesReference(),
+    getStaffReference(),
+    getServiceAssignmentsReference(),
+  ]);
+  return {
+    services: services.services,
+    staff: staff.staff,
+    serviceAssignments: assignments.serviceAssignments,
+    error: errors(services.error ?? "", staff.error ?? "", assignments.error ?? ""),
+  };
+}
+
+export async function getSettingsTeamData() {
+  const [staff, stations] = await Promise.all([
+    getStaffReference(),
+    getStationsReference(),
+  ]);
+  return {
+    staff: staff.staff,
+    stations: stations.stations,
+    error: errors(staff.error ?? "", stations.error ?? ""),
+  };
+}
+
+export async function getSettingsDeliveries(): Promise<DataResult<{ deliveries: DeliveryRecord[] }>> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return { deliveries: [], error: "Supabase is not configured." };
+  const result = await measureServerTiming("staff.settings.deliveries", () => supabase
+    .from("notification_deliveries")
+    .select("id,kind,recipient,status,last_error,created_at")
+    .order("created_at", { ascending: false })
+    .limit(6));
+  return {
+    deliveries: (result.data ?? []).map((row) => ({
+      id: row.id,
+      kind: row.kind,
+      recipient: row.recipient,
+      status: row.status,
+      lastError: row.last_error,
+      createdAt: row.created_at,
+    })),
+    error: errors(result.error),
   };
 }

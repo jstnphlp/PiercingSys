@@ -34,13 +34,15 @@ type Props = {
   stations: Station[];
   studio: StudioSettings;
   availability: AvailabilityRecord[];
+  initialDate: string;
+  initialNow: string;
 };
 
 const dayNames = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 
 export function CalendarWorkspace(props: Props) {
   const [mode, setMode] = useState<"week" | "day">("week");
-  const [anchor, setAnchor] = useState(() => manilaDate(new Date()));
+  const [anchor, setAnchor] = useState(props.initialDate);
   const [piercerId, setPiercerId] = useState(props.role === "piercer" ? props.userId : "");
   const [stationId, setStationId] = useState("");
   const [appointments, setAppointments] = useState<RawAppointment[]>([]);
@@ -48,7 +50,7 @@ export function CalendarWorkspace(props: Props) {
   const [error, setError] = useState("");
   const [newOpen, setNewOpen] = useState(false);
   const [selected, setSelected] = useState<RawAppointment | null>(null);
-  const [now, setNow] = useState(() => new Date());
+  const [now, setNow] = useState(() => new Date(props.initialNow));
   const days = useMemo(() => mode === "week" ? weekDates(anchor) : [anchor], [anchor, mode]);
   const visibleAppointments = useMemo(() => appointments.filter(isVisibleAppointment), [appointments]);
 
@@ -96,7 +98,7 @@ export function CalendarWorkspace(props: Props) {
     <section className={`${panel} relative border-2 shadow-[5px_5px_0_#3b2923]`} aria-busy={loading}>
       {loading ? <><span className="sr-only" role="status">Loading live appointments</span>{mode === "week" ? <div className="overflow-x-auto [scrollbar-color:#d5aa89_transparent] [scrollbar-width:thin]"><CalendarGridSkeleton/></div> : <DayListSkeleton/>}</>
         : mode === "week" ? <WeekCalendar days={days} anchor={anchor} appointments={visibleAppointments} now={now} onSelectDate={(date) => { setAnchor(date); setMode("day"); }} onSelectAppointment={setSelected}/>
-          : <DayCalendar date={anchor} appointments={visibleAppointments} onSelectAppointment={setSelected}/>}
+          : <DayCalendar date={anchor} appointments={visibleAppointments} now={now} onSelectAppointment={setSelected}/>}
     </section>
     {newOpen && <AppointmentFormDialog {...props} initialDate={anchor} onClose={() => setNewOpen(false)} onSaved={async () => { setNewOpen(false); await load(); }}/>} 
     {selected && <AppointmentDialog appointment={selected} {...props} onClose={() => setSelected(null)} onSaved={async () => { setSelected(null); await load(); }}/>} 
@@ -148,10 +150,10 @@ function WeekCalendar({ days, anchor, appointments, now, onSelectDate, onSelectA
   </div>;
 }
 
-function DayCalendar({ date, appointments, onSelectAppointment }: { date: string; appointments: RawAppointment[]; onSelectAppointment: (appointment: RawAppointment) => void }) {
+function DayCalendar({ date, appointments, now, onSelectAppointment }: { date: string; appointments: RawAppointment[]; now: Date; onSelectAppointment: (appointment: RawAppointment) => void }) {
   const items = appointments.filter((item) => manilaDate(item.starts_at) === date).sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime());
   return <div className="grid min-h-[330px] grid-cols-[112px_minmax(0,1fr)] bg-[#fff9eb] max-[760px]:grid-cols-[70px_minmax(0,1fr)]">
-    <aside className={cn("relative flex min-h-[330px] flex-col items-center justify-center overflow-hidden border-r-[1.5px] border-dashed border-[#a96749] bg-[#f0c875] before:absolute before:top-[22px] before:left-[18px] before:-rotate-12 before:text-2xl before:text-[#b34829] before:content-['✦'] after:absolute after:right-4 after:bottom-6 after:rotate-12 after:text-[31px] after:text-[#795d8e] after:content-['☾'] max-[760px]:before:left-[9px] max-[760px]:before:text-base max-[760px]:after:right-2 max-[760px]:after:text-[21px] [&>span]:text-[9px] [&>span]:font-[950] [&>span]:tracking-[1.4px] [&>span]:text-[#a24429] [&>strong]:my-[5px] [&>strong]:font-display [&>strong]:text-[34px]/none [&>strong]:font-extrabold [&>strong]:text-hippy-ink max-[760px]:[&>strong]:text-[27px] [&>small]:text-[10px] [&>small]:font-[750] [&>small]:text-[#76584d]", date === manilaDate(new Date()) && "bg-hippy-orange before:text-[#f6d16f] after:text-[#f6d16f] [&>span]:text-[#fff7e4] [&>strong]:text-[#fff7e4] [&>small]:text-[#fff7e4]")}>
+    <aside className={cn("relative flex min-h-[330px] flex-col items-center justify-center overflow-hidden border-r-[1.5px] border-dashed border-[#a96749] bg-[#f0c875] before:absolute before:top-[22px] before:left-[18px] before:-rotate-12 before:text-2xl before:text-[#b34829] before:content-['✦'] after:absolute after:right-4 after:bottom-6 after:rotate-12 after:text-[31px] after:text-[#795d8e] after:content-['☾'] max-[760px]:before:left-[9px] max-[760px]:before:text-base max-[760px]:after:right-2 max-[760px]:after:text-[21px] [&>span]:text-[9px] [&>span]:font-[950] [&>span]:tracking-[1.4px] [&>span]:text-[#a24429] [&>strong]:my-[5px] [&>strong]:font-display [&>strong]:text-[34px]/none [&>strong]:font-extrabold [&>strong]:text-hippy-ink max-[760px]:[&>strong]:text-[27px] [&>small]:text-[10px] [&>small]:font-[750] [&>small]:text-[#76584d]", date === manilaDate(now) && "bg-hippy-orange before:text-[#f6d16f] after:text-[#f6d16f] [&>span]:text-[#fff7e4] [&>strong]:text-[#fff7e4] [&>small]:text-[#fff7e4]")}>
       <span>{dayNames[weekday(date)]}</span><strong>{date.slice(8)}</strong><small>{formatMonth(date)}</small>
     </aside>
     <div className="min-w-0 bg-[#fff9eb]">

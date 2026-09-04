@@ -14,9 +14,10 @@ export async function proxy(request: NextRequest) {
       cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
     },
   } });
-  const { data: { user } } = await supabase.auth.getUser();
-  if (request.nextUrl.pathname.startsWith("/app") && !user) return NextResponse.redirect(new URL("/login", request.url));
-  if (request.nextUrl.pathname === "/login" && user) return NextResponse.redirect(new URL("/app", request.url));
+  const { data } = await supabase.auth.getClaims();
+  const authenticated = Boolean(data?.claims.sub);
+  if (request.nextUrl.pathname.startsWith("/app") && !authenticated) return NextResponse.redirect(new URL("/login", request.url));
+  if (request.nextUrl.pathname === "/login" && authenticated) return NextResponse.redirect(new URL("/app", request.url));
   return response;
 }
 

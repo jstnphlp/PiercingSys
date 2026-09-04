@@ -19,6 +19,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 }
 
 async function AuthenticatedApp({ children }: { children: ReactNode }) {
+  // Supabase JWT validation reads the current time, so session work must start at request time.
   await connection();
   const session = await getStaffSession();
   if (!session) redirect("/login");

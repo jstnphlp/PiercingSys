@@ -4,7 +4,7 @@ import { resolveReportPeriod } from "@/lib/report-period";
 const createSupabaseServerClient = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/supabase/server", () => ({ createSupabaseServerClient }));
 
-import { getStaffData } from "./staff";
+import { getReportsData } from "./staff";
 
 describe("report data loading", () => {
   it("passes the same inclusive Manila UTC boundaries to the reporting RPC", async () => {
@@ -15,7 +15,7 @@ describe("report data loading", () => {
     createSupabaseServerClient.mockResolvedValue({ rpc });
     const period = resolveReportPeriod({ period: "custom", from: "2026-09-01", to: "2026-09-07" });
 
-    const data = await getStaffData("reports", period);
+    const data = await getReportsData(period);
 
     expect(rpc).toHaveBeenCalledWith("studio_report", { p_start: period.startUtc, p_end: period.endUtc });
     expect(data).toMatchObject({ completedRevenueCents: 125000, completedSaleCount: 1, reportSaleCount: 2, reportBookingCount: 2 });

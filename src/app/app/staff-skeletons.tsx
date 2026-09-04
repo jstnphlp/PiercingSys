@@ -64,11 +64,20 @@ export function DayListSkeleton() {
   </div>;
 }
 
+export function OverviewMetricsSkeleton() {
+  return <div className={metricGrid}>{Array.from({ length: 4 }, (_, index) => <MetricSkeleton key={index}/>)}</div>;
+}
+
+export function OverviewAppointmentsSkeleton() {
+  return <section className={panel}><PanelHeadingSkeleton/>{Array.from({ length: 5 }, (_, index) => <RowSkeleton key={index} columns={4}/>)}</section>;
+}
+
+export function OverviewReadinessSkeleton() {
+  return <section className={panel}><PanelHeadingSkeleton/>{Array.from({ length: 4 }, (_, index) => <RowSkeleton key={index} columns={2}/>)}</section>;
+}
+
 function OverviewSkeleton() {
-  return <><div className={metricGrid}>{Array.from({ length: 4 }, (_, index) => <MetricSkeleton key={index}/>)}</div><div className={twoPanel}>
-    <section className={panel}><PanelHeadingSkeleton/>{Array.from({ length: 5 }, (_, index) => <RowSkeleton key={index} columns={4}/>)}</section>
-    <section className={panel}><PanelHeadingSkeleton/>{Array.from({ length: 4 }, (_, index) => <RowSkeleton key={index} columns={2}/>)}</section>
-  </div></>;
+  return <><OverviewMetricsSkeleton/><div className={twoPanel}><OverviewAppointmentsSkeleton/><OverviewReadinessSkeleton/></div></>;
 }
 
 function SalesSkeleton() {
@@ -114,6 +123,22 @@ export function StaffViewSkeleton({ view = "overview", label = "Loading workspac
     {view === "reports" && <ReportsSkeleton/>}
     {view === "settings" && <SettingsSkeleton/>}
   </div>;
+}
+
+export function SettingsFormSkeleton() {
+  return <section className={settingSection}><PanelHeadingSkeleton/><div className="grid grid-cols-2 gap-[13px] p-[18px] max-[760px]:grid-cols-1">{Array.from({ length: 8 }, (_, index) => <div className="flex flex-col gap-2" key={index}><Skeleton width="36%" height={9}/><Skeleton width="100%" height={42}/></div>)}</div></section>;
+}
+
+export function SettingsScheduleSkeleton() {
+  return <section className={settingSection}><PanelHeadingSkeleton/><CalendarGridSkeleton/></section>;
+}
+
+export function SettingsListSkeleton({ rows = 4 }: { rows?: number }) {
+  return <section className={settingSection}><PanelHeadingSkeleton/>{Array.from({ length: rows }, (_, index) => <RowSkeleton key={index} columns={3}/>)}</section>;
+}
+
+export function SettingsNotificationSkeleton() {
+  return <div className={settingSection}><PanelHeadingSkeleton/>{Array.from({ length: 3 }, (_, index) => <RowSkeleton key={index} columns={2}/>)}</div>;
 }
 
 export function StaffShellSkeleton({ view = "overview" }: { view?: StaffView }) {

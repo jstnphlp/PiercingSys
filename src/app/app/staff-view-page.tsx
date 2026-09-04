@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { connection } from "next/server";
 import { Suspense } from "react";
 import {
   CalendarDays,
@@ -10,14 +9,25 @@ import {
   Sparkles,
   UsersRound,
 } from "lucide-react";
-import { getStaffSession } from "@/lib/auth";
+import { getStaffSession, type StaffSession } from "@/lib/auth";
 import {
   formatPhp,
   manilaDate,
 } from "@/lib/domain";
 import {
-  getStaffData,
-  type StaffDataScope,
+  getCalendarReferenceData,
+  getClientsPage,
+  getOverviewBookings,
+  getOverviewCustomerCount,
+  getOverviewReadiness,
+  getOverviewRevenue,
+  getReportsData,
+  getSalesPage,
+  getSettingsDeliveries,
+  getSettingsScheduleData,
+  getSettingsServicesData,
+  getSettingsStudioData,
+  getSettingsTeamData,
 } from "@/lib/data/staff";
 import { resolveReportPeriod, type ReportPeriod, type ReportPreset } from "@/lib/report-period";
 import {
@@ -34,7 +44,16 @@ import { ScheduleSettings } from "./schedule-settings";
 import { ReportsView } from "./reports-view";
 import { SalesView } from "./sales-view";
 import { ServiceList } from "./service-list";
-import { StaffViewSkeleton } from "./staff-skeletons";
+import {
+  OverviewAppointmentsSkeleton,
+  OverviewMetricsSkeleton,
+  OverviewReadinessSkeleton,
+  SettingsFormSkeleton,
+  SettingsListSkeleton,
+  SettingsNotificationSkeleton,
+  SettingsScheduleSkeleton,
+  StaffViewSkeleton,
+} from "./staff-skeletons";
 import { SettingsSectionFocus, type SettingsSection } from "./settings-section-focus";
 import { TodayAppointments } from "./appointment-list";
 import { emptyState, featureView, metricCard, metricGrid, panel, panelHead, settingSection, settingsListRow, settingsStack, statusClasses, statusNote, twoPanel } from "./dashboard-styles";
@@ -70,59 +89,97 @@ async function AuthorizedStaffView({
   view: StaffView;
   searchParams: Promise<StaffSearchParams>;
 }) {
-  await connection();
   const [session, params] = await Promise.all([getStaffSession(), searchParams]);
   if (!session) redirect("/login");
   if (!allowedViews(session.role).includes(view)) redirect("/app");
-  const reportPeriod = resolveReportPeriod(params);
-  const settingsSection = resolveSettingsSection(params.section);
-  const data = await getStaffData(
-    view as StaffDataScope,
-    view === "reports" ? reportPeriod : undefined,
-    session,
-  );
-  return data.error ? <StateCard title="Data could not be loaded" detail={data.error}/> : viewContent(view, settingsSection, data, session, reportPeriod);
+  const reportPeriod = view === "reports" ? resolveReportPeriod(params) : null;
+  const settingsSection = view === "settings" ? resolveSettingsSection(params.section) : null;
+  return viewContent(view, settingsSection, session, reportPeriod);
 }
 
 function viewContent(
   view: StaffView,
   settingsSection: SettingsSection | null,
-  data: Awaited<ReturnType<typeof getStaffData>>,
-  session: { role: string; userId: string },
-  reportPeriod: ReportPeriod,
+  session: StaffSession,
+  reportPeriod: ReportPeriod | null,
 ) {
   const role = session.role;
-  if (view === "overview") return <Overview data={data} role={role} />;
+  if (view === "overview") return <Overview role={role} />;
   if (view === "calendar")
-    return <CalendarWorkspace role={role} userId={session.userId} services={data.services} staff={data.staff} assignments={data.serviceAssignments} stations={data.stations} studio={data.studio} availability={data.availability} />;
-  if (view === "clients") return <Clients data={data} role={role} />;
-  if (view === "sales") return <Sales data={data} />;
-  if (view === "reports") return <Reports data={data} period={reportPeriod} />;
-  return <StudioSettings data={data} role={role} section={settingsSection} />;
+    return <Suspense fallback={<StaffViewSkeleton view="calendar" label="Loading calendar" />}><Calendar role={role} userId={session.userId} /></Suspense>;
+  if (view === "clients") return <Suspense fallback={<StaffViewSkeleton view="clients" label="Loading clients" />}><Clients role={role} /></Suspense>;
+  if (view === "sales") return <Suspense fallback={<StaffViewSkeleton view="sales" label="Loading sales" />}><Sales /></Suspense>;
+  if (view === "reports" && reportPeriod) return <Suspense fallback={<StaffViewSkeleton view="reports" label="Loading reports" />}><Reports period={reportPeriod} /></Suspense>;
+  return <StudioSettings role={role} section={settingsSection} />;
 }
 
-function Overview({
-  data,
+function Overview({ role }: { role: string }) {
+  const bookings = getOverviewBookings();
+  const customerCount = getOverviewCustomerCount();
+  const revenue = role === "piercer"
+    ? Promise.resolve({ completedRevenueCents: 0, completedSaleCount: 0, error: null })
+    : getOverviewRevenue();
+
+  return (
+    <div className={featureView}>
+      <Suspense fallback={<OverviewMetricsSkeleton />}>
+        <OverviewMetrics bookings={bookings} customerCount={customerCount} revenue={revenue} role={role} />
+      </Suspense>
+      <div className={`${twoPanel} items-start`}>
+        <Suspense fallback={<OverviewAppointmentsSkeleton />}>
+          <OverviewAppointments bookings={bookings} role={role} />
+        </Suspense>
+        <Suspense fallback={<OverviewReadinessSkeleton />}>
+          <OverviewReadiness role={role} />
+        </Suspense>
+      </div>
+    </div>
+  );
+}
+
+async function OverviewMetrics({
+  bookings,
+  customerCount,
+  revenue,
   role,
 }: {
-  data: Awaited<ReturnType<typeof getStaffData>>;
+  bookings: ReturnType<typeof getOverviewBookings>;
+  customerCount: ReturnType<typeof getOverviewCustomerCount>;
+  revenue: ReturnType<typeof getOverviewRevenue>;
   role: string;
 }) {
-  const today = manilaDate(new Date());
-  const appointments = data.bookings.filter(
-    (item) => manilaDate(item.startsAt) === today,
-  );
-  const completedSales = data.sales.filter(
-    (item) =>
-      item.status === "completed" && manilaDate(item.createdAt) === today,
-  );
-  const revenue = completedSales.reduce(
-    (sum, item) => sum + item.totalCents - item.adjustmentCents,
-    0,
-  );
-  const pendingEmails = data.deliveries.filter(
-    (item) => item.status === "pending" || item.status === "failed",
-  ).length;
+  const [bookingData, customerData, revenueData] = await Promise.all([
+    bookings,
+    customerCount,
+    revenue,
+  ]);
+  const error = [bookingData.error, customerData.error, revenueData.error].filter(Boolean).join(" ");
+  if (error) return <StateCard title="Metrics could not be loaded" detail={error} />;
+  const appointments = bookingData.bookings;
+  return <div className={metricGrid}>
+    <Metric icon={<CalendarDays />} label="Appointments" value={String(appointments.length)} note="Today in Manila" />
+    <Metric icon={<Clock3 />} label="Confirmed" value={String(appointments.filter((item) => item.status === "confirmed").length)} note="Ready for the studio" />
+    <Metric icon={<UsersRound />} label="Clients" value={String(customerData.customerCount)} note="Stored records" />
+    {role !== "piercer" && <Metric icon={<CircleDollarSign />} label="Collected" value={formatPhp(revenueData.completedRevenueCents)} note={`${revenueData.completedSaleCount} completed sales`} />}
+  </div>;
+}
+
+async function OverviewAppointments({
+  bookings,
+  role,
+}: {
+  bookings: ReturnType<typeof getOverviewBookings>;
+  role: string;
+}) {
+  const data = await bookings;
+  return data.error
+    ? <StateCard title="Appointments could not be loaded" detail={data.error} />
+    : <TodayAppointments bookings={data.bookings} role={role} />;
+}
+
+async function OverviewReadiness({ role }: { role: string }) {
+  const data = await getOverviewReadiness(role !== "piercer");
+  if (data.error) return <StateCard title="Studio readiness could not be loaded" detail={data.error} />;
   const activeServices = data.services.filter((item) => item.isActive);
   const hasActiveServices = activeServices.length > 0;
   const hasQualifiedStaff = hasActiveServices && activeServices.every((service) =>
@@ -137,39 +194,6 @@ function Overview({
     ),
   );
   return (
-    <div className={featureView}>
-      <div className={metricGrid}>
-        <Metric
-          icon={<CalendarDays />}
-          label="Appointments"
-          value={String(appointments.length)}
-          note="Today in Manila"
-        />
-        <Metric
-          icon={<Clock3 />}
-          label="Confirmed"
-          value={String(
-            appointments.filter((item) => item.status === "confirmed").length,
-          )}
-          note="Ready for the studio"
-        />
-        <Metric
-          icon={<UsersRound />}
-          label="Clients"
-          value={String(data.customerCount)}
-          note="Stored records"
-        />
-        {role !== "piercer" && (
-          <Metric
-            icon={<CircleDollarSign />}
-            label="Collected"
-            value={formatPhp(revenue)}
-            note={`${completedSales.length} completed sales`}
-          />
-        )}
-      </div>
-      <div className={`${twoPanel} items-start`}>
-        <TodayAppointments bookings={appointments} role={role} />
         <section className={panel}>
           <PanelHead
             title="Studio readiness"
@@ -196,10 +220,10 @@ function Overview({
             {role !== "piercer" && (
               <Readiness
                 label="Email deliveries"
-                done={pendingEmails === 0}
+                done={data.pendingDeliveryCount === 0}
                 detail={
-                  pendingEmails
-                    ? `${pendingEmails} need attention`
+                  data.pendingDeliveryCount
+                    ? `${data.pendingDeliveryCount} need attention`
                     : "All clear"
                 }
                 section="notifications"
@@ -207,18 +231,19 @@ function Overview({
             )}
           </div>
         </section>
-      </div>
-    </div>
   );
 }
 
-function Clients({
-  data,
-  role,
-}: {
-  data: Awaited<ReturnType<typeof getStaffData>>;
-  role: string;
-}) {
+async function Calendar({ role, userId }: { role: string; userId: string }) {
+  const data = await getCalendarReferenceData();
+  if (data.error) return <StateCard title="Calendar could not be loaded" detail={data.error} />;
+  const now = new Date();
+  return <CalendarWorkspace role={role} userId={userId} services={data.services} staff={data.staff} assignments={data.serviceAssignments} stations={data.stations} studio={data.studio} availability={data.availability} initialDate={manilaDate(now)} initialNow={now.toISOString()} />;
+}
+
+async function Clients({ role }: { role: string }) {
+  const data = await getClientsPage();
+  if (data.error) return <StateCard title="Clients could not be loaded" detail={data.error} />;
   return (
     <div className={featureView}>
       <ClientRecords
@@ -229,7 +254,9 @@ function Clients({
   );
 }
 
-function Sales({ data }: { data: Awaited<ReturnType<typeof getStaffData>> }) {
+async function Sales() {
+  const data = await getSalesPage();
+  if (data.error) return <StateCard title="Sales could not be loaded" detail={data.error} />;
   return <SalesView initialSales={data.sales} services={data.services} />;
 }
 
@@ -241,7 +268,9 @@ const reportPresets: Array<{ value: ReportPreset; label: string }> = [
   { value: "custom", label: "Custom Range" },
 ];
 
-function Reports({ data, period }: { data: Awaited<ReturnType<typeof getStaffData>>; period: ReportPeriod }) {
+async function Reports({ period }: { period: ReportPeriod }) {
+  const data = await getReportsData(period);
+  if (data.error) return <StateCard title="Reports could not be loaded" detail={data.error} />;
   const presetLinks = reportPresets.map((item) => {
     const resolved = resolveReportPeriod({ period: item.value });
     return {
@@ -266,11 +295,9 @@ function Reports({ data, period }: { data: Awaited<ReturnType<typeof getStaffDat
 }
 
 function StudioSettings({
-  data,
   role,
   section,
 }: {
-  data: Awaited<ReturnType<typeof getStaffData>>;
   role: string;
   section: SettingsSection | null;
 }) {
@@ -278,9 +305,46 @@ function StudioSettings({
     <div className={featureView}>
       <SettingsSectionFocus section={section} />
       <div className={settingsStack}>
-        <SettingsForm studio={data.studio} />
-        <ScheduleSettings studio={data.studio} staff={data.staff} availability={data.availability} closures={data.closures} sectionId="studio-settings-hours" />
-        <section id="studio-settings-services" className={settingSection} tabIndex={-1}>
+        <Suspense fallback={<SettingsFormSkeleton />}><SettingsGeneral /></Suspense>
+        <Suspense fallback={<SettingsScheduleSkeleton />}><SettingsSchedule /></Suspense>
+        <Suspense fallback={<SettingsListSkeleton />}><SettingsServices /></Suspense>
+        <Suspense fallback={<SettingsListSkeleton rows={5} />}><SettingsTeam role={role} /></Suspense>
+        <section className={twoPanel}>
+          <div id="studio-settings-notifications" className={settingSection} tabIndex={-1}>
+            <PanelHead
+              title="Consent records"
+              detail="Signed acknowledgements are stored against bookings."
+            />
+            <p className={`${statusNote} mx-[18px] my-2.5`}>
+              Consent records become visible from the associated client and
+              appointment once submitted.
+            </p>
+          </div>
+          <Suspense fallback={<SettingsNotificationSkeleton />}><SettingsNotifications /></Suspense>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+async function SettingsGeneral() {
+  const data = await getSettingsStudioData();
+  return data.error
+    ? <StateCard title="Studio settings could not be loaded" detail={data.error} />
+    : <SettingsForm studio={data.studio} />;
+}
+
+async function SettingsSchedule() {
+  const data = await getSettingsScheduleData();
+  return data.error
+    ? <StateCard title="Schedule settings could not be loaded" detail={data.error} />
+    : <ScheduleSettings studio={data.studio} staff={data.staff} availability={data.availability} closures={data.closures} sectionId="studio-settings-hours" initialDate={manilaDate(new Date())} />;
+}
+
+async function SettingsServices() {
+  const data = await getSettingsServicesData();
+  if (data.error) return <StateCard title="Services could not be loaded" detail={data.error} />;
+  return <section id="studio-settings-services" className={settingSection} tabIndex={-1}>
           <PanelHead
             title="Services & pricing"
             detail="Only active, assigned services appear on public booking."
@@ -294,8 +358,13 @@ function StudioSettings({
             />
           </div>
           <ServiceList services={data.services} />
-        </section>
-        <section id="studio-settings-team" className={settingSection} tabIndex={-1}>
+        </section>;
+}
+
+async function SettingsTeam({ role }: { role: string }) {
+  const data = await getSettingsTeamData();
+  if (data.error) return <StateCard title="Team settings could not be loaded" detail={data.error} />;
+  return <section id="studio-settings-team" className={settingSection} tabIndex={-1}>
           <PanelHead
             title="Team, schedules & stations"
             detail="Owners manage invitations; managers configure operational availability."
@@ -321,19 +390,13 @@ function StudioSettings({
               </div>
             ))}
           </div>
-        </section>
-        <section className={twoPanel}>
-          <div id="studio-settings-notifications" className={settingSection} tabIndex={-1}>
-            <PanelHead
-              title="Consent records"
-              detail="Signed acknowledgements are stored against bookings."
-            />
-            <p className={`${statusNote} mx-[18px] my-2.5`}>
-              Consent records become visible from the associated client and
-              appointment once submitted.
-            </p>
-          </div>
-          <div className={settingSection}>
+        </section>;
+}
+
+async function SettingsNotifications() {
+  const data = await getSettingsDeliveries();
+  if (data.error) return <StateCard title="Notification deliveries could not be loaded" detail={data.error} />;
+  return <div className={settingSection}>
             <PanelHead
               title="Notification deliveries"
               detail="Confirmation, reschedule, and cancellation email status."
@@ -353,11 +416,7 @@ function StudioSettings({
             ) : (
               <p className={`${statusNote} mx-[18px] my-2.5`}>No email deliveries recorded.</p>
             )}
-          </div>
-        </section>
-      </div>
-    </div>
-  );
+          </div>;
 }
 
 function Metric({
