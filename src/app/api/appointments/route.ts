@@ -2,7 +2,7 @@ import { z } from "zod";
 import { getStaffSession } from "@/lib/auth";
 import { queueBookingEmail } from "@/lib/booking-side-effects";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { validationError } from "@/lib/validation";
+import { philippineMobilePhone, validationError } from "@/lib/validation";
 
 const createSchema = z.object({
   serviceIds: z.array(z.string().uuid()).min(1).max(12),
@@ -14,7 +14,7 @@ const createSchema = z.object({
     firstName: z.string().trim().min(1).max(80),
     lastName: z.string().trim().min(1).max(80),
     email: z.string().trim().email().max(254),
-    phone: z.string().trim().min(7).max(30),
+    phone: philippineMobilePhone,
   }).nullable().optional(),
   notes: z.string().trim().max(2000).nullable().optional(),
   sendConfirmation: z.boolean().default(true),
@@ -89,7 +89,7 @@ export async function POST(request: Request) {
       code: forbidden ? "FORBIDDEN" : conflict ? "SCHEDULE_CONFLICT" : "CREATE_FAILED",
       message: forbidden ? "You cannot assign that piercer." : conflict
         ? "That piercer or station is unavailable at the selected time."
-        : error.message.replaceAll("_", " "),
+        : scheduleMessage(error.message),
     } }, { status: forbidden ? 403 : conflict ? 409 : 422 });
   }
   const booking = Array.isArray(data) ? data[0] : data;
@@ -98,4 +98,14 @@ export async function POST(request: Request) {
     if (delivery.data) queueBookingEmail(delivery.data.id);
   }
   return Response.json({ data: booking }, { status: 201 });
+}
+
+function scheduleMessage(message: string) {
+  const messages: Record<string, string> = {
+    studio_closed: "The studio is closed on the selected date.",
+    before_studio_hours: "The selected start time is before the studio opens.",
+    appointment_ends_after_studio_hours: "This appointment ends after the studio's configured closing time.",
+    outside_staff_availability: "The selected piercer is not available for the full appointment.",
+  };
+  return messages[message] ?? message.replaceAll("_", " ");
 }

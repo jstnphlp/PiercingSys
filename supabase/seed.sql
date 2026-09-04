@@ -1,2 +1,3 @@
--- Local fixture data is created by the checked-in migrations.
--- Run `npm run prisma:seed` after a reset to create the local owner account.
+-- The service catalog and studio defaults are created by checked-in migrations.
+-- Run `npm run prisma:seed` after a reset to create the local owner, mock staff
+-- accounts, and the relational operational fixtures that depend on Auth users.

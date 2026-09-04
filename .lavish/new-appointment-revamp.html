@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PiercingSys New Appointment Prototype</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    :root {
+      --ink:#3b2923; --orange:#df682c; --rust:#ba4f2d; --gold:#efb83f;
+      --cream:#fff8e8; --paper:#fff9eb; --shell:#fff5df; --sand:#f7dd9c;
+      --line:#d79c75; --muted:#756861; --sage:#a9c99a; --lilac:#c9afd4; --teal:#73aaa2;
+      --focus:#efb83f88; --danger:#a33e30;
+    }
+    body { margin:0; min-height:100vh; background:var(--cream); color:var(--ink); font-family: ui-rounded, "Arial Rounded MT Bold", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    button, input, select, textarea { font:inherit; color:inherit; }
+    button { cursor:pointer; }
+    :is(button,input,select,textarea):focus-visible { outline:3px solid var(--focus); outline-offset:2px; }
+    .page { min-height:100vh; display:grid; place-items:center; padding:22px; background: radial-gradient(circle at 12% 18%, #efb83f22 0 80px, transparent 82px), radial-gradient(circle at 88% 82%, #c9afd433 0 95px, transparent 97px), var(--cream); }
+    .backdrop { width:100%; max-width:1120px; border:2px solid var(--ink); border-radius:24px 18px 25px 20px; background:#2d181214; box-shadow:8px 8px 0 var(--ink); padding:12px; }
+    .dialog { max-height:94vh; overflow:hidden; border:2px solid var(--ink); border-radius:22px; background:var(--shell); box-shadow:4px 4px 0 var(--ink); display:flex; flex-direction:column; }
+    .dialog > header { position:sticky; top:0; z-index:3; display:flex; justify-content:space-between; gap:16px; align-items:flex-start; border-bottom:1px dashed #c88f6e; background:var(--shell); padding:19px 21px; }
+    h1,h2,h3,p { margin:0; }
+    h1 { font-family: Georgia, ui-serif, serif; font-size:24px; line-height:1.05; letter-spacing:0; }
+    .detail { margin-top:5px; font-size:11px; color:#785d53; line-height:1.45; }
+    .close { width:34px; height:34px; border:1.5px solid var(--ink); border-radius:10px 8px 11px 9px; background:#efc6a4; box-shadow:1px 2px 0 var(--ink); font-weight:900; }
+    .composer { display:grid; grid-template-columns:minmax(0,1fr) 330px; gap:0; min-height:0; overflow:auto; }
+    .main { padding:20px; display:flex; flex-direction:column; gap:16px; min-width:0; }
+    .summary { position:sticky; top:0; align-self:start; min-height:100%; border-left:1.5px dashed #bb7f5d; background:#f6dcae; padding:17px; }
+    .summary-card { border:2px solid var(--ink); border-radius:18px 13px 19px 14px; background:#fff8e8; box-shadow:4px 4px 0 var(--ink); overflow:hidden; }
+    .summary-head { padding:15px; border-bottom:1px dashed #c98965; background:#fff1cf; }
+    .summary-head strong { display:block; font-family:Georgia, ui-serif, serif; font-size:18px; }
+    .summary-head small { display:block; margin-top:4px; color:#765c52; font-size:10px; }
+    .section { border-top:1px dashed #c88f6e; padding-top:15px; }
+    .section:first-child { border-top:0; padding-top:0; }
+    .section-title { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:10px; }
+    .section-title span:first-child { display:flex; align-items:center; gap:8px; font-size:10px; font-weight:950; letter-spacing:1px; color:#a34d30; text-transform:uppercase; }
+    .num { display:grid; place-items:center; width:23px; height:23px; border:1.5px solid var(--ink); border-radius:50% 43% 54% 45%; background:var(--gold); color:#59351c; box-shadow:1px 1px 0 var(--ink); font-size:10px; }
+    .pill { border:1px solid var(--ink); border-radius:999px; background:#d8e4c7; color:#315342; padding:5px 9px; font-size:9px; font-weight:900; box-shadow:1px 1px 0 var(--ink); white-space:nowrap; }
+    .service-tools { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:9px; margin-bottom:9px; align-items:center; }
+    .search, .field input, .field select, .field textarea { width:100%; min-height:43px; border:1.5px solid var(--ink); border-radius:10px 7px 11px 8px; background:#fffaf0; padding:10px 12px; box-shadow:2px 2px 0 #d9a47e; }
+    .service-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; max-height:248px; overflow:auto; padding:2px; scrollbar-color:#d5aa89 transparent; }
+    .service { position:relative; display:grid; grid-template-columns:22px minmax(0,1fr) auto; align-items:center; gap:9px; min-height:54px; border:1.5px solid #bc7c57; border-radius:12px 9px 13px 10px; background:#fff8e8; padding:9px; text-align:left; }
+    .service[aria-pressed="true"] { border:2px solid var(--ink); background:#f4c56e; box-shadow:3px 3px 0 var(--ink); transform:translate(-1px,-1px); }
+    .check { display:grid; place-items:center; width:20px; height:20px; border:2px solid var(--ink); border-radius:6px 4px 7px 5px; background:white; font-weight:950; color:transparent; }
+    .service[aria-pressed="true"] .check { background:var(--orange); color:white; }
+    .service strong { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px; }
+    .service small { display:block; margin-top:3px; color:#74594f; font-size:9px; }
+    .minutes { border:1px dashed #9f6a4d; border-radius:999px; padding:4px 7px; font-size:9px; font-weight:900; background:#fff5df; white-space:nowrap; }
+    .segmented { display:grid; grid-template-columns:1fr 1fr; border:1.5px solid var(--ink); border-radius:13px 10px 14px 11px; background:#d9ac83; padding:3px; box-shadow:1px 2px 0 var(--ink); }
+    .segmented button { min-height:37px; border:0; border-radius:10px 8px 11px 9px; background:transparent; font-weight:900; }
+    .segmented button[aria-pressed="true"] { background:#fff4d7; box-shadow:1px 1px 0 var(--ink); color:#b74827; }
+    .grid2 { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+    .field { display:flex; flex-direction:column; gap:7px; color:#694d43; font-size:12px; font-weight:800; }
+    .field textarea { min-height:74px; resize:vertical; }
+    .customer-picker { display:grid; gap:7px; }
+    .hint { display:flex; align-items:center; gap:7px; border:1px dashed #ba7652; border-radius:11px; background:#f8dcae; padding:10px 12px; font-size:11px; color:#60463c; }
+    .notes-row { opacity:.9; }
+    .confirm { display:flex; align-items:center; gap:8px; font-size:10px; color:#71594f; font-weight:800; padding:2px 0; }
+    .confirm input { width:18px; height:18px; accent-color:var(--orange); }
+    .sum-list { padding:14px 15px 5px; display:grid; gap:12px; }
+    .sum-row { display:grid; grid-template-columns:86px minmax(0,1fr); gap:10px; align-items:start; }
+    .sum-row dt { font-size:8px; font-weight:950; letter-spacing:.8px; text-transform:uppercase; color:#a34d30; }
+    .sum-row dd { margin:0; font-size:12px; line-height:1.45; color:#49332c; }
+    .empty { color:#82675d; font-style:italic; }
+    .selected-services { display:flex; flex-wrap:wrap; gap:6px; }
+    .tag { border:1.5px solid var(--ink); border-radius:10px 8px 11px 9px; background:#f0c66e; padding:6px 8px; box-shadow:1px 1px 0 var(--ink); font-size:10px; font-weight:900; }
+    .readiness { margin:10px 15px 14px; border:1.5px solid var(--ink); border-radius:14px 10px 15px 11px; background:#fff5df; padding:12px; }
+    .ready { background:#d8e5cf; color:#315342; }
+    .readiness strong { display:block; font-size:12px; margin-bottom:7px; }
+    .readiness ul { margin:0; padding-left:18px; font-size:10px; line-height:1.65; }
+    .actions { display:flex; justify-content:flex-end; gap:9px; flex-wrap:wrap; padding:14px 15px 15px; border-top:1px dashed #c98965; background:#fff1cf; }
+    .btn { display:inline-flex; min-height:43px; align-items:center; justify-content:center; gap:8px; border:2px solid var(--ink); border-radius:13px 10px 14px 11px; padding:0 19px; font-weight:850; box-shadow:3px 3px 0 var(--ink); transition:transform .15s, box-shadow .15s, background .15s; }
+    .btn:hover { transform:translate(1px,1px); box-shadow:2px 2px 0 var(--ink); }
+    .btn.secondary { background:#fffaf0; }
+    .btn.primary { background:var(--orange); color:white; }
+    .btn:disabled { cursor:not-allowed; opacity:.48; transform:none; }
+    .toast { display:none; margin-top:10px; border:1px solid #4a6d5b; background:#c8dfc6; color:#315342; border-radius:10px; padding:9px; font-size:11px; font-weight:900; }
+    .toast.show { display:block; }
+    @media (max-width: 860px) {
+      .page { padding:10px; align-items:start; }
+      .backdrop { padding:6px; }
+      .dialog { max-height:none; overflow:visible; }
+      .composer { grid-template-columns:1fr; overflow:visible; }
+      .summary { position:static; border-left:0; border-top:1.5px dashed #bb7f5d; }
+      .service-list, .grid2, .service-tools { grid-template-columns:1fr; }
+      .dialog > header { padding:16px; }
+      .main { padding:16px; }
+      .sum-row { grid-template-columns:1fr; gap:3px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <div class="backdrop">
+      <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="title">
+        <header>
+          <div>
+            <h1 id="title">New appointment</h1>
+            <p class="detail">Studio-created bookings ignore public lead time and horizon limits.</p>
+          </div>
+          <button class="close" type="button" aria-label="Close dialog">x</button>
+        </header>
+        <div class="composer">
+          <form class="main" id="bookingForm">
+            <section class="section" aria-labelledby="servicesTitle">
+              <div class="section-title">
+                <span><span class="num">1</span><span id="servicesTitle">Services</span></span>
+                <span class="pill" id="serviceMeta">0 selected · 0 min</span>
+              </div>
+              <div class="service-tools">
+                <input class="search" id="serviceSearch" type="search" placeholder="Search services" aria-label="Search services">
+                <span class="hint" id="eligibleHint">Choose services to refine eligible piercers.</span>
+              </div>
+              <div class="service-list" id="serviceList" aria-label="Services"></div>
+            </section>
+
+            <section class="section" aria-labelledby="clientTitle">
+              <div class="section-title"><span><span class="num">2</span><span id="clientTitle">Client</span></span></div>
+              <div class="segmented" role="group" aria-label="Client mode">
+                <button type="button" id="existingBtn" aria-pressed="true">Existing client</button>
+                <button type="button" id="newBtn" aria-pressed="false">New client</button>
+              </div>
+              <div id="existingClient" class="customer-picker">
+                <label class="field">Client search
+                  <input id="clientSearch" type="search" placeholder="Search clients" value="Jamie">
+                </label>
+                <label class="field">Client
+                  <select id="customerId" required>
+                    <option value="">Choose a client</option>
+                    <option selected>Jamie Cruz · jamie.cruz@example.com</option>
+                    <option>Mika Santos · mika@example.com</option>
+                    <option>Rafa Lim · rafa@example.com</option>
+                  </select>
+                </label>
+              </div>
+              <div id="newClient" class="grid2" hidden>
+                <label class="field">First name<input id="firstName" autocomplete="given-name"></label>
+                <label class="field">Last name<input id="lastName" autocomplete="family-name"></label>
+                <label class="field">Email<input id="email" type="email" autocomplete="email"></label>
+                <label class="field">Phone<input id="phone" autocomplete="tel"></label>
+              </div>
+            </section>
+
+            <section class="section" aria-labelledby="scheduleTitle">
+              <div class="section-title">
+                <span><span class="num">3</span><span id="scheduleTitle">Schedule</span></span>
+                <span class="pill">Asia/Manila</span>
+              </div>
+              <div class="grid2">
+                <label class="field">Eligible piercer
+                  <select id="piercerId" required></select>
+                </label>
+                <label class="field">Station
+                  <select id="stationId">
+                    <option value="">No station</option>
+                    <option selected>Station 2</option>
+                    <option>Station 1</option>
+                    <option>Consult Room</option>
+                  </select>
+                </label>
+                <label class="field">Date
+                  <input id="date" type="date" value="2026-09-03" required>
+                </label>
+                <label class="field">Manila time
+                  <input id="time" type="time" value="10:00" required>
+                </label>
+              </div>
+              <p class="hint" id="durationHint">Combined duration: <strong>0 minutes</strong>. End time is calculated automatically.</p>
+            </section>
+
+            <section class="section notes-row" aria-labelledby="notesTitle">
+              <div class="section-title"><span><span class="num">4</span><span id="notesTitle">Notes / additional details</span></span></div>
+              <label class="field">Notes
+                <textarea id="notes" maxlength="2000" placeholder="Optional studio notes"></textarea>
+              </label>
+              <label class="confirm"><input id="sendConfirmation" type="checkbox" checked> Email a confirmation to the client</label>
+            </section>
+          </form>
+
+          <aside class="summary" aria-label="Appointment summary">
+            <div class="summary-card">
+              <div class="summary-head">
+                <strong>Appointment Summary</strong>
+                <small>Live review before creation</small>
+              </div>
+              <dl class="sum-list">
+                <div class="sum-row"><dt>Services</dt><dd id="sumServices" class="empty">Not selected</dd></div>
+                <div class="sum-row"><dt>Total duration</dt><dd id="sumDuration" class="empty">Not selected</dd></div>
+                <div class="sum-row"><dt>Client</dt><dd id="sumClient" class="empty">Choose a client</dd></div>
+                <div class="sum-row"><dt>Piercer</dt><dd id="sumPiercer" class="empty">Choose a piercer</dd></div>
+                <div class="sum-row"><dt>Station</dt><dd id="sumStation">Station 2</dd></div>
+                <div class="sum-row"><dt>Date & time</dt><dd id="sumWhen">Sep 3 · 10:00 AM</dd></div>
+                <div class="sum-row"><dt>Notes</dt><dd id="sumNotes" class="empty">No notes</dd></div>
+              </dl>
+              <div class="readiness" id="readiness"></div>
+              <div class="actions">
+                <button class="btn secondary" type="button">Cancel</button>
+                <button class="btn primary" id="createBtn" type="button" disabled>Create appointment</button>
+              </div>
+            </div>
+            <div class="toast" id="toast" role="status">Simulated: appointment payload is ready for POST /api/appointments.</div>
+          </aside>
+        </div>
+      </section>
+    </div>
+  </main>
+  <script>
+    const services = [
+      { id:"oral", name:"Oral Piercing", duration:60, staff:["ana","bea"] },
+      { id:"nipple", name:"Nipple", duration:60, staff:["ana","carlo"] },
+      { id:"dermal", name:"Dermal", duration:60, staff:["ana"] },
+      { id:"genital", name:"Genital", duration:60, staff:["carlo"] },
+      { id:"ears", name:"Curation / Earscape", duration:60, staff:["ana","bea","carlo"] },
+      { id:"removal", name:"Removal / Replacement / Downsize / Cleaning", duration:30, staff:["ana","bea","carlo"] },
+      { id:"bump", name:"Bump Treatment", duration:30, staff:["bea","carlo"] },
+      { id:"disc", name:"Authentic No-Pull Disc", duration:15, staff:["ana","bea","carlo"] },
+      { id:"anodizing", name:"Titanium Anodizing", duration:30, staff:["ana","bea","carlo"] },
+      { id:"ultrasonic", name:"Ultrasonic Jewelry Cleaning", duration:30, staff:["ana","bea","carlo"] }
+    ];
+    const staff = { ana:"Ana Reyes", bea:"Bea Cruz", carlo:"Carlo Mendoza" };
+    let selected = new Set(["oral","anodizing"]);
+    let clientMode = "existing";
+
+    const $ = (id) => document.getElementById(id);
+    function selectedServices() { return services.filter(s => selected.has(s.id)); }
+    function duration() { return selectedServices().reduce((sum,s) => sum + s.duration, 0); }
+    function eligiblePiercers() {
+      const chosen = selectedServices();
+      if (!chosen.length) return Object.keys(staff);
+      return Object.keys(staff).filter(id => chosen.every(s => s.staff.includes(id)));
+    }
+    function renderServices() {
+      const q = $("serviceSearch").value.trim().toLowerCase();
+      $("serviceList").innerHTML = "";
+      services.filter(s => s.name.toLowerCase().includes(q)).forEach(service => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "service";
+        button.setAttribute("aria-pressed", selected.has(service.id) ? "true" : "false");
+        button.innerHTML = `<span class="check" aria-hidden="true">✓</span><span><strong>${service.name}</strong><small>${service.staff.map(id => staff[id].split(" ")[0]).join(", ")} eligible</small></span><span class="minutes">${service.duration} min</span>`;
+        button.addEventListener("click", () => {
+          selected.has(service.id) ? selected.delete(service.id) : selected.add(service.id);
+          render();
+        });
+        $("serviceList").appendChild(button);
+      });
+    }
+    function renderPiercers() {
+      const options = eligiblePiercers();
+      const current = $("piercerId").value;
+      $("piercerId").innerHTML = `<option value="">Choose eligible piercer</option>` + options.map(id => `<option value="${id}">${staff[id]}</option>`).join("");
+      $("piercerId").value = options.includes(current) ? current : (options.includes("ana") ? "ana" : "");
+      $("eligibleHint").textContent = `${options.length} eligible piercer${options.length === 1 ? "" : "s"} for selected services`;
+    }
+    function clientLabel() {
+      if (clientMode === "existing") return $("customerId").value || "";
+      const name = [$("firstName").value, $("lastName").value].filter(Boolean).join(" ");
+      return name || "";
+    }
+    function whenLabel() {
+      const date = $("date").value;
+      const time = $("time").value;
+      if (!date || !time) return "";
+      const d = new Date(`${date}T${time}:00+08:00`);
+      return new Intl.DateTimeFormat("en-PH", { month:"short", day:"numeric", timeZone:"Asia/Manila" }).format(d) + " · " +
+        new Intl.DateTimeFormat("en-PH", { hour:"numeric", minute:"2-digit", timeZone:"Asia/Manila" }).format(d);
+    }
+    function renderSummary() {
+      const chosen = selectedServices();
+      $("serviceMeta").textContent = `${chosen.length} selected · ${duration()} min`;
+      $("durationHint").innerHTML = `Combined duration: <strong>${duration()} minutes</strong>. End time is calculated automatically.`;
+      $("sumServices").className = chosen.length ? "" : "empty";
+      $("sumServices").innerHTML = chosen.length ? `<div class="selected-services">${chosen.map(s => `<span class="tag">${s.name}</span>`).join("")}</div>` : "Not selected";
+      $("sumDuration").className = duration() ? "" : "empty";
+      $("sumDuration").textContent = duration() ? `${duration()} min` : "Not selected";
+      const client = clientLabel();
+      $("sumClient").className = client ? "" : "empty";
+      $("sumClient").textContent = client || (clientMode === "new" ? "Enter new client details" : "Choose a client");
+      const piercerName = staff[$("piercerId").value];
+      $("sumPiercer").className = piercerName ? "" : "empty";
+      $("sumPiercer").textContent = piercerName || "Choose a piercer";
+      $("sumStation").textContent = $("stationId").value || "No station";
+      $("sumWhen").className = whenLabel() ? "" : "empty";
+      $("sumWhen").textContent = whenLabel() || "Choose date and time";
+      $("sumNotes").className = $("notes").value.trim() ? "" : "empty";
+      $("sumNotes").textContent = $("notes").value.trim() || "No notes";
+      const missing = [];
+      if (!chosen.length) missing.push("Services");
+      if (!client) missing.push("Client");
+      if (clientMode === "new" && (!$("email").value || !$("phone").value)) missing.push("New client contact");
+      if (!piercerName) missing.push("Piercer");
+      if (!$("date").value || !$("time").value) missing.push("Date and time");
+      $("createBtn").disabled = missing.length > 0;
+      $("readiness").className = missing.length ? "readiness" : "readiness ready";
+      $("readiness").innerHTML = missing.length ? `<strong>Still needed:</strong><ul>${missing.map(x => `<li>${x}</li>`).join("")}</ul>` : `<strong>✓ Ready to create</strong><div style="font-size:10px;line-height:1.5">Server validation still checks qualifications, hours, availability, and conflicts.</div>`;
+    }
+    function render() { renderServices(); renderPiercers(); renderSummary(); }
+    $("serviceSearch").addEventListener("input", renderServices);
+    $("existingBtn").addEventListener("click", () => { clientMode = "existing"; $("existingBtn").setAttribute("aria-pressed","true"); $("newBtn").setAttribute("aria-pressed","false"); $("existingClient").hidden = false; $("newClient").hidden = true; renderSummary(); });
+    $("newBtn").addEventListener("click", () => { clientMode = "new"; $("existingBtn").setAttribute("aria-pressed","false"); $("newBtn").setAttribute("aria-pressed","true"); $("existingClient").hidden = true; $("newClient").hidden = false; renderSummary(); });
+    ["customerId","firstName","lastName","email","phone","piercerId","stationId","date","time","notes","sendConfirmation"].forEach(id => $(id).addEventListener("input", renderSummary));
+    ["piercerId","stationId","date","time","customerId"].forEach(id => $(id).addEventListener("change", renderSummary));
+    $("createBtn").addEventListener("click", () => { $("toast").classList.add("show"); setTimeout(() => $("toast").classList.remove("show"), 3600); });
+    render();
+  </script>
+</body>
+</html>

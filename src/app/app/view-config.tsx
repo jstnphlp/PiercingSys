@@ -31,6 +31,28 @@ export function resolveStaffView(value: string | undefined, role: StaffRole): St
   return allowedViews(role).includes(requested) ? requested : "overview";
 }
 
+export function staffViewPath(view: StaffView) {
+  return view === "overview" ? "/app" : `/app/${view}`;
+}
+
+export function staffViewFromPathname(pathname: string, role: StaffRole): StaffView {
+  const segment = pathname.split("/").filter(Boolean)[1];
+  return resolveStaffView(segment, role);
+}
+
+export function legacyStaffViewUrl(params: Record<string, string | string[] | undefined>) {
+  if (!params.view || Array.isArray(params.view)) return null;
+  const destination = staffViews.includes(params.view as StaffView)
+    ? staffViewPath(params.view as StaffView)
+    : "/app";
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (key === "view" || value === undefined) continue;
+    for (const item of Array.isArray(value) ? value : [value]) query.append(key, item);
+  }
+  return `${destination}${query.size ? `?${query}` : ""}`;
+}
+
 export function staffViewTitle(view: StaffView) {
   return view === "overview" ? "Today at the corner" : view[0].toUpperCase() + view.slice(1);
 }

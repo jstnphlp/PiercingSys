@@ -3,7 +3,6 @@ import { getStaffSession, hasRole } from "@/lib/auth";
 import { REPORT_TIME_ZONE, validateReportRange } from "@/lib/report-period";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-export const runtime = "nodejs";
 const PAGE_SIZE = 1000;
 const PHP_FORMAT = '₱#,##0.00;[Red]-₱#,##0.00';
 

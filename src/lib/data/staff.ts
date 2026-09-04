@@ -1,14 +1,16 @@
 import "server-only";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { cacheLife, cacheTag } from "next/cache";
+import type { StaffSession } from "@/lib/auth";
+import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
 import type {
   BookingStatus,
   PaymentMethod,
   SaleStatus,
   Service,
-  StudioSettings,
 } from "@/lib/domain";
 import { manilaDayBounds } from "@/lib/domain";
 import { seededStudio } from "@/lib/data/public";
+import { customerDisplayContact, customerDisplayName } from "@/lib/walk-in-customer";
 
 export type BookingRecord = {
   id: string;
@@ -110,7 +112,7 @@ export function mapSaleRow(row: Record<string, unknown>): SaleRecord {
     status: row.status as SaleStatus,
     totalCents: Number(row.total_cents),
     createdAt: String(row.created_at),
-    customerName: customer ? `${customer.first_name} ${customer.last_name}` : "Walk-in",
+    customerName: customer ? customerDisplayName(customer.first_name, customer.last_name) : "Walk-in",
     methods: payments.map((item) => item.method),
     paidCents: payments.reduce((sum, item) => sum + item.amount_cents, 0),
     adjustmentCents: adjustments.reduce((sum, item) => sum + item.amount_cents, 0),
@@ -197,9 +199,100 @@ const emptyData = {
   error: null as string | null,
 };
 
+const emptyReferenceData = {
+  studio: seededStudio,
+  services: [] as Service[],
+  staff: [] as StaffRecord[],
+  serviceAssignments: [] as Array<{ serviceId: string; staffId: string }>,
+  stations: [] as Array<{ id: string; name: string }>,
+  closures: [] as ClosureRecord[],
+  availability: [] as AvailabilityRecord[],
+  error: null as string | null,
+};
+
+async function getCachedStaffReferenceData(scope: StaffDataScope) {
+  "use cache";
+  cacheLife("minutes");
+  cacheTag("staff-reference");
+
+  const admin = createSupabaseAdminClient();
+  if (!admin) return { ...emptyReferenceData, error: "Supabase is not configured." };
+  const includes = (...scopes: StaffDataScope[]) => scope === "all" || scopes.includes(scope);
+  const [settingsResult, servicesResult, staffResult, assignmentResult, stationResult, availabilityResult, closureResult] = await Promise.all([
+    includes("overview", "calendar", "settings")
+      ? admin.from("studio_settings").select("id,name,location,address,email,phone,instagram_url,business_hours,booking_interval_minutes,minimum_lead_hours,booking_horizon_days,minimum_age,cancellation_policy").eq("id", 1).single()
+      : Promise.resolve({ data: null, error: null }),
+    includes("overview", "calendar", "sales", "settings")
+      ? admin.from("services").select("id,name,description,body_area,category,duration_minutes,price_cents,min_price_cents,max_price_cents,price_unit,is_active,sort_order").order("sort_order")
+      : Promise.resolve({ data: [], error: null }),
+    includes("overview", "calendar", "settings")
+      ? admin.from("staff_profiles").select("user_id,display_name,role,active,color").order("created_at")
+      : Promise.resolve({ data: [], error: null }),
+    includes("overview", "calendar", "settings")
+      ? admin.from("service_staff").select("service_id,staff_id")
+      : Promise.resolve({ data: [], error: null }),
+    includes("calendar", "settings")
+      ? admin.from("stations").select("id,name").eq("active", true).order("name")
+      : Promise.resolve({ data: [], error: null }),
+    includes("calendar", "settings")
+      ? admin.from("staff_availability").select("id,staff_id,weekday,starts_at,ends_at,availability_date").order("weekday").order("starts_at")
+      : Promise.resolve({ data: [], error: null }),
+    includes("settings")
+      ? admin.from("closures").select("id,starts_at,ends_at,reason").order("starts_at", { ascending: false }).limit(100)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  const settingsRow = settingsResult.data;
+  const errors = [settingsResult.error, servicesResult.error, staffResult.error, assignmentResult.error, stationResult.error, availabilityResult.error, closureResult.error].filter(Boolean);
+  return {
+    studio: settingsRow ? {
+      id: settingsRow.id,
+      name: settingsRow.name,
+      location: settingsRow.location,
+      address: settingsRow.address,
+      email: settingsRow.email,
+      phone: settingsRow.phone,
+      instagramUrl: settingsRow.instagram_url,
+      timezone: "Asia/Manila" as const,
+      currency: "PHP" as const,
+      businessHours: settingsRow.business_hours,
+      bookingIntervalMinutes: settingsRow.booking_interval_minutes,
+      minimumLeadHours: settingsRow.minimum_lead_hours,
+      bookingHorizonDays: settingsRow.booking_horizon_days,
+      minimumAge: settingsRow.minimum_age,
+      cancellationPolicy: settingsRow.cancellation_policy,
+    } : seededStudio,
+    services: (servicesResult.data ?? []).map((row) => ({
+      id: row.id,
+      name: row.name,
+      description: row.description,
+      bodyArea: row.body_area,
+      category: row.category as Service["category"],
+      durationMinutes: row.duration_minutes,
+      priceCents: row.price_cents,
+      minPriceCents: row.min_price_cents,
+      maxPriceCents: row.max_price_cents,
+      priceUnit: row.price_unit,
+      isActive: row.is_active,
+    })),
+    staff: (staffResult.data ?? []).map((row) => ({
+      id: row.user_id,
+      displayName: row.display_name,
+      role: row.role,
+      active: row.active,
+      color: row.color,
+    })),
+    serviceAssignments: (assignmentResult.data ?? []).map((row) => ({ serviceId: row.service_id, staffId: row.staff_id })),
+    stations: stationResult.data ?? [],
+    closures: (closureResult.data ?? []).map((row) => ({ id: row.id, startsAt: row.starts_at, endsAt: row.ends_at, reason: row.reason })),
+    availability: (availabilityResult.data ?? []).map((row) => ({ id: row.id, staffId: row.staff_id, weekday: row.weekday, startsAt: row.starts_at, endsAt: row.ends_at, availabilityDate: row.availability_date })),
+    error: errors.map((error) => error?.message).filter(Boolean).join(" ") || null,
+  };
+}
+
 export async function getStaffData(
   scope: StaffDataScope = "all",
   reportRange?: { startUtc: string; endUtc: string },
+  session?: Pick<StaffSession, "userId" | "role">,
 ) {
   const supabase = await createSupabaseServerClient();
   if (!supabase)
@@ -209,31 +302,25 @@ export async function getStaffData(
     };
   const includes = (...scopes: StaffDataScope[]) =>
     scope === "all" || scopes.includes(scope);
+  const needsReferenceData = includes("overview", "calendar", "sales", "settings");
   const emptyMany = Promise.resolve({ data: [] as never[], error: null, count: null });
   const emptySingle = Promise.resolve({ data: null, error: null, count: null });
   const today = manilaDayBounds();
   const [
-    settingsResult,
-    servicesResult,
+    referenceData,
     bookingsResult,
     customersResult,
     customerCountResult,
     directoryResult,
     salesResult,
-    staffResult,
-    assignmentResult,
     deliveryResult,
-    stationResult,
-    availabilityResult,
-    closureResult,
     reportResult,
   ] = await Promise.all([
-    includes("overview", "settings")
-      ? supabase.from("studio_settings").select("id,name,location,address,email,phone,instagram_url,business_hours,booking_interval_minutes,minimum_lead_hours,booking_horizon_days,minimum_age,cancellation_policy").eq("id", 1).single()
-      : emptySingle,
-    includes("overview", "calendar", "sales", "settings")
-      ? supabase.from("services").select("id,name,description,body_area,category,duration_minutes,price_cents,min_price_cents,max_price_cents,price_unit,is_active,sort_order").order("sort_order")
-      : emptyMany,
+    needsReferenceData
+      ? session
+        ? getCachedStaffReferenceData(scope)
+        : Promise.resolve({ ...emptyReferenceData, error: "An active staff session is required." })
+      : Promise.resolve(emptyReferenceData),
     includes("overview")
       ? supabase
           .from("bookings")
@@ -262,38 +349,12 @@ export async function getStaffData(
           .order("created_at", { ascending: false })
           .limit(scope === "overview" ? 100 : 25)
       : emptyMany,
-    includes("overview", "calendar", "settings")
-      ? supabase
-          .from("staff_profiles")
-          .select("user_id,display_name,role,active,color")
-          .order("created_at")
-      : emptyMany,
-    includes("overview", "calendar", "settings")
-      ? supabase.from("service_staff").select("service_id,staff_id")
-      : emptyMany,
     includes("overview", "settings")
       ? supabase
           .from("notification_deliveries")
           .select("id,kind,recipient,status,last_error,created_at")
           .order("created_at", { ascending: false })
           .limit(25)
-      : emptyMany,
-    includes("calendar", "settings")
-      ? supabase
-          .from("stations")
-          .select("id,name")
-          .eq("active", true)
-          .order("name")
-      : emptyMany,
-    includes("settings")
-      ? supabase.from("staff_availability").select("id,staff_id,weekday,starts_at,ends_at,availability_date").order("weekday").order("starts_at")
-      : emptyMany,
-    includes("settings")
-      ? supabase
-          .from("closures")
-          .select("id,starts_at,ends_at,reason")
-          .order("starts_at", { ascending: false })
-          .limit(100)
       : emptyMany,
     includes("reports")
       ? reportRange
@@ -304,57 +365,19 @@ export async function getStaffData(
         : supabase.rpc("studio_report")
       : emptySingle,
   ]);
-  const settingsRow = settingsResult.data;
-  const studio: StudioSettings = settingsRow
-    ? {
-        id: settingsRow.id,
-        name: settingsRow.name,
-        location: settingsRow.location,
-        address: settingsRow.address,
-        email: settingsRow.email,
-        phone: settingsRow.phone,
-        instagramUrl: settingsRow.instagram_url,
-        timezone: "Asia/Manila",
-        currency: "PHP",
-        businessHours: settingsRow.business_hours,
-        bookingIntervalMinutes: settingsRow.booking_interval_minutes,
-        minimumLeadHours: settingsRow.minimum_lead_hours,
-        bookingHorizonDays: settingsRow.booking_horizon_days,
-        minimumAge: settingsRow.minimum_age,
-        cancellationPolicy: settingsRow.cancellation_policy,
-      }
-    : seededStudio;
-  const services: Service[] = (servicesResult.data ?? []).map((row) => ({
-    id: row.id,
-    name: row.name,
-    description: row.description,
-    bodyArea: row.body_area,
-    category: row.category as Service["category"],
-    durationMinutes: row.duration_minutes,
-    priceCents: row.price_cents,
-    minPriceCents: row.min_price_cents,
-    maxPriceCents: row.max_price_cents,
-    priceUnit: row.price_unit,
-    isActive: row.is_active,
-  }));
   const bookings: BookingRecord[] = (bookingsResult.data ?? []).map((row) => mapBookingRow(row as Record<string, unknown>));
-  const directoryCustomers: CustomerRecord[] = (directoryResult.data ?? []).map((row) => ({
-    id: row.id,
-    name: `${row.first_name} ${row.last_name}`,
-    email: row.email,
-    phone: row.phone,
-    createdAt: row.created_at,
-    appointmentCount: Number(row.appointment_count ?? 0),
-    lastActivityAt: row.last_appointment_at ?? null,
-  }));
+  const directoryCustomers: CustomerRecord[] = (directoryResult.data ?? []).map((row) => {
+    const contact = customerDisplayContact(row.email, row.phone);
+    return {
+      id: row.id,
+      name: customerDisplayName(row.first_name, row.last_name),
+      ...contact,
+      createdAt: row.created_at,
+      appointmentCount: Number(row.appointment_count ?? 0),
+      lastActivityAt: row.last_appointment_at ?? null,
+    };
+  });
   const sales: SaleRecord[] = (salesResult.data ?? []).map((row) => mapSaleRow(row as Record<string, unknown>));
-  const staff: StaffRecord[] = (staffResult.data ?? []).map((row) => ({
-    id: row.user_id,
-    displayName: row.display_name,
-    role: row.role,
-    active: row.active,
-    color: row.color,
-  }));
   const deliveries: DeliveryRecord[] = (deliveryResult.data ?? []).map(
     (row) => ({
       id: row.id,
@@ -365,20 +388,6 @@ export async function getStaffData(
       createdAt: row.created_at,
     }),
   );
-  const closures: ClosureRecord[] = (closureResult.data ?? []).map((row) => ({
-    id: row.id,
-    startsAt: row.starts_at,
-    endsAt: row.ends_at,
-    reason: row.reason,
-  }));
-  const availability: AvailabilityRecord[] = (availabilityResult.data ?? []).map((row) => ({
-    id: row.id,
-    staffId: row.staff_id,
-    weekday: row.weekday,
-    startsAt: row.starts_at,
-    endsAt: row.ends_at,
-    availabilityDate: row.availability_date,
-  }));
   const report = (reportResult.data ?? null) as {
     revenue_cents?: number;
     completed_sales?: number;
@@ -388,36 +397,26 @@ export async function getStaffData(
     methods?: Record<string, number>;
   } | null;
   const queryErrors = [
-    settingsResult.error,
-    servicesResult.error,
     bookingsResult.error,
     customersResult.error,
     customerCountResult.error,
     directoryResult.error,
     salesResult.error,
-    staffResult.error,
-    assignmentResult.error,
     deliveryResult.error,
-    stationResult.error,
-    closureResult.error,
-    availabilityResult.error,
     reportResult.error,
   ].filter((error): error is NonNullable<typeof error> => Boolean(error));
   return {
-    studio,
-    services,
+    studio: referenceData.studio,
+    services: referenceData.services,
     bookings,
     customers: directoryCustomers,
     sales,
-    staff,
-    serviceAssignments: (assignmentResult.data ?? []).map((row) => ({
-      serviceId: row.service_id,
-      staffId: row.staff_id,
-    })),
+    staff: referenceData.staff,
+    serviceAssignments: referenceData.serviceAssignments,
     deliveries,
-    stations: stationResult.data ?? [],
-    closures,
-    availability,
+    stations: referenceData.stations,
+    closures: referenceData.closures,
+    availability: referenceData.availability,
     customerCount: customerCountResult.count ?? directoryCustomers.length,
     bookingStatusCounts: report?.booking_statuses ?? {},
     paymentMethodTotals: report?.methods ?? {},
@@ -425,8 +424,6 @@ export async function getStaffData(
     completedSaleCount: Number(report?.completed_sales ?? 0),
     reportSaleCount: Number(report?.sale_count ?? 0),
     reportBookingCount: Number(report?.booking_count ?? 0),
-    error: queryErrors.length
-      ? queryErrors.map((error) => error.message).join(" ")
-      : null,
+    error: [referenceData.error, ...queryErrors.map((error) => error.message)].filter(Boolean).join(" ") || null,
   };
 }

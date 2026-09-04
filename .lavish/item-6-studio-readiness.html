@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PiercingSys Item 6 - Studio readiness prototype</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    :root {
+      --ink: #3b2923;
+      --orange: #df682c;
+      --rust: #ba4f2d;
+      --gold: #efb83f;
+      --cream: #fff2d5;
+      --sand: #f7dd9c;
+      --sage: #a9c99a;
+      --lilac: #c9afd4;
+      --teal: #73aaa2;
+      --muted: #756861;
+      --line: #d79c75;
+      --danger: #a33e30;
+      --panel: #fff9eb;
+      --panel-head: #fff7e5;
+    }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--sand);
+      color: var(--ink);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    button, input { font: inherit; }
+    button { color: inherit; }
+    .shell {
+      min-height: 100vh;
+      padding: 14px;
+      background:
+        radial-gradient(circle at 1% 90%, #df682c 0 72px, transparent 74px),
+        radial-gradient(circle at 99% 5%, #785b8e 0 54px, transparent 56px),
+        repeating-radial-gradient(circle at 11% 8%, transparent 0 19px, #b94d2823 20px 22px, transparent 23px 37px);
+    }
+    .app {
+      display: grid;
+      grid-template-columns: 230px minmax(0, 1fr);
+      gap: 15px;
+      max-width: 1460px;
+      margin: 0 auto;
+    }
+    .sidebar, .main {
+      border: 2px solid var(--ink);
+      box-shadow: 6px 6px 0 var(--ink);
+    }
+    .sidebar {
+      min-height: calc(100vh - 28px);
+      border-radius: 24px 14px 20px 17px;
+      background: #f9ecd1;
+      padding: 21px 14px 16px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 8px 27px;
+    }
+    .logo {
+      display: grid;
+      place-items: center;
+      width: 42px;
+      height: 42px;
+      rotate: -6deg;
+      border: 2px solid var(--ink);
+      border-radius: 50% 43% 55% 46%;
+      background: var(--orange);
+      box-shadow: 3px 3px 0 var(--ink);
+      color: #fff8e6;
+      font-weight: 900;
+    }
+    .brand strong { display: block; font-size: 18px; line-height: 1; font-weight: 800; }
+    .brand small { display: block; margin-top: 3px; color: var(--rust); font-size: 7px; font-weight: 900; letter-spacing: 1.8px; }
+    .nav-label { margin: 9px 12px; color: #9a5a40; font-size: 8px; font-weight: 900; letter-spacing: 1.4px; text-transform: uppercase; }
+    .nav { display: flex; flex-direction: column; gap: 6px; }
+    .nav span {
+      min-height: 42px;
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      border: 1px solid transparent;
+      border-radius: 12px 9px 13px 10px;
+      padding: 0 12px;
+      color: #6f5148;
+      font-size: 11px;
+      font-weight: 800;
+    }
+    .nav .active {
+      rotate: -.25deg;
+      border: 2px solid var(--ink);
+      background: var(--orange);
+      color: #fff8e6;
+      box-shadow: 3px 3px 0 var(--ink);
+    }
+    .main {
+      min-height: calc(100vh - 28px);
+      border-radius: 18px 26px 17px 23px;
+      background:
+        radial-gradient(circle at 96% 0, #df682c3d 0 122px, transparent 124px),
+        radial-gradient(circle at 91% 1%, #785b8e35 0 92px, transparent 94px),
+        linear-gradient(120deg, transparent 0 73%, #efb9a128 73% 75%, transparent 75%),
+        var(--cream);
+      overflow: hidden;
+    }
+    .topbar {
+      min-height: 92px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 17px clamp(24px, 4vw, 52px);
+      border-bottom: 2px dashed #c9825a;
+    }
+    .eyebrow { margin: 0 0 3px; color: var(--rust); font-size: 8px; font-weight: 900; letter-spacing: 1.8px; }
+    h1 { margin: 0; font-size: 28px; line-height: 1.05; }
+    .content { padding: 30px clamp(22px, 4vw, 52px) 72px; }
+    .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 15px; margin-bottom: 18px; }
+    .metric {
+      min-height: 118px;
+      border: 1.5px solid var(--ink);
+      border-radius: 19px 14px 20px 16px;
+      background: #fff8e8;
+      box-shadow: 4px 4px 0 var(--ink);
+      padding: 17px;
+    }
+    .metric small { display: block; color: #765c52; font-size: 9px; }
+    .metric strong { display: block; margin: 5px 0; font-size: 22px; }
+    .metric p { margin: 0; color: #765c52; font-size: 8px; }
+    .layout { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(280px, .8fr); gap: 18px; align-items: start; }
+    .panel {
+      overflow: hidden;
+      border: 1.5px solid var(--ink);
+      border-radius: 19px 14px 20px 16px;
+      background: var(--panel);
+      box-shadow: 4px 4px 0 var(--ink);
+    }
+    .panel-head {
+      min-height: 66px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px dashed #c98965;
+      background: var(--panel-head);
+      padding: 14px 18px;
+    }
+    h2, h3 { margin: 0; }
+    .panel-head h2, .panel-head h3 { font-size: 16px; }
+    .panel-head p { margin: 4px 0 0; color: #82675d; font-size: 9px; }
+    .placeholder { min-height: 280px; padding: 20px; color: #755b52; font-size: 12px; }
+    .readiness-list { display: flex; flex-direction: column; }
+    .readiness-row {
+      width: 100%;
+      min-height: 61px;
+      display: grid;
+      grid-template-columns: 26px minmax(0, 1fr) auto 16px;
+      align-items: center;
+      gap: 9px;
+      border: 0;
+      border-bottom: 1px dashed #d5a684;
+      background: transparent;
+      padding: 10px 17px;
+      text-align: left;
+      cursor: pointer;
+      transition: background .15s ease, transform .15s ease;
+    }
+    .readiness-row:last-child { border-bottom: 0; }
+    .readiness-row:hover { background: #fff1cf; transform: translateX(1px); }
+    .readiness-row:focus-visible {
+      outline: 3px solid #efb83f88;
+      outline-offset: -4px;
+      background: #fff4d7;
+    }
+    .dot {
+      grid-row: span 2;
+      display: grid;
+      place-items: center;
+      width: 24px;
+      height: 24px;
+      border: 1px solid var(--ink);
+      border-radius: 999px;
+      box-shadow: 1px 1px 0 var(--ink);
+      font-size: 10px;
+      font-weight: 900;
+    }
+    .healthy .dot { background: var(--sage); color: #274c3c; }
+    .attention .dot { background: var(--gold); color: #664219; }
+    .row-text { min-width: 0; }
+    .row-text strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
+    .row-text small { display: block; margin-top: 3px; color: var(--muted); font-size: 8px; line-height: 1.35; }
+    .action {
+      justify-self: end;
+      color: #7b574b;
+      font-size: 8px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: .4px;
+    }
+    .chev { color: #6f5148; font-size: 17px; font-weight: 900; }
+    .settings-sim { margin-top: 18px; display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 18px; align-items: start; }
+    .section-menu { padding: 10px; }
+    .section-menu button {
+      width: 100%;
+      min-height: 42px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border: 1px solid transparent;
+      border-radius: 12px 9px 13px 10px;
+      background: transparent;
+      padding: 9px 10px;
+      color: #6f5148;
+      font-size: 10px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .section-menu button.active {
+      border: 1.5px solid var(--ink);
+      background: #f4d59b;
+      box-shadow: 2px 2px 0 var(--ink);
+      color: var(--ink);
+    }
+    .destination {
+      min-height: 250px;
+      border: 1.5px solid var(--ink);
+      border-radius: 16px 12px 17px 13px;
+      background: #fff9eb;
+      box-shadow: 3px 3px 0 var(--ink);
+      overflow: hidden;
+    }
+    .dest-body { padding: 16px 18px; }
+    .dest-body p { margin: 0 0 12px; color: #755b52; font-size: 11px; line-height: 1.55; }
+    .url {
+      display: inline-flex;
+      max-width: 100%;
+      border: 1px dashed #ba7652;
+      border-radius: 11px;
+      background: #f8dcae;
+      padding: 8px 10px;
+      color: #60463c;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 11px;
+      overflow-wrap: anywhere;
+    }
+    .mini-list { display: grid; gap: 8px; margin-top: 14px; }
+    .mini-row { min-height: 42px; display: flex; align-items: center; justify-content: space-between; gap: 10px; border-top: 1px dashed #d6a786; padding: 9px 0 0; font-size: 10px; }
+    .pill { border: 1px solid #9b631d; border-radius: 999px; background: #f3ce70; padding: 4px 8px; color: #694313; font-size: 8px; font-weight: 900; white-space: nowrap; }
+    .pill.ok { border-color: #4a6d5b; background: #c8dfc6; color: #315342; }
+    .notes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 18px; }
+    .note-card { border: 1.5px solid var(--ink); border-radius: 15px 11px 16px 12px; background: #fff8e8; box-shadow: 3px 3px 0 var(--ink); padding: 15px; }
+    .note-card h3 { font-size: 13px; margin-bottom: 8px; }
+    .note-card ul { margin: 0; padding-left: 18px; color: #665047; font-size: 11px; line-height: 1.65; }
+    @media (max-width: 1000px) {
+      .app { grid-template-columns: 1fr; }
+      .sidebar { min-height: auto; }
+      .nav { flex-direction: row; overflow-x: auto; }
+      .layout, .settings-sim, .notes { grid-template-columns: 1fr; }
+      .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 560px) {
+      .shell { padding: 7px; }
+      .content { padding: 25px 15px 58px; }
+      .metrics { grid-template-columns: 1fr; }
+      .readiness-row {
+        grid-template-columns: 26px minmax(0, 1fr) 14px;
+        row-gap: 2px;
+        padding-right: 13px;
+      }
+      .action { grid-column: 2; justify-self: start; margin-top: 2px; }
+      .chev { grid-column: 3; grid-row: 1 / span 2; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="app">
+      <aside class="sidebar" aria-label="Studio navigation preview">
+        <div class="brand"><span class="logo">PC</span><span><strong>Piercing Corner</strong><small>STUDIO DESK</small></span></div>
+        <p class="nav-label">Workspace</p>
+        <div class="nav">
+          <span class="active">Overview</span><span>Calendar</span><span>Clients</span><span>Sales</span><span>Reports</span><span>Settings</span>
+        </div>
+      </aside>
+      <main class="main">
+        <header class="topbar">
+          <div><p class="eyebrow">PIERCING CORNER · OWNER</p><h1>Today at the corner</h1></div>
+        </header>
+        <div class="content">
+          <div class="metrics" aria-hidden="true">
+            <section class="metric"><small>Appointments</small><strong>7</strong><p>Today in Manila</p></section>
+            <section class="metric"><small>Confirmed</small><strong>5</strong><p>Ready for the studio</p></section>
+            <section class="metric"><small>Clients</small><strong>128</strong><p>Stored records</p></section>
+            <section class="metric"><small>Collected</small><strong>PHP 9.8k</strong><p>3 completed sales</p></section>
+          </div>
+          <div class="layout">
+            <section class="panel">
+              <div class="panel-head"><div><h2>Today's appointments</h2><p>Reference area included only to preserve overview proportions.</p></div></div>
+              <div class="placeholder">This prototype intentionally focuses on the Studio readiness card. The surrounding dashboard stays visually quiet so the changed behavior can be reviewed in context.</div>
+            </section>
+            <section class="panel" aria-labelledby="readiness-title">
+              <div class="panel-head"><div><h2 id="readiness-title">Studio readiness</h2><p>Items affecting daily operations</p></div></div>
+              <div class="readiness-list">
+                <button class="readiness-row healthy" data-section="hours" data-action="Review">
+                  <span class="dot">✓</span><span class="row-text"><strong>Business hours</strong><small>Configured</small></span><span class="action">Review</span><span class="chev">›</span>
+                </button>
+                <button class="readiness-row attention" data-section="services" data-action="Configure">
+                  <span class="dot">!</span><span class="row-text"><strong>Active services</strong><small>No active services available</small></span><span class="action">Configure</span><span class="chev">›</span>
+                </button>
+                <button class="readiness-row attention" data-section="assignments" data-action="Configure">
+                  <span class="dot">!</span><span class="row-text"><strong>Qualified staff</strong><small>A service needs an assigned piercer</small></span><span class="action">Configure</span><span class="chev">›</span>
+                </button>
+                <button class="readiness-row attention" data-section="notifications" data-action="Review">
+                  <span class="dot">!</span><span class="row-text"><strong>Email deliveries</strong><small>2 deliveries need attention</small></span><span class="action">Review</span><span class="chev">›</span>
+                </button>
+              </div>
+            </section>
+          </div>
+          <div class="settings-sim" aria-live="polite">
+            <section class="panel">
+              <div class="panel-head"><div><h3>Studio Settings</h3><p>Simulated direct landing target</p></div></div>
+              <div class="section-menu">
+                <button data-section-button="hours">Hours, availability & closures <span>›</span></button>
+                <button data-section-button="services">Services & pricing <span>›</span></button>
+                <button data-section-button="assignments">Service/staff assignments <span>›</span></button>
+                <button data-section-button="notifications">Notification deliveries <span>›</span></button>
+              </div>
+            </section>
+            <section class="destination">
+              <div class="panel-head"><div><h3 id="destination-title">Choose a readiness row</h3><p id="destination-subtitle">Click a compact row above to preview direct section navigation.</p></div></div>
+              <div class="dest-body">
+                <p id="destination-copy">The production behavior should move from the overview readiness row to the relevant settings section without requiring the owner or manager to search manually.</p>
+                <code class="url" id="destination-url">/app?view=settings&amp;section=...</code>
+                <div class="mini-list" id="destination-details"></div>
+              </div>
+            </section>
+          </div>
+          <div class="notes">
+            <section class="note-card">
+              <h3>Recommended production shape</h3>
+              <ul>
+                <li>Evolve the existing Readiness component into a link-like row.</li>
+                <li>Use a section query parameter: <code>/app?view=settings&amp;section=services</code>.</li>
+                <li>Give settings subsections stable IDs and scroll/focus on load.</li>
+              </ul>
+            </section>
+            <section class="note-card">
+              <h3>Implementation notes from inspection</h3>
+              <ul>
+                <li>Readiness rows live in <code>src/app/app/page.tsx</code>.</li>
+                <li>Settings sections are already grouped in the same file.</li>
+                <li>Piercers cannot access settings, so Email deliveries and management destinations need role gating.</li>
+              </ul>
+            </section>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+  <script>
+    const targets = {
+      hours: {
+        title: "Studio Settings -> Hours, availability & closures",
+        subtitle: "Business hours would land on the schedule configuration.",
+        copy: "This should focus the existing ScheduleSettings section where weekly business-hour chips can be edited. The owner lands near the business-hours controls, not at the top of Settings.",
+        url: "/app?view=settings&section=hours",
+        details: [["Current row action", "Review", "ok"], ["Destination control", "Edit weekday studio hours", "ok"]]
+      },
+      services: {
+        title: "Studio Settings -> Services & pricing",
+        subtitle: "Active services would land on service creation and service list controls.",
+        copy: "This section already contains Add service and the paginated ServiceList. A failing active-services readiness state should use Configure because public booking cannot proceed without active services.",
+        url: "/app?view=settings&section=services",
+        details: [["Current row action", "Configure", ""], ["Production focus", "Add service", "ok"]]
+      },
+      assignments: {
+        title: "Studio Settings -> Service/staff assignments",
+        subtitle: "Qualified staff would land on assignment controls inside Services & pricing.",
+        copy: "The current ServiceAssignmentForm is nested inside Services & pricing. Production can use the same settings view with a more specific section key and focus the Manage service assignments control.",
+        url: "/app?view=settings&section=assignments",
+        details: [["Current row action", "Configure", ""], ["Production focus", "Manage service assignments", "ok"]]
+      },
+      notifications: {
+        title: "Studio Settings -> Notification deliveries",
+        subtitle: "Email deliveries would land on delivery status.",
+        copy: "The current notification delivery list sits in the lower settings grid. A direct section key should scroll to that panel and focus the first failed or pending delivery when present.",
+        url: "/app?view=settings&section=notifications",
+        details: [["Current row action", "Review", ""], ["Attention state", "2 pending or failed deliveries", ""]]
+      }
+    };
+    const title = document.getElementById("destination-title");
+    const subtitle = document.getElementById("destination-subtitle");
+    const copy = document.getElementById("destination-copy");
+    const url = document.getElementById("destination-url");
+    const details = document.getElementById("destination-details");
+    const menuButtons = [...document.querySelectorAll("[data-section-button]")];
+    function activate(section) {
+      const target = targets[section];
+      title.textContent = target.title;
+      subtitle.textContent = target.subtitle;
+      copy.textContent = target.copy;
+      url.textContent = target.url;
+      details.innerHTML = target.details.map(([label, value, tone]) => `<div class="mini-row"><span>${label}</span><span class="pill ${tone}">${value}</span></div>`).join("");
+      menuButtons.forEach((button) => button.classList.toggle("active", button.dataset.sectionButton === section));
+      document.querySelector(".destination").scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+    document.querySelectorAll(".readiness-row").forEach((row) => {
+      row.addEventListener("click", () => activate(row.dataset.section));
+    });
+    menuButtons.forEach((button) => button.addEventListener("click", () => activate(button.dataset.sectionButton)));
+  </script>
+</body>
+</html>
