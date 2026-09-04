@@ -1,5 +1,6 @@
 import { LoadingStatus, Skeleton } from "@/components/skeleton";
 import { cn } from "@/lib/utils";
+import { calendarBodyHeight, calendarHourLabels, calendarTotalHeight } from "./calendar-geometry";
 import { featureView, metricCard, metricGrid, metricGridThree, panel, panelHead, settingSection, settingsStack, tablePanel, twoPanel } from "./dashboard-styles";
 import type { StaffView } from "./view-config";
 
@@ -28,13 +29,15 @@ function TableSkeleton({ rows = 6, columns = 4 }: { rows?: number; columns?: num
 export function CalendarGridSkeleton({ publicCalendar = false, day = false }: { publicCalendar?: boolean; day?: boolean }) {
   const columns = day ? 1 : 7;
   const columnTemplate = publicCalendar ? "64px repeat(7, minmax(118px, 1fr))" : `72px repeat(${columns}, minmax(138px, 1fr))`;
-  return <div className={cn("h-[896px] min-w-[1080px] overflow-hidden bg-[#fff8e7]", publicCalendar && "h-[783px] min-w-[890px]", day && "min-w-[540px]")} aria-hidden="true">
+  const shellHeight = publicCalendar ? undefined : calendarTotalHeight;
+  const bodyHeight = publicCalendar ? undefined : calendarBodyHeight;
+  return <div className={cn("min-w-[1080px] overflow-hidden bg-[#fff8e7]", publicCalendar ? "h-[783px] min-w-[890px]" : "", day && "min-w-[540px]")} style={shellHeight ? { height: shellHeight } : undefined} aria-hidden="true">
     <div className={cn("grid h-16 border-b-[1.5px] border-hippy-ink bg-[#f0d09d]", publicCalendar && "h-[55px]")} style={{ gridTemplateColumns: columnTemplate }}>
       <Skeleton className={cn("m-auto h-[15px] w-[30px] bg-[#dfcda9]", publicCalendar && "bg-[#dfc49e]")} />
       {Array.from({ length: columns }, (_, index) => <div className="flex flex-col items-center justify-center gap-[5px] border-l border-[#c99572]" key={index}><Skeleton className={publicCalendar ? "bg-[#dfc49e]" : "bg-[#dfcda9]"} width="42%" height={7}/><Skeleton className={publicCalendar ? "bg-[#dfc49e]" : "bg-[#dfcda9]"} width="24%" height={18}/><Skeleton className={publicCalendar ? "bg-[#dfc49e]" : "bg-[#dfcda9]"} width="34%" height={7}/></div>)}
     </div>
-    <div className={cn("grid h-[832px]", publicCalendar && "h-[728px]")} style={{ gridTemplateColumns: columnTemplate }}>
-      <div className="flex flex-col items-end justify-around border-r-[1.5px] border-hippy-ink bg-[#f7e4bd] px-[9px]">{Array.from({ length: 9 }, (_, index) => <Skeleton className={publicCalendar ? "bg-[#dfc49e]" : "bg-[#dfcda9]"} key={index} width={25} height={7}/>)}</div>
+    <div className={cn("grid", publicCalendar && "h-[728px]")} style={{ gridTemplateColumns: columnTemplate, height: bodyHeight }}>
+      <div className="flex flex-col items-end justify-around border-r-[1.5px] border-hippy-ink bg-[#f7e4bd] px-[9px]">{Array.from({ length: publicCalendar ? 9 : calendarHourLabels().length }, (_, index) => <Skeleton className={publicCalendar ? "bg-[#dfc49e]" : "bg-[#dfcda9]"} key={index} width={25} height={7}/>)}</div>
       {Array.from({ length: columns }, (_, column) => <div className="relative border-l border-[#d2a281] bg-[#fff9eb] bg-[repeating-linear-gradient(to_bottom,transparent_0,transparent_63px,#d6ab8b_64px)]" key={column}/>) }
     </div>
   </div>;

@@ -219,7 +219,7 @@ async function getCachedStaffReferenceData(scope: StaffDataScope) {
   if (!admin) return { ...emptyReferenceData, error: "Supabase is not configured." };
   const includes = (...scopes: StaffDataScope[]) => scope === "all" || scopes.includes(scope);
   const [settingsResult, servicesResult, staffResult, assignmentResult, stationResult, availabilityResult, closureResult] = await Promise.all([
-    includes("overview", "settings")
+    includes("overview", "calendar", "settings")
       ? admin.from("studio_settings").select("id,name,location,address,email,phone,instagram_url,business_hours,booking_interval_minutes,minimum_lead_hours,booking_horizon_days,minimum_age,cancellation_policy").eq("id", 1).single()
       : Promise.resolve({ data: null, error: null }),
     includes("overview", "calendar", "sales", "settings")
@@ -234,7 +234,7 @@ async function getCachedStaffReferenceData(scope: StaffDataScope) {
     includes("calendar", "settings")
       ? admin.from("stations").select("id,name").eq("active", true).order("name")
       : Promise.resolve({ data: [], error: null }),
-    includes("settings")
+    includes("calendar", "settings")
       ? admin.from("staff_availability").select("id,staff_id,weekday,starts_at,ends_at,availability_date").order("weekday").order("starts_at")
       : Promise.resolve({ data: [], error: null }),
     includes("settings")

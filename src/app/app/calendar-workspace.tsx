@@ -1,11 +1,13 @@
 "use client";
 
-import { Check, ChevronLeft, ChevronRight, Clock3, Plus, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { combinedServiceDuration, manilaDate, shiftManilaDate, type BookingStatus, type Service } from "@/lib/domain";
-import type { StaffRecord } from "@/lib/data/staff";
+import { Check, ChevronLeft, ChevronRight, Clock3, Plus, Search, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { combinedServiceDuration, manilaDate, manilaDateTime, manilaSchedulingEnd, shiftManilaDate, type BookingStatus, type Service, type StudioSettings } from "@/lib/domain";
+import type { AvailabilityRecord, StaffRecord } from "@/lib/data/staff";
 import { CustomerSelect } from "./customer-select";
+import { appointmentDayBoundary } from "./appointment-time";
 import { WORKSPACE_REFRESH_EVENT } from "./workspace-refresh";
+import { calendarBodyHeight, calendarEndLabel, calendarEventStyle, calendarHeaderHeight, calendarHourLabels, calendarMinuteTop, isCalendarMinuteVisible } from "./calendar-geometry";
 import { layoutOverlappingAppointments } from "./calendar-layout";
 import { CalendarGridSkeleton, DayListSkeleton } from "./staff-skeletons";
 import { cn } from "@/lib/utils";
@@ -30,12 +32,11 @@ type Props = {
   staff: StaffRecord[];
   assignments: Array<{ serviceId: string; staffId: string }>;
   stations: Station[];
+  studio: StudioSettings;
+  availability: AvailabilityRecord[];
 };
 
 const dayNames = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
-const gridStartHour = 8;
-const gridEndHour = 21;
-const hourHeight = 60;
 
 export function CalendarWorkspace(props: Props) {
   const [mode, setMode] = useState<"week" | "day">("week");
@@ -112,23 +113,26 @@ function WeekCalendar({ days, anchor, appointments, now, onSelectDate, onSelectA
 }) {
   const today = manilaDate(now);
   const currentMinutes = manilaMinutes(now.toISOString());
-  const showNow = days.includes(today) && currentMinutes >= gridStartHour * 60 && currentMinutes <= gridEndHour * 60;
+  const showNow = days.includes(today) && isCalendarMinuteVisible(currentMinutes);
   return <div className="overflow-x-auto [scrollbar-color:#d5aa89_transparent] [scrollbar-width:thin]">
-    <div className="relative grid min-w-[1000px] grid-cols-[64px_repeat(var(--calendar-days),minmax(132px,1fr))] grid-rows-[64px_780px] bg-[#fff9eb] max-[760px]:min-w-[884px] max-[760px]:grid-cols-[58px_repeat(var(--calendar-days),minmax(118px,1fr))]" style={{ "--calendar-days": days.length } as React.CSSProperties}>
+    <div className="relative grid min-w-[1000px] grid-cols-[64px_repeat(var(--calendar-days),minmax(132px,1fr))] bg-[#fff9eb] max-[760px]:min-w-[884px] max-[760px]:grid-cols-[58px_repeat(var(--calendar-days),minmax(118px,1fr))]" style={{ "--calendar-days": days.length, gridTemplateRows: `${calendarHeaderHeight}px ${calendarBodyHeight}px` } as React.CSSProperties}>
       <div className="sticky top-0 z-5 flex flex-col items-center justify-center gap-0.5 border-b-[1.5px] border-hippy-ink bg-[#f0d09d] text-[#a24429] [&>svg]:w-4 [&>span]:text-[7px] [&>span]:font-extrabold [&>span]:tracking-[.5px]"><Clock3/><span>GMT+8</span></div>
       {days.map((date) => <button type="button" className={cn("sticky top-0 z-5 flex cursor-pointer flex-col items-center justify-center border-0 border-b-[1.5px] border-l border-dashed border-b-hippy-ink border-l-[#bb7f5d] bg-[#f0d09d] text-[#4b342c] transition hover:bg-[#f7bc73] [&>span]:text-[8px] [&>span]:font-[750] [&>span]:tracking-[.6px] [&>span]:text-[#80675d] [&>small]:text-[8px] [&>small]:font-[750] [&>small]:tracking-[.6px] [&>small]:text-[#80675d] [&>strong]:my-0.5 [&>strong]:grid [&>strong]:size-[29px] [&>strong]:place-items-center [&>strong]:rounded-full [&>strong]:text-[13px] [&>strong]:font-[750]", date === today && "bg-[#f5dd9d] [&>strong]:text-[#b54c28] [&>strong]:shadow-[inset_0_0_0_1.5px_#d96032]", date === anchor && "bg-hippy-orange [&>span]:text-[#fff4dd] [&>small]:text-[#fff4dd] [&>strong]:bg-[#fff4d7] [&>strong]:text-[#9f3d22] [&>strong]:shadow-[2px_2px_0_#3b2923]")} key={date} onClick={() => onSelectDate(date)} aria-label={`Open day view for ${formatLongDate(date)}`}>
         <span>{dayNames[weekday(date)]}</span><strong>{date.slice(8)}</strong><small>{formatMonth(date)}</small>
       </button>)}
-      <div className="relative z-2 border-r-[1.5px] border-hippy-ink bg-[#f7e4bd]">{Array.from({ length: gridEndHour - gridStartHour + 1 }, (_, index) => <span className="absolute right-2.5 translate-y-[5px] text-[8px] font-[650] text-[#8b7166]" key={index} style={{ top: index * hourHeight }}>{formatHour(gridStartHour + index)}</span>)}</div>
+      <div className="relative z-2 border-r-[1.5px] border-hippy-ink bg-[#f7e4bd]">{calendarHourLabels().map(({ hour, top }) => <span className="absolute right-2.5 translate-y-[5px] text-[8px] font-[650] text-[#8b7166]" key={hour} style={{ top }}>{formatHour(hour)}</span>)}<span className="absolute right-2.5 -translate-y-full text-[8px] font-black text-[#b74827]" style={{ top: calendarBodyHeight }}>{calendarEndLabel}</span></div>
       {days.map((date) => {
         const positionedAppointments = layoutOverlappingAppointments(appointments.filter((item) => manilaDate(item.starts_at) === date));
         return <div className={cn("relative border-l border-dashed border-[#c79370] bg-[#fff9eb] bg-[repeating-linear-gradient(to_bottom,transparent_0,transparent_59px,#d9b493_60px)]", date === today && "bg-[#f9edcf]", date === anchor && "bg-[#fbe5c9]")} key={date}>
         {positionedAppointments.map(({ item, lane, laneCount }) => {
-          const start = manilaMinutes(item.starts_at); const end = manilaMinutes(item.ends_at); const piercer = one(item.staff_profiles); const station = one(item.stations);
+          const start = manilaMinutes(item.starts_at);
+          const end = start + Math.round((new Date(item.ends_at).getTime() - new Date(item.starts_at).getTime()) / 60_000);
+          const piercer = one(item.staff_profiles); const station = one(item.stations);
           const accessibleLabel = `${formatTime(item.starts_at)} to ${formatTime(item.ends_at)}, ${clientName(item)}, ${servicesLabel(item)}, ${piercer?.display_name ?? "Unassigned"}, ${station?.name ?? "No station"}`;
+          const eventStyle = calendarEventStyle(start, end);
           return <button type="button" key={item.id} className={cn("absolute left-[calc((100%/var(--event-lanes))*var(--event-lane)+4px)] z-2 min-h-[34px] w-[calc(100%/var(--event-lanes)-8px)] cursor-pointer overflow-hidden rounded-[10px_7px_11px_8px] border border-l-[5px] border-hippy-ink border-l-[var(--event-color)] bg-[color-mix(in_srgb,var(--event-color)_25%,#fff6df)] px-2 py-1.5 text-left text-[#432e27] shadow-[2px_2px_0_#3b2923] transition hover:z-7 hover:-translate-x-px hover:-translate-y-0.5 hover:shadow-[4px_5px_0_#3b2923] focus-visible:z-7 focus-visible:-translate-x-px focus-visible:-translate-y-0.5 focus-visible:shadow-[4px_5px_0_#3b2923] [&>strong]:block [&>strong]:overflow-hidden [&>strong]:text-[9px] [&>strong]:text-ellipsis [&>strong]:whitespace-nowrap [&>small]:mt-0.5 [&>small]:block [&>small]:overflow-hidden [&>small]:text-[8px] [&>small]:text-ellipsis [&>small]:whitespace-nowrap [&>i]:mt-0.5 [&>i]:block [&>i]:overflow-hidden [&>i]:text-[8px] [&>i]:text-ellipsis [&>i]:whitespace-nowrap [&>i]:not-italic [&>i]:text-[#765d53]", item.status === "completed" && "opacity-70")} style={{
-            top: Math.max(0, (start - gridStartHour * 60) * hourHeight / 60),
-            height: Math.max(34, (end - start) * hourHeight / 60),
+            top: eventStyle.top,
+            height: eventStyle.height,
             "--event-color": piercer?.color ?? "#e86f2c",
             "--event-lane": lane,
             "--event-lanes": laneCount,
@@ -139,7 +143,7 @@ function WeekCalendar({ days, anchor, appointments, now, onSelectDate, onSelectA
           </button>;
         })}
       </div>;})}
-      {showNow && <div className="pointer-events-none absolute right-0 left-[60px] z-8 h-0.5 bg-[#b94735] max-[760px]:left-[54px]" style={{ top: 64 + (currentMinutes - gridStartHour * 60) * hourHeight / 60 }} aria-hidden="true"><span className="absolute top-1/2 left-0 size-2.5 -translate-y-1/2 rounded-full border-[1.5px] border-hippy-ink bg-hippy-orange"/></div>}
+      {showNow && <div className="pointer-events-none absolute right-0 left-[60px] z-8 h-0.5 bg-[#b94735] max-[760px]:left-[54px]" style={{ top: calendarHeaderHeight + calendarMinuteTop(currentMinutes) }} aria-hidden="true"><span className="absolute top-1/2 left-0 size-2.5 -translate-y-1/2 rounded-full border-[1.5px] border-hippy-ink bg-hippy-orange"/></div>}
     </div>
   </div>;
 }
@@ -170,10 +174,19 @@ function DayCalendar({ date, appointments, onSelectAppointment }: { date: string
 function AppointmentFormDialog(props: Props & { initialDate: string; onClose: () => void; onSaved: () => void }) {
   const activeServices = props.services.filter((service) => service.isActive);
   const [serviceIds, setServiceIds] = useState<string[]>([]);
+  const [serviceSearch, setServiceSearch] = useState("");
   const [clientMode, setClientMode] = useState<"existing" | "new">("existing");
+  const [clientLabel, setClientLabel] = useState("");
+  const [newClient, setNewClient] = useState({ firstName: "", lastName: "", email: "", phone: "" });
   const [piercerId, setPiercerId] = useState(props.role === "piercer" ? props.userId : "");
+  const [stationId, setStationId] = useState("");
+  const [date, setDate] = useState(props.initialDate);
+  const [time, setTime] = useState("10:00");
+  const [notes, setNotes] = useState("");
+  const [sendConfirmation, setSendConfirmation] = useState(true);
   const [busy, setBusy] = useState(false); const [error, setError] = useState("");
   const selectedServices = activeServices.filter((service) => serviceIds.includes(service.id));
+  const visibleServices = activeServices.filter((service) => service.name.toLowerCase().includes(serviceSearch.trim().toLowerCase()));
   const duration = combinedServiceDuration(selectedServices);
   const eligible = props.staff.filter((person) => isPiercer(person) && person.active &&
     serviceIds.every((serviceId) => props.assignments.some((item) => item.serviceId === serviceId && item.staffId === person.id)));
@@ -182,35 +195,115 @@ function AppointmentFormDialog(props: Props & { initialDate: string; onClose: ()
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError(""); const form = new FormData(event.currentTarget);
     const payload = {
-      serviceIds, startsAt: `${form.get("date")}T${form.get("time")}:00+08:00`, piercerId: effectivePiercerId,
+      serviceIds, startsAt: `${date}T${time}:00+08:00`, piercerId: effectivePiercerId,
       stationId: form.get("stationId") || null, customerId: clientMode === "existing" ? form.get("customerId") : null,
       customer: clientMode === "new" ? { firstName: form.get("firstName"), lastName: form.get("lastName"), email: form.get("email"), phone: form.get("phone") } : null,
-      notes: form.get("notes") || null, sendConfirmation: form.get("sendConfirmation") === "on",
+      notes: form.get("notes") || null, sendConfirmation,
     };
     const response = await fetch("/api/appointments", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
     const body = await response.json(); setBusy(false);
     if (!response.ok) { setError(body.error?.message ?? "Appointment could not be created."); return; }
     props.onSaved();
   }
+  const chosenPiercer = props.staff.find((person) => person.id === effectivePiercerId);
+  const chosenStation = props.stations.find((station) => station.id === stationId);
+  const clientSummary = clientMode === "existing" ? cleanClientLabel(clientLabel) : `${newClient.firstName} ${newClient.lastName}`.trim();
+  const boundary = date && time && duration ? appointmentDayBoundary(date, time, duration) : null;
+  const endsAt = boundary?.endsAt ?? null;
+  const dayHours = props.studio.businessHours[String(weekday(date))];
+  const studioScheduleIssue = endsAt && (!dayHours || dayHours.closed
+    ? "The studio is closed on this date."
+    : endsAt > manilaSchedulingEnd(date, dayHours.close)
+      ? `The studio closes at ${compactScheduleTime(dayHours.close)}.`
+      : null);
+  const piercerScheduleIssue = endsAt && effectivePiercerId && !props.availability.some((block) =>
+    block.staffId === effectivePiercerId &&
+    (block.availabilityDate ? block.availabilityDate === date : block.weekday === weekday(date)) &&
+    new Date(`${date}T${time}:00+08:00`) >= manilaDateTime(date, block.startsAt.slice(0, 5)) &&
+    endsAt <= manilaSchedulingEnd(date, block.endsAt.slice(0, 5)),
+  ) ? `${chosenPiercer?.displayName ?? "The selected piercer"} is not available through ${formatTime(endsAt.toISOString())}.` : null;
+  const missing = [
+    !serviceIds.length && "Services",
+    !clientSummary && (clientMode === "existing" ? "Client" : "New client name"),
+    clientMode === "new" && (!newClient.email || !newClient.phone) && "New client contact",
+    !effectivePiercerId && "Piercer",
+    (!date || !time) && "Date and time",
+    boundary?.endsPastMidnight && "Choose a start time that ends by midnight",
+    studioScheduleIssue,
+    piercerScheduleIssue,
+  ].filter(Boolean) as string[];
+  const readinessMissing = error ? [...missing, "Resolve the issue above"] : missing;
   return <Dialog title="New appointment" detail="Studio-created bookings ignore public lead time and horizon limits." onClose={props.onClose}>
-    <form className={operationForm} onSubmit={submit}>
-      <fieldset className="grid max-h-[230px] grid-cols-2 gap-[7px] overflow-auto rounded-[14px] border-[1.5px] border-hippy-ink bg-[#fae5bf] p-2.5 max-[700px]:grid-cols-1 [&>legend]:px-[7px] [&>legend]:font-black [&>label]:flex [&>label]:cursor-pointer [&>label]:items-center [&>label]:gap-2 [&>label]:rounded-[10px] [&>label]:border [&>label]:border-[#bc7c57] [&>label]:bg-[#fff8e8] [&>label]:p-2 [&>label>span]:flex [&>label>span]:flex-1 [&>label>span]:justify-between [&>label>span]:gap-1.5 [&>label>span]:text-[10px] [&_small]:text-[#81665c]"><legend>Services</legend>{activeServices.map((service) => <label key={service.id}>
-        <input type="checkbox" checked={serviceIds.includes(service.id)} onChange={(event) => setServiceIds((current) => event.target.checked ? [...current, service.id] : current.filter((id) => id !== service.id))}/>
-        <span><strong>{service.name}</strong><small>{service.durationMinutes} min</small></span>
-      </label>)}</fieldset>
-      <div className="grid grid-cols-2 rounded-xl border-[1.5px] border-hippy-ink bg-[#d9ac83] p-[3px] [&>button]:rounded-lg [&>button]:border-0 [&>button]:bg-transparent [&>button]:p-2 [&>button]:font-extrabold"><button type="button" className={clientMode === "existing" ? "bg-[#fff4d7]! shadow-[1px_1px_0_#3b2923]" : ""} onClick={() => setClientMode("existing")}>Existing client</button><button type="button" className={clientMode === "new" ? "bg-[#fff4d7]! shadow-[1px_1px_0_#3b2923]" : ""} onClick={() => setClientMode("new")}>New client</button></div>
-      {clientMode === "existing" ? <label className={dashField}>Client<CustomerSelect required /></label>
-        : <div className={operationGrid}><label className={dashField}>First name<input name="firstName" required/></label><label className={dashField}>Last name<input name="lastName" required/></label><label className={dashField}>Email<input name="email" type="email" required/></label><label className={dashField}>Phone<input name="phone" required/></label></div>}
-      <div className={operationGrid}><label className={dashField}>Piercer<StudioSelect value={effectivePiercerId} onValueChange={setPiercerId} required disabled={props.role === "piercer"} ariaLabel="Piercer" options={[{ value: "", label: "Choose eligible piercer" }, ...eligible.map((person) => ({ value: person.id, label: person.displayName }))]} /></label>
-        <label className={dashField}>Station<StudioSelect name="stationId" defaultValue="" ariaLabel="Station" options={[{ value: "", label: "No station" }, ...props.stations.map((station) => ({ value: station.id, label: station.name }))]} /></label>
-        <label className={dashField}>Date<input name="date" type="date" defaultValue={props.initialDate} required/></label><label className={dashField}>Manila time<input name="time" type="time" defaultValue="10:00" required/></label></div>
-      <p className="m-0 flex items-center gap-[7px] rounded-[11px] border border-dashed border-[#ba7652] bg-[#f8dcae] px-3 py-2.5 text-[11px] text-[#60463c] [&>svg]:w-4"><Clock3/> Combined duration: <strong>{duration} minutes</strong>. End time is calculated automatically.</p>
-      <label className={dashField}>Notes<textarea name="notes" maxLength={2000}/></label>
-      <label className="relative flex min-h-auto cursor-pointer items-center gap-2 p-[9px_11px] text-[9px] text-[#71594f]"><input className="peer absolute opacity-0" name="sendConfirmation" type="checkbox" defaultChecked/><span className="grid size-[18px] place-items-center rounded-[5px] border-2 border-hippy-ink bg-white text-transparent peer-checked:bg-hippy-orange peer-checked:text-white [&>svg]:w-[11px]"><Check/></span> Email a confirmation to the client</label>
-      {error && <p className={dashError} role="alert">{error}</p>}
-      <footer><button type="button" className={dashButton({ variant: "secondary" })} onClick={props.onClose}>Cancel</button><button className={dashButton({ variant: "primary" })} disabled={busy || !serviceIds.length || !effectivePiercerId}>{busy ? "Creating…" : "Create appointment"}</button></footer>
+    <form className="grid grid-cols-[minmax(0,1fr)_320px] max-[900px]:grid-cols-1" onSubmit={submit}>
+      <div className="flex flex-col gap-4 p-[21px] max-[700px]:p-4">
+        <section className="flex flex-col gap-2.5">
+          <SectionHead index="1" title="Services" meta={`${serviceIds.length} selected · ${duration} min`}/>
+          <label className="relative block [&>svg]:pointer-events-none [&>svg]:absolute [&>svg]:top-1/2 [&>svg]:left-3 [&>svg]:w-4 [&>svg]:-translate-y-1/2 [&>svg]:text-[#9a6b55]"><Search/><input className="min-h-[43px] w-full rounded-[10px_7px_11px_8px] border-[1.5px] border-hippy-ink bg-[#fffaf0] py-2.5 pr-3 pl-9 text-[11px] shadow-[2px_2px_0_#d9a47e]" type="search" value={serviceSearch} onChange={(event) => setServiceSearch(event.target.value)} placeholder="Search services" aria-label="Search services"/></label>
+          <fieldset className="grid max-h-[250px] grid-cols-2 gap-[7px] overflow-auto rounded-[14px] border-[1.5px] border-hippy-ink bg-[#fae5bf] p-2.5 [scrollbar-color:#d5aa89_transparent] [scrollbar-width:thin] max-[700px]:grid-cols-1"><legend className="sr-only">Services</legend>{visibleServices.map((service) => {
+            const selected = serviceIds.includes(service.id);
+            return <label className={cn("grid min-h-[54px] cursor-pointer grid-cols-[22px_minmax(0,1fr)_auto] items-center gap-2 rounded-[12px_9px_13px_10px] border-[1.5px] border-[#bc7c57] bg-[#fff8e8] p-2 text-[10px] transition", selected && "-translate-x-px -translate-y-px border-2 border-hippy-ink bg-[#f0c66e] shadow-[3px_3px_0_#3b2923]")} key={service.id}>
+              <input className="peer sr-only" type="checkbox" checked={selected} onChange={(event) => { setError(""); setServiceIds((current) => event.target.checked ? [...current, service.id] : current.filter((id) => id !== service.id)); }}/>
+              <span className="grid size-5 place-items-center rounded-[6px_4px_7px_5px] border-2 border-hippy-ink bg-white text-transparent leading-none peer-checked:bg-hippy-orange peer-checked:text-white [&>svg]:block [&>svg]:size-[11px]"><Check/></span>
+              <span className="min-w-0"><strong className="block overflow-hidden text-ellipsis whitespace-nowrap">{service.name}</strong><small className="mt-1 block text-[8px] text-[#81665c]">{qualifiedNames(service.id, props).join(", ") || "No eligible piercer"}</small></span>
+              <small className="rounded-full border border-dashed border-[#9f6a4d] bg-[#fff5df] px-2 py-1 text-[8px] font-black whitespace-nowrap">{service.durationMinutes} min</small>
+            </label>;
+          })}</fieldset>
+        </section>
+        <section className="border-t border-dashed border-[#c88f6e] pt-4">
+          <SectionHead index="2" title="Client"/>
+          <div className="mb-3 grid grid-cols-2 rounded-xl border-[1.5px] border-hippy-ink bg-[#d9ac83] p-[3px] shadow-[1px_2px_0_#3b2923] [&>button]:rounded-lg [&>button]:border-0 [&>button]:bg-transparent [&>button]:p-2 [&>button]:font-extrabold"><button type="button" className={clientMode === "existing" ? "bg-[#fff4d7]! text-[#b74827] shadow-[1px_1px_0_#3b2923]" : ""} aria-pressed={clientMode === "existing"} onClick={() => setClientMode("existing")}>Existing client</button><button type="button" className={clientMode === "new" ? "bg-[#fff4d7]! text-[#b74827] shadow-[1px_1px_0_#3b2923]" : ""} aria-pressed={clientMode === "new"} onClick={() => setClientMode("new")}>New client</button></div>
+          {clientMode === "existing" ? <label className={dashField}>Client<CustomerSelect required onSelectionLabelChange={setClientLabel}/></label>
+            : <div className={operationGrid}><label className={dashField}>First name<input name="firstName" value={newClient.firstName} onChange={(event) => setNewClient((current) => ({ ...current, firstName: event.target.value }))} required/></label><label className={dashField}>Last name<input name="lastName" value={newClient.lastName} onChange={(event) => setNewClient((current) => ({ ...current, lastName: event.target.value }))} required/></label><label className={dashField}>Email<input name="email" type="email" value={newClient.email} onChange={(event) => setNewClient((current) => ({ ...current, email: event.target.value }))} required/></label><label className={dashField}>Phone<input name="phone" value={newClient.phone} onChange={(event) => setNewClient((current) => ({ ...current, phone: event.target.value }))} required/></label></div>}
+        </section>
+        <section className="border-t border-dashed border-[#c88f6e] pt-4">
+          <SectionHead index="3" title="Schedule" meta="Asia/Manila"/>
+          <div className={operationGrid}><label className={dashField}>Eligible piercer<StudioSelect value={effectivePiercerId} onValueChange={(value) => { setError(""); setPiercerId(value); }} required disabled={props.role === "piercer"} ariaLabel="Eligible piercer" options={[{ value: "", label: "Choose eligible piercer" }, ...eligible.map((person) => ({ value: person.id, label: person.displayName }))]} /></label>
+            <label className={dashField}>Station<StudioSelect name="stationId" value={stationId} onValueChange={(value) => { setError(""); setStationId(value); }} ariaLabel="Station" options={[{ value: "", label: "No station" }, ...props.stations.map((station) => ({ value: station.id, label: station.name }))]} /></label>
+            <label className={dashField}>Date<input name="date" type="date" value={date} onChange={(event) => { setError(""); setDate(event.target.value); }} required/></label><label className={dashField}>Manila time<input name="time" type="time" value={time} onChange={(event) => { setError(""); setTime(event.target.value); }} required/></label></div>
+          <p className={cn("mt-3 mb-0 flex items-center gap-[7px] rounded-[11px] border border-dashed border-[#ba7652] bg-[#f8dcae] px-3 py-2.5 text-[11px] text-[#60463c] [&>svg]:w-4", (boundary?.endsPastMidnight || studioScheduleIssue || piercerScheduleIssue) && "border-[#a33e30] bg-[#f2c8b6] text-[#783321]", boundary?.endsAtMidnight && !studioScheduleIssue && !piercerScheduleIssue && "border-[#4d745e] bg-[#d8e5cf] text-[#315342]")}><Clock3/> Combined duration: <strong>{duration} minutes</strong>. {boundary?.endsPastMidnight ? "This ends after midnight. Cross-day appointments are not supported." : studioScheduleIssue ?? piercerScheduleIssue ?? (boundary?.endsAtMidnight ? "Ends exactly at midnight — valid end-of-day boundary." : "End time is calculated automatically.")}</p>
+        </section>
+        <section className="border-t border-dashed border-[#c88f6e] pt-4 opacity-90">
+          <SectionHead index="4" title="Notes / additional details"/>
+          <label className={dashField}>Notes<textarea name="notes" maxLength={2000} value={notes} onChange={(event) => setNotes(event.target.value)}/></label>
+          <label className="relative mt-2 flex min-h-auto cursor-pointer items-center gap-2 p-[9px_11px] text-[9px] text-[#71594f]"><input className="peer absolute opacity-0" name="sendConfirmation" type="checkbox" checked={sendConfirmation} onChange={(event) => setSendConfirmation(event.target.checked)}/><span className="grid size-[18px] place-items-center rounded-[5px] border-2 border-hippy-ink bg-white text-transparent leading-none peer-checked:bg-hippy-orange peer-checked:text-white [&>svg]:block [&>svg]:size-[11px]"><Check/></span> Email a confirmation to the client</label>
+          {error && <p className={dashError} role="alert">{error}</p>}
+        </section>
+      </div>
+      <aside className="sticky top-[74px] m-0 flex h-full min-h-full self-stretch flex-col border-l border-dashed border-[#bb7f5d] bg-[#f6dcae] p-[17px] max-[900px]:static max-[900px]:border-t max-[900px]:border-l-0">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[18px_13px_19px_14px] border-2 border-hippy-ink bg-[#fff8e8] shadow-[4px_4px_0_#3b2923]">
+          <header className="border-b border-dashed border-[#c98965] bg-[#fff1cf] p-[15px]"><strong className="block font-display text-[18px] font-[760] text-hippy-ink">Appointment Summary</strong><small className="mt-1 block text-[10px] text-[#765c52]">Live review before creation</small></header>
+          <dl className="m-0 grid min-h-0 flex-1 content-start gap-3 overflow-auto p-[15px] text-[11px] [scrollbar-color:#d5aa89_transparent] [scrollbar-width:thin] [&_dt]:mb-1 [&_dt]:text-[8px] [&_dt]:font-black [&_dt]:tracking-[.8px] [&_dt]:text-[#a34d30] [&_dt]:uppercase [&_dd]:m-0 [&_dd]:leading-[1.45]">{summaryRow("Services", selectedServices.length ? <span className="flex flex-wrap gap-1.5">{selectedServices.map((service) => <span className="rounded-[10px_8px_11px_9px] border-[1.5px] border-hippy-ink bg-[#f0c66e] px-2 py-1.5 font-black shadow-[1px_1px_0_#3b2923]" key={service.id}>{service.name}</span>)}</span> : <span className="text-[#82675d] italic">Not selected</span>)}
+            {summaryRow("Total duration", duration ? `${duration} min` : <span className="text-[#82675d] italic">Not selected</span>)}
+            {summaryRow("Client", clientSummary || <span className="text-[#82675d] italic">{clientMode === "existing" ? "Choose a client" : "Enter new client details"}</span>)}
+            {summaryRow("Piercer", chosenPiercer?.displayName ?? <span className="text-[#82675d] italic">Choose a piercer</span>)}
+            {summaryRow("Station", chosenStation?.name ?? "No station")}
+            {summaryRow("Date & time", date && time ? `${formatShortDate(date)} · ${formatTime(`${date}T${time}:00+08:00`)}` : <span className="text-[#82675d] italic">Choose date and time</span>)}
+            {summaryRow("Ends", endsAt ? <span>{formatShortDate(manilaDate(endsAt))} · {formatTime(endsAt.toISOString())}{boundary?.endsAtMidnight && <small className="mt-1 block font-bold text-[#315342]">Valid midnight endpoint</small>}{boundary?.endsPastMidnight && <small className="mt-1 block font-bold text-[#a33e30]">Crosses midnight — choose an earlier start</small>}</span> : <span className="text-[#82675d] italic">Select services and a start time</span>)}
+            {summaryRow("Notes", notes.trim() || <span className="text-[#82675d] italic">No notes</span>)}</dl>
+          <div className={cn("mx-[15px] mb-[14px] rounded-[14px_10px_15px_11px] border-[1.5px] border-hippy-ink bg-[#fff5df] p-3 text-[10px] leading-[1.55]", !readinessMissing.length && "bg-[#d8e5cf] text-[#315342]")}><strong className="block text-[12px]">{readinessMissing.length ? "Still needed:" : "Ready to create"}</strong>{readinessMissing.length ? <ul className="my-1.5 pl-5">{readinessMissing.map((item) => <li key={item}>{item}</li>)}</ul> : <p className="mt-1">Server validation still checks qualifications, hours, availability, and conflicts.</p>}</div>
+          <footer className="flex shrink-0 flex-wrap justify-end gap-[9px] border-t border-dashed border-[#c98965] bg-[#fff1cf] p-[15px]"><button type="button" className={dashButton({ variant: "secondary" })} onClick={props.onClose}>Cancel</button><button className={dashButton({ variant: "primary" })} disabled={busy || Boolean(readinessMissing.length)}>{busy ? "Creating…" : "Create appointment"}</button></footer>
+        </div>
+      </aside>
     </form>
   </Dialog>;
+}
+
+function SectionHead({ index, title, meta }: { index: string; title: string; meta?: string }) {
+  return <div className="mb-2.5 flex items-center justify-between gap-3"><span className="flex items-center gap-2 text-[10px] font-black tracking-[1px] text-[#a34d30] uppercase"><span className="grid size-[23px] place-items-center rounded-[50%_43%_54%_45%] border-[1.5px] border-hippy-ink bg-hippy-gold text-[10px] text-[#59351c] shadow-[1px_1px_0_#3b2923]">{index}</span>{title}</span>{meta && <span className="rounded-full border border-hippy-ink bg-[#d8e4c7] px-2.5 py-1.5 text-[8px] font-black text-[#315342] shadow-[1px_1px_0_#3b2923] whitespace-nowrap">{meta}</span>}</div>;
+}
+
+function summaryRow(label: string, value: ReactNode) {
+  return <div className="grid grid-cols-[86px_minmax(0,1fr)] gap-2.5 max-[520px]:grid-cols-1 max-[520px]:gap-1"><dt>{label}</dt><dd>{value}</dd></div>;
+}
+
+function qualifiedNames(serviceId: string, props: Props) {
+  return props.staff
+    .filter((person) => isPiercer(person) && props.assignments.some((assignment) => assignment.serviceId === serviceId && assignment.staffId === person.id))
+    .map((person) => person.displayName.split(" ")[0]);
+}
+
+function cleanClientLabel(value: string) {
+  return value.replace(/\s+·\s+.+$/, "");
 }
 
 function AppointmentDialog(props: Props & { appointment: RawAppointment; onClose: () => void; onSaved: () => void }) {
@@ -260,8 +353,10 @@ function weekday(date: string) { return new Date(`${date}T12:00:00Z`).getUTCDay(
 function shiftDate(date: string, days: number) { const value = new Date(`${date}T12:00:00Z`); value.setUTCDate(value.getUTCDate() + days); return value.toISOString().slice(0, 10); }
 function weekDates(anchor: string) { const start = shiftDate(anchor, -weekday(anchor)); return Array.from({ length: 7 }, (_, index) => shiftDate(start, index)); }
 function formatMonth(date: string) { return new Intl.DateTimeFormat("en-PH", { month: "short", timeZone: "UTC" }).format(new Date(`${date}T12:00:00Z`)); }
+function formatShortDate(date: string) { return new Intl.DateTimeFormat("en-PH", { month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(`${date}T12:00:00Z`)); }
 function formatLongDate(date: string) { return new Intl.DateTimeFormat("en-PH", { weekday: "long", month: "long", day: "numeric", year: "numeric", timeZone: "UTC" }).format(new Date(`${date}T12:00:00Z`)); }
 function formatHour(hour: number) { return new Intl.DateTimeFormat("en-PH", { hour: "numeric", timeZone: "UTC" }).format(new Date(Date.UTC(2020, 0, 1, hour))); }
 function formatTime(value: string) { return new Intl.DateTimeFormat("en-PH", { hour: "numeric", minute: "2-digit", timeZone: "Asia/Manila" }).format(new Date(value)); }
+function compactScheduleTime(value: string) { return value.startsWith("24:00") || value.startsWith("23:59") ? "12:00 AM" : new Intl.DateTimeFormat("en-PH", { hour: "numeric", minute: "2-digit", timeZone: "UTC" }).format(new Date(`2020-01-01T${value.slice(0, 5)}:00Z`)); }
 function manilaTimeValue(value: string) { const parts = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Asia/Manila" }).formatToParts(new Date(value)); return `${parts.find((part) => part.type === "hour")?.value}:${parts.find((part) => part.type === "minute")?.value}`; }
 function manilaMinutes(value: string) { const [hour, minute] = manilaTimeValue(value).split(":").map(Number); return hour * 60 + minute; }

@@ -14,7 +14,15 @@ import type { CustomerRecord } from "@/lib/data/staff";
 
 type CustomerOption = { value: string; label: string };
 
-export function CustomerSelect({ name = "customerId", required = false }: { name?: string; required?: boolean }) {
+export function CustomerSelect({
+  name = "customerId",
+  required = false,
+  onSelectionLabelChange,
+}: {
+  name?: string;
+  required?: boolean;
+  onSelectionLabelChange?: (label: string) => void;
+}) {
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
   useEffect(() => {
@@ -33,6 +41,7 @@ export function CustomerSelect({ name = "customerId", required = false }: { name
       itemToStringValue={(item) => item.value}
       isItemEqualToValue={(item, value) => item.value === value.value}
       onInputValueChange={(value) => setSearch(value)}
+      onValueChange={(item) => onSelectionLabelChange?.(item?.label ?? "")}
     >
       <ComboboxInput
         placeholder="Search clients"

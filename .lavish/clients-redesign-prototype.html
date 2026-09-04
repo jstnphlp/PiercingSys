@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PiercingSys Clients - review prototype</title>
+  <style>
+    :root { --ink:#3b2923; --muted:#765c52; --cream:#fff8e8; --paper:#fff9eb; --sand:#f5ddba; --peach:#efc6a4; --orange:#d66335; --gold:#efc76f; --line:#c98965; --shadow:#3b2923; --sage:#c8dfc6; --lilac:#ddd0e5; --rose:#f0c0ad; }
+    * { box-sizing:border-box; }
+    body { margin:0; color:var(--ink); background:#ead6b8; font-family: ui-rounded, "Avenir Next", Avenir, system-ui, sans-serif; font-size:14px; }
+    button,input { font:inherit; }
+    button { color:inherit; }
+    .app { min-height:100vh; display:grid; grid-template-columns:218px minmax(0,1fr); background:var(--cream); }
+    .sidebar { background:#f3d7aa; border-right:2px solid var(--ink); padding:24px 14px; display:flex; flex-direction:column; gap:30px; }
+    .brand { display:flex; align-items:center; gap:10px; font-family:Georgia,serif; font-size:21px; font-weight:800; }
+    .brand-mark { width:34px; height:34px; display:grid; place-items:center; border:1.5px solid var(--ink); border-radius:50% 43% 54% 45%; background:var(--orange); color:white; box-shadow:2px 2px 0 var(--shadow); }
+    .nav { display:grid; gap:5px; }
+    .nav a { display:flex; align-items:center; gap:10px; min-height:39px; padding:0 11px; border-radius:10px 7px 11px 8px; color:#5a4036; text-decoration:none; font-size:12px; font-weight:700; }
+    .nav a.active { color:var(--ink); border:1.5px solid var(--ink); background:var(--paper); box-shadow:2px 2px 0 var(--shadow); }
+    .sidebar-note { margin-top:auto; border-top:1px dashed var(--line); padding:15px 8px 0; color:var(--muted); font-size:11px; line-height:1.5; }
+    .workspace { min-width:0; padding:30px clamp(20px,4vw,54px) 46px; }
+    .topbar { display:flex; align-items:center; justify-content:space-between; gap:18px; padding-bottom:23px; border-bottom:1px dashed var(--line); }
+    .eyebrow { color:#a04b2f; font-size:10px; font-weight:900; letter-spacing:.1em; text-transform:uppercase; }
+    h1,h2,h3 { font-family:Georgia,serif; letter-spacing:0; }
+    h1 { margin:3px 0 0; font-size:31px; line-height:1; }
+    .topbar p { margin:7px 0 0; color:var(--muted); font-size:12px; }
+    .user { display:flex; align-items:center; gap:9px; color:var(--muted); font-size:11px; }
+    .avatar { display:grid; width:32px; height:32px; place-items:center; border:1.5px solid var(--ink); border-radius:50%; background:var(--lilac); color:#593f69; font-weight:900; }
+    .clients { padding-top:25px; }
+    .toolbar { display:flex; align-items:end; gap:12px; margin-bottom:17px; }
+    .search-wrap { flex:1; min-width:200px; }
+    .field-label { display:block; margin:0 0 6px; color:#694d43; font-size:10px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; }
+    .search { position:relative; }
+    .search svg { position:absolute; left:13px; top:50%; width:18px; height:18px; transform:translateY(-50%); color:#8a6c5f; pointer-events:none; }
+    input { width:100%; height:43px; border:1.5px solid var(--ink); border-radius:10px 7px 11px 8px; outline:0; background:#fffaf0; box-shadow:2px 2px 0 #d9a47e; padding:0 12px; color:var(--ink); }
+    .search input { padding-left:42px; }
+    input:focus { border-color:var(--orange); outline:3px solid #df682c35; }
+    .btn { min-height:41px; display:inline-flex; align-items:center; justify-content:center; gap:8px; border:1.5px solid var(--ink); border-radius:10px 7px 11px 8px; padding:0 14px; background:#fffaf0; box-shadow:2px 2px 0 var(--shadow); cursor:pointer; font-size:12px; font-weight:850; white-space:nowrap; }
+    .btn:hover { background:#fff1cf; }
+    .btn:focus-visible,.row:focus-visible { outline:3px solid var(--orange); outline-offset:2px; }
+    .btn.primary { background:var(--orange); color:white; }
+    .btn.primary:hover { background:#ba512c; }
+    .btn svg { width:16px; height:16px; }
+    .search-state { min-height:21px; padding:0 2px 8px; color:var(--muted); font-size:11px; }
+    .search-state strong { color:#a04b2f; }
+    .panel { overflow:hidden; border:1.5px solid var(--ink); border-radius:19px 14px 20px 16px; background:var(--paper); box-shadow:4px 4px 0 var(--shadow); }
+    .table-scroll { overflow-x:auto; }
+    table { width:100%; min-width:850px; border-collapse:collapse; table-layout:fixed; }
+    col.client{width:25%} col.email{width:25%} col.phone{width:17%} col.appts{width:11%} col.activity{width:17%} col.action{width:5%}
+    th { height:40px; padding:0 16px; background:var(--sand); color:#795346; text-align:left; font-size:9px; letter-spacing:.08em; text-transform:uppercase; }
+    th:last-child,td:last-child { text-align:center; }
+    td { height:62px; padding:10px 16px; border-top:1px dashed #dab08f; color:#695249; font-size:12px; vertical-align:middle; }
+    .row { cursor:pointer; outline:0; transition:background .14s ease; }
+    .row:hover,.row.focus-demo { background:#fff1cf; }
+    .client-name { display:block; color:var(--ink); font-size:13px; font-weight:850; }
+    .client-since { display:block; margin-top:3px; color:#86685c; font-size:10px; }
+    .cell-text { display:block; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .placeholder { color:#9a8177; }
+    .count { display:inline-grid; min-width:27px; min-height:25px; place-items:center; border:1px solid #7d5b4d; border-radius:50% 43% 54% 45%; background:#f8d7a5; color:#50362e; font-size:11px; font-weight:900; }
+    .chev { display:inline-grid; width:29px; height:29px; place-items:center; border:0; border-radius:8px; background:transparent; cursor:pointer; }
+    .chev:hover { background:#f5ddba; }
+    .chev svg { width:18px; height:18px; }
+    .pagination { display:flex; align-items:center; justify-content:center; gap:12px; min-height:68px; padding:12px; border-top:1px dashed var(--line); color:var(--muted); font-size:11px; }
+    .pagination .btn { min-height:32px; padding:0 11px; font-size:11px; }
+    .empty { display:grid; min-height:256px; place-items:center; padding:32px; text-align:center; background:radial-gradient(circle at 50% 46%,#efb83f20 0 75px,transparent 77px); }
+    .empty h2 { margin:7px 0; font-size:20px; }
+    .empty p { max-width:350px; margin:0; color:var(--muted); font-size:12px; line-height:1.55; }
+    .loading { display:grid; min-height:256px; place-items:center; gap:10px; color:var(--muted); }
+    .spinner { width:32px; height:32px; border:4px dotted var(--orange); border-radius:50%; animation:spin 1.1s linear infinite; }
+    @keyframes spin { to{transform:rotate(360deg)} }
+    .backdrop { position:fixed; inset:0; z-index:10; display:none; background:#2d1812a6; backdrop-filter:blur(4px); }
+    .backdrop.show { display:block; }
+    .drawer { position:absolute; top:0; right:0; display:flex; width:min(590px,100%); height:100%; flex-direction:column; background:var(--cream); border-left:2px solid var(--ink); box-shadow:-7px 0 0 var(--shadow); }
+    .drawer-head,.modal-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; padding:23px 23px 19px; border-bottom:1px dashed var(--line); background:#fff5df; }
+    .drawer-head>div,.modal-head>div { min-width:0; }
+    .drawer h2,.modal h2 { overflow-wrap:anywhere; margin:3px 0 0; font-size:26px; line-height:1.05; }
+    .drawer-head p,.modal-head p { margin:7px 0 0; color:var(--muted); font-size:12px; }
+    .icon-btn { flex:0 0 36px; display:grid; width:36px; height:36px; place-items:center; border:1.5px solid var(--ink); border-radius:10px; padding:0; line-height:0; background:var(--peach); cursor:pointer; }
+    .icon-btn svg { display:block; width:17px; height:17px; }
+    .icon-btn:hover { background:#e8ad82; }
+    .drawer-content { overflow:auto; padding:22px; }
+    .contact-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:25px; }
+    .contact { min-width:0; padding:13px; border:1.5px solid var(--ink); border-radius:12px 8px 13px 9px; background:#f8d7a5; box-shadow:2px 2px 0 #7d5b4d; }
+    .contact-label { display:flex; align-items:center; gap:6px; color:#9a4a2f; font-size:9px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; }
+    .contact-label svg { width:14px; height:14px; }
+    .contact a,.contact .plain { display:block; overflow:hidden; margin-top:8px; color:var(--ink); font-size:12px; font-weight:750; text-overflow:ellipsis; white-space:nowrap; }
+    .section-head { display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin-bottom:10px; }
+    .section-head h3 { margin:0; font-size:19px; }
+    .section-head small { color:var(--muted); font-size:10px; }
+    .history { overflow:auto; border:1.5px solid var(--ink); border-radius:13px 9px 14px 10px; background:var(--paper); }
+    .history table { min-width:530px; table-layout:auto; }
+    .history th { height:35px; padding:0 11px; font-size:8px; }
+    .history td { height:auto; padding:11px; font-size:11px; }
+    .history .when strong { display:block; color:var(--ink); }
+    .history .when span { color:var(--muted); font-size:10px; }
+    .service-text { color:var(--ink); font-weight:700; }
+    .more { color:var(--muted); font-size:10px; }
+    .status { display:inline-flex; align-items:center; min-height:24px; border:1px solid; border-radius:999px; padding:0 8px; font-size:9px; font-weight:900; text-transform:capitalize; white-space:nowrap; }
+    .status.completed { border-color:#68547a; background:var(--lilac); color:#5a436c; }.status.confirmed{border-color:#4a6d5b;background:var(--sage);color:#315342}.status.cancelled{border-color:#9a4734;background:var(--rose);color:#783321}.status.no_show{border-color:#9a4734;background:var(--rose);color:#783321}
+    .history-empty { padding:32px 18px; color:var(--muted); text-align:center; font-size:12px; }
+    .modal-wrap { position:absolute; inset:0; display:grid; place-items:center; padding:18px; }
+    .modal { width:min(590px,100%); overflow:hidden; border:2px solid var(--ink); border-radius:22px 16px 23px 18px; background:var(--cream); box-shadow:8px 8px 0 var(--shadow); }
+    .modal form { padding:21px; }.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.full{grid-column:1/-1}.form-error{display:none;margin:11px 0 0;border:1px solid #9a4734;border-radius:9px;background:#f2c8b6;padding:9px 10px;color:#783321;font-size:11px;font-weight:700}.form-error.show{display:block}.form-foot{display:flex;justify-content:flex-end;gap:9px;margin-top:18px}.hint{margin:6px 0 0;color:var(--muted);font-size:10px;line-height:1.45}.valid-note{display:none;margin:6px 0 0;color:#315342;font-size:10px;font-weight:700}.valid-note.show{display:block}
+    .demo-bar { position:fixed; right:18px; bottom:18px; z-index:20; display:flex; align-items:center; gap:8px; border:1.5px solid var(--ink); border-radius:12px 8px 13px 9px; background:#fff5df; box-shadow:3px 3px 0 var(--shadow); padding:8px 9px; }.demo-bar span{font-size:10px;font-weight:850}.demo-bar select{height:30px;border:1px solid var(--ink);border-radius:7px;background:#fffaf0;padding:0 7px;color:var(--ink);font-size:10px}.demo-bar button{height:30px;border:1px solid var(--ink);border-radius:7px;background:var(--gold);padding:0 8px;font-size:10px;font-weight:850;cursor:pointer}
+    .review { margin-top:24px; padding:17px 19px; border:1.5px dashed var(--line); border-radius:13px 9px 14px 10px; background:#fff3d8; }.review strong{font-family:Georgia,serif;font-size:16px}.review p{margin:5px 0 12px;color:var(--muted);font-size:11px}.review form{display:flex;flex-wrap:wrap;gap:10px;align-items:center}.review label{font-size:11px;font-weight:700}.review select{height:34px;border:1px solid var(--ink);border-radius:7px;background:#fffaf0;padding:0 8px;color:var(--ink)}
+    @media (max-width:760px){.app{grid-template-columns:1fr}.sidebar{display:none}.workspace{padding:22px 16px 70px}.topbar{align-items:flex-start}.user{display:none}.toolbar{align-items:stretch;flex-direction:column}.toolbar .btn{width:100%}.contact-grid,.form-grid{grid-template-columns:1fr}.drawer-head,.modal-head{padding:19px 16px}.drawer-content,.modal form{padding:16px}.drawer h2,.modal h2{font-size:23px}.demo-bar{left:12px;right:12px;bottom:12px;justify-content:space-between}.demo-bar span{display:none}}
+  </style>
+</head>
+<body>
+  <main class="app" aria-label="PiercingSys client-management prototype">
+    <aside class="sidebar" aria-label="Studio navigation"><div class="brand"><span class="brand-mark">✦</span> PiercingSys</div><nav class="nav"><a href="#">Overview</a><a href="#">Calendar</a><a class="active" href="#clients">Clients</a><a href="#">Sales</a><a href="#">Reports</a><a href="#">Settings</a></nav><p class="sidebar-note">Studio operations<br><strong>Manila, Philippines</strong></p></aside>
+    <section class="workspace" id="clients"><header class="topbar"><div><span class="eyebrow">Studio operations</span><h1>Clients</h1><p>Search and review your studio client records.</p></div><div class="user"><span class="avatar">OC</span><span>Oliver<br><strong>Manager</strong></span></div></header>
+      <div class="clients"><div class="toolbar"><div class="search-wrap"><label class="field-label" for="client-search">Search clients</label><div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg><input id="client-search" type="search" autocomplete="off" placeholder="Search name, email, or phone" aria-describedby="search-state" /></div></div><button class="btn primary" id="open-add" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add client</button></div><div id="search-state" class="search-state" aria-live="polite">Showing <strong>25</strong> of 68 clients</div>
+        <section class="panel" id="list-panel"><div class="table-scroll"><table aria-label="Clients"><colgroup><col class="client"><col class="email"><col class="phone"><col class="appts"><col class="activity"><col class="action"></colgroup><thead><tr><th>Client</th><th>Email</th><th>Contact number</th><th>Appointments</th><th>Last activity</th><th><span class="sr-only">Open details</span></th></tr></thead><tbody id="client-rows"></tbody></table></div><nav class="pagination" aria-label="Client pages"><button class="btn" type="button" disabled>Previous</button><span>Page 1 of 3 · 68 clients</span><button class="btn" type="button">Next</button></nav></section>
+        <section class="panel" id="empty-panel" hidden><div class="empty"><div><div class="brand-mark" style="margin:auto;">?</div><h2>No clients found</h2><p id="empty-copy">Try a different name, email, or contact number.</p></div></div></section>
+        <section class="panel" id="loading-panel" hidden><div class="loading"><span class="spinner" aria-hidden="true"></span><strong>Searching clients…</strong><span>Fetching the requested page.</span></div></section>
+        <section class="review" data-lavish-question="clients-review"><strong>Review this Clients direction</strong><p>Use the page interactions, then queue your decision for implementation.</p><form id="review-form"><label for="review-choice">Decision</label><select id="review-choice" name="decision"><option value="Approve the proposed Clients redesign">Approve this direction</option><option value="Revise the table hierarchy">Revise table hierarchy</option><option value="Revise the details drawer">Revise details drawer</option><option value="Revise phone validation feedback">Revise phone validation</option></select><button class="btn" type="submit">Queue review decision</button></form></section>
+      </div>
+    </section>
+  </main>
+  <div class="backdrop" id="details-layer" aria-hidden="true"><aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title"><header class="drawer-head"><div><span class="eyebrow">Client details</span><h2 id="drawer-title">Juan Dela Cruz</h2><p id="drawer-since">Client since Jun 12, 2024</p></div><button class="icon-btn" type="button" data-close="details-layer" aria-label="Close client details"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header><div class="drawer-content"><section class="contact-grid" aria-label="Client contact"><div class="contact"><span class="contact-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>Email</span><a id="drawer-email" href="mailto:juan.delacruz@example.com">juan.delacruz@example.com</a></div><div class="contact"><span class="contact-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.12.9.33 1.78.62 2.64a2 2 0 0 1-.45 2.11L8 9.75a16 16 0 0 0 6 6l1.28-1.28a2 2 0 0 1 2.11-.45c.86.29 1.74.5 2.64.62A2 2 0 0 1 22 16.92Z"/></svg>Contact number</span><a id="drawer-phone" href="tel:+639171234567">+63 917 123 4567</a></div></section><section><div class="section-head"><h3>Appointment history</h3><small id="history-count">4 appointments · Manila time</small></div><div class="history" id="history-table"><table aria-label="Appointment history"><thead><tr><th>Timestamp</th><th>Piercer</th><th>Piercing type</th><th>Completion status</th></tr></thead><tbody id="history-rows"></tbody></table></div><div class="history" id="history-empty" hidden><p class="history-empty">No permitted appointments are available for this client.</p></div></section></div></aside></div>
+  <div class="backdrop" id="add-layer" aria-hidden="true"><div class="modal-wrap"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="add-title"><header class="modal-head"><div><span class="eyebrow">Client record</span><h2 id="add-title">Add client</h2><p>Create a client record without booking an appointment.</p></div><button class="icon-btn" type="button" data-close="add-layer" aria-label="Close add client form"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header><form id="add-form" novalidate><div class="form-grid"><label><span class="field-label">First name</span><input required value="Mika" /></label><label><span class="field-label">Last name</span><input required value="Santos" /></label><label><span class="field-label">Email</span><input type="email" required value="mika.santos@example.com" /></label><label class="full"><span class="field-label">Contact number</span><input id="phone-input" type="tel" autocomplete="tel" inputmode="tel" value="09171234567" aria-describedby="phone-help phone-error phone-valid" /><p class="hint" id="phone-help">Philippine mobile format. Spaces, hyphens, and an optional <code>+63</code> are accepted.</p><p class="form-error" id="phone-error" role="alert">Enter a valid Philippine mobile number, such as 09171234567 or +639171234567.</p><p class="valid-note" id="phone-valid">Valid Philippine mobile number.</p></label></div><footer class="form-foot"><button class="btn" type="button" data-close="add-layer">Cancel</button><button class="btn primary" type="submit">Save client</button></footer></form></section></div></div>
+  <div class="demo-bar"><span>Prototype state</span><select id="state-select" aria-label="Prototype state"><option value="default">Default client list</option><option value="full-name">Full-name search</option><option value="loading">Loading search</option><option value="no-results">No results</option><option value="focus">Keyboard focus row</option><option value="history">Client details: history</option><option value="empty-history">Client details: no history</option><option value="add-invalid">Add client: invalid phone</option><option value="add-valid">Add client: valid phone</option></select><button type="button" id="show-state">Show</button></div>
+  <script>
+    const clients=[
+      {id:'juan',name:'Juan Dela Cruz',email:'juan.delacruz@example.com',phone:'+63 917 123 4567',appointments:4,last:'Sep 2, 2026',since:'Jun 12, 2024'},
+      {id:'mica',name:'Mica Santos',email:'mica.santos@example.com',phone:'0917 556 0182',appointments:2,last:'Aug 31, 2026',since:'Mar 18, 2025'},
+      {id:'claire',name:'Claire Villanueva',email:'claire.v@example.com',phone:'—',appointments:0,last:'Jun 12, 2026',since:'Jun 12, 2026'},
+      {id:'ana',name:'Ana Bea Carlos',email:'ana.carlos@example.com',phone:'+63 919 728 0112',appointments:7,last:'Aug 29, 2026',since:'Jan 08, 2024'},
+      {id:'rafa',name:'Rafa de Leon',email:'rafa.del@example.com',phone:'0917-442-9190',appointments:1,last:'Aug 22, 2026',since:'Aug 22, 2026'},
+      {id:'isabel',name:'Isabel Tan',email:'—',phone:'0928 003 2344',appointments:3,last:'Aug 17, 2026',since:'Feb 01, 2025'}
+    ];
+    const histories={juan:[['Sep 2, 2026','3:30 PM','Bea Cruz','Double Lobe + 1 more','Completed','completed'],['Aug 12, 2026','11:00 AM','Bea Cruz','Helix','Completed','completed'],['Jul 17, 2026','2:00 PM','Unassigned','Conch','Cancelled','cancelled'],['Jun 12, 2026','10:30 AM','Carlo Reyes','Lobe','Confirmed','confirmed']]};
+    const rows=document.getElementById('client-rows'), search=document.getElementById('client-search'), state=document.getElementById('search-state'); let lastFocus=null;
+    function normalized(value){return value.trim().replace(/\s+/g,' ').toLowerCase()}
+    function render(query='') { const q=normalized(query); const filtered=clients.filter(c=>normalized(c.name).includes(q)||normalized(c.email).includes(q)||normalized(c.phone).replace(/[\s-]/g,'').includes(q.replace(/[\s-]/g,''))); rows.innerHTML=''; filtered.forEach(c=>{const tr=document.createElement('tr');tr.className='row';tr.tabIndex=0;tr.innerHTML=`<td><span class="client-name">${c.name}</span><span class="client-since">Client since ${c.since}</span></td><td><span class="cell-text ${c.email==='—'?'placeholder':''}">${c.email}</span></td><td><span class="cell-text ${c.phone==='—'?'placeholder':''}">${c.phone}</span></td><td><span class="count">${c.appointments}</span></td><td>${c.last}</td><td><button class="chev" aria-label="Open ${c.name}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m9 18 6-6-6-6"/></svg></button></td>`;tr.addEventListener('click',()=>openDetails(c));tr.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openDetails(c)}});rows.append(tr)}); document.getElementById('list-panel').hidden=!filtered.length;document.getElementById('empty-panel').hidden=!!filtered.length;state.innerHTML=q?`Showing <strong>${filtered.length}</strong> matching client${filtered.length===1?'':'s'} for “${query.trim().replace(/\s+/g,' ')}”`:`Showing <strong>25</strong> of 68 clients`; }
+    function openDetails(c){lastFocus=document.activeElement;document.getElementById('drawer-title').textContent=c.name;document.getElementById('drawer-since').textContent='Client since '+c.since;const email=document.getElementById('drawer-email'),phone=document.getElementById('drawer-phone');email.textContent=c.email;email.href=c.email==='—'?'#':'mailto:'+c.email;phone.textContent=c.phone;phone.href=c.phone==='—'?'#':'tel:'+c.phone.replace(/\D/g,'');const body=document.getElementById('history-rows');const data=histories[c.id]||[];body.innerHTML=data.map(h=>`<tr><td class="when"><strong>${h[0]}</strong><span>${h[1]} PHT</span></td><td>${h[2]}</td><td><span class="service-text">${h[3]}</span></td><td><span class="status ${h[5]}">${h[4]}</span></td></tr>`).join('');document.getElementById('history-table').hidden=!data.length;document.getElementById('history-empty').hidden=!!data.length;document.getElementById('history-count').textContent=data.length?`${data.length} appointments · Manila time`:'No appointments';showLayer('details-layer');}
+    function showLayer(id){document.getElementById(id).classList.add('show');document.getElementById(id).setAttribute('aria-hidden','false');setTimeout(()=>document.querySelector('#'+id+' button')?.focus(),0)}
+    function closeLayer(id){document.getElementById(id).classList.remove('show');document.getElementById(id).setAttribute('aria-hidden','true');lastFocus?.focus?.()}
+    search.addEventListener('input',()=>render(search.value)); document.getElementById('open-add').onclick=()=>{lastFocus=document.activeElement;showLayer('add-layer')}; document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>closeLayer(b.dataset.close)); document.querySelectorAll('.backdrop').forEach(layer=>layer.addEventListener('mousedown',e=>{if(e.target===layer)closeLayer(layer.id)}));document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelectorAll('.backdrop.show').forEach(x=>closeLayer(x.id))});
+    function phoneIsValid(raw){const compact=raw.trim().replace(/[\s()-]/g,'');if(!/^(?:0|\+63)9\d{9}$/.test(compact))return false;return true} function phoneState(){const input=document.getElementById('phone-input'), valid=phoneIsValid(input.value);document.getElementById('phone-error').classList.toggle('show',!!input.value&&!valid);document.getElementById('phone-valid').classList.toggle('show',!!input.value&&valid);input.setAttribute('aria-invalid',String(!!input.value&&!valid));return valid}document.getElementById('phone-input').addEventListener('input',phoneState);document.getElementById('add-form').addEventListener('submit',e=>{e.preventDefault();if(!phoneState())document.getElementById('phone-input').focus()});
+    document.getElementById('show-state').onclick=()=>{const value=document.getElementById('state-select').value;document.querySelectorAll('.backdrop.show').forEach(x=>closeLayer(x.id));document.getElementById('loading-panel').hidden=true;document.getElementById('list-panel').hidden=false;document.getElementById('empty-panel').hidden=true;if(value==='default'){search.value='';render()}if(value==='full-name'){search.value='  Juan   Dela   Cruz ';render(search.value)}if(value==='no-results'){search.value='Nora Unlisted';render(search.value)}if(value==='loading'){search.value='Juan';document.getElementById('list-panel').hidden=true;document.getElementById('loading-panel').hidden=false;state.innerHTML='Searching <strong>Juan</strong>…'}if(value==='focus'){search.value='';render();setTimeout(()=>document.querySelector('.row')?.focus(),0)}if(value==='history')openDetails(clients[0]);if(value==='empty-history')openDetails(clients[2]);if(value==='add-invalid'){showLayer('add-layer');document.getElementById('phone-input').value='abc 123';phoneState()}if(value==='add-valid'){showLayer('add-layer');document.getElementById('phone-input').value='+63 917 123 4567';phoneState()}};
+    document.getElementById('review-form').addEventListener('submit',e=>{e.preventDefault();const decision=new FormData(e.currentTarget).get('decision');if(window.lavish){window.lavish.queuePrompt(decision,{tag:'clients-prototype-review',text:decision,element:e.currentTarget,data:{decision}})} }); render();
+  </script>
+</body></html>

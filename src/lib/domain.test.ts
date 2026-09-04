@@ -309,6 +309,35 @@ describe("available slots", () => {
     expect(slots[0]?.endsAt).toBe("2026-09-01T05:00:00.000Z");
   });
 
+  it("allows an appointment to end exactly at the next midnight, but not beyond it", () => {
+    const midnight = generateAvailableSlots({
+      ...base,
+      serviceDurationMinutes: 60,
+      bookingIntervalMinutes: 15,
+      businessHours: { "2": { open: "10:00", close: "24:00" } },
+      availability: [
+        { staffId: "p1", weekday: 2, startsAt: "10:00", endsAt: "24:00" },
+      ],
+      preferredPiercerId: "p1",
+    });
+
+    expect(midnight.some((slot) => slot.startsAt === "2026-09-01T15:00:00.000Z" && slot.endsAt === "2026-09-01T16:00:00.000Z")).toBe(true);
+    expect(midnight.some((slot) => slot.startsAt === "2026-09-01T15:15:00.000Z")).toBe(false);
+  });
+
+  it("treats the displayed 11:59 PM closing label as the exclusive midnight endpoint", () => {
+    const slots = generateAvailableSlots({
+      ...base,
+      serviceDurationMinutes: 60,
+      bookingIntervalMinutes: 15,
+      businessHours: { "2": { open: "10:00", close: "23:59" } },
+      availability: [{ staffId: "p1", weekday: 2, startsAt: "10:00", endsAt: "23:59" }],
+      preferredPiercerId: "p1",
+    });
+
+    expect(slots.some((slot) => slot.startsAt === "2026-09-01T15:00:00.000Z" && slot.endsAt === "2026-09-01T16:00:00.000Z")).toBe(true);
+  });
+
   it("clips staff availability to studio hours", () => {
     const slots = generateAvailableSlots({
       ...base,

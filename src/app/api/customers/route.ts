@@ -1,11 +1,11 @@
 import { z } from "zod";
 import { getStaffSession, hasRole } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { validationError } from "@/lib/validation";
+import { philippineMobilePhone, validationError } from "@/lib/validation";
 import { pageMeta, parsePageQuery, safeSearchTerm } from "@/lib/pagination";
 import { customerDisplayContact, customerDisplayName } from "@/lib/walk-in-customer";
 
-const schema = z.object({ firstName: z.string().trim().min(1).max(80), lastName: z.string().trim().min(1).max(80), email: z.string().trim().email(), phone: z.string().trim().min(7).max(30), notes: z.string().trim().max(2000).nullable().optional() });
+const schema = z.object({ firstName: z.string().trim().min(1).max(80), lastName: z.string().trim().min(1).max(80), email: z.string().trim().email(), phone: philippineMobilePhone, notes: z.string().trim().max(2000).nullable().optional() });
 
 export async function GET(request: Request) {
   const session = await getStaffSession();
@@ -19,7 +19,10 @@ export async function GET(request: Request) {
     .order("id", { ascending: false });
   if (search) {
     const term = `*${search}*`;
-    query = query.or(`first_name.ilike.${term},last_name.ilike.${term},email.ilike.${term},phone.ilike.${term}`);
+    const nameTerms = search.split(" ")
+      .map((word) => `or(first_name.ilike.*${word}*,last_name.ilike.*${word}*)`)
+      .join(",");
+    query = query.or(`and(${nameTerms}),email.ilike.${term},phone.ilike.${term}`);
   }
   const { data, error, count } = await query.range(from, to);
   if (error) return Response.json({ error: { code: "LOOKUP_FAILED", message: error.message } }, { status: 400 });

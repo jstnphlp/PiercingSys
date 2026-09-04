@@ -1,8 +1,10 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import {
   CalendarDays,
+  ChevronRight,
   CircleDollarSign,
   Clock3,
   Sparkles,
@@ -15,12 +17,10 @@ import {
 } from "@/lib/domain";
 import {
   getStaffData,
-  type BookingRecord,
   type StaffDataScope,
 } from "@/lib/data/staff";
 import { resolveReportPeriod, type ReportPeriod, type ReportPreset } from "@/lib/report-period";
 import {
-  BookingActions,
   InviteForm,
   ServiceAssignmentForm,
   ServiceForm,
@@ -35,10 +35,13 @@ import { ReportsView } from "./reports-view";
 import { SalesView } from "./sales-view";
 import { ServiceList } from "./service-list";
 import { StaffViewSkeleton } from "./staff-skeletons";
+import { SettingsSectionFocus, type SettingsSection } from "./settings-section-focus";
+import { TodayAppointments } from "./appointment-list";
 import { emptyState, featureView, metricCard, metricGrid, panel, panelHead, settingSection, settingsListRow, settingsStack, statusClasses, statusNote, twoPanel } from "./dashboard-styles";
 import { allowedViews, type StaffView } from "./view-config";
 
 type StaffSearchParams = {
+  section?: string;
   period?: string;
   from?: string;
   to?: string;
@@ -72,16 +75,18 @@ async function AuthorizedStaffView({
   if (!session) redirect("/login");
   if (!allowedViews(session.role).includes(view)) redirect("/app");
   const reportPeriod = resolveReportPeriod(params);
+  const settingsSection = resolveSettingsSection(params.section);
   const data = await getStaffData(
     view as StaffDataScope,
     view === "reports" ? reportPeriod : undefined,
     session,
   );
-  return data.error ? <StateCard title="Data could not be loaded" detail={data.error}/> : viewContent(view, data, session, reportPeriod);
+  return data.error ? <StateCard title="Data could not be loaded" detail={data.error}/> : viewContent(view, settingsSection, data, session, reportPeriod);
 }
 
 function viewContent(
   view: StaffView,
+  settingsSection: SettingsSection | null,
   data: Awaited<ReturnType<typeof getStaffData>>,
   session: { role: string; userId: string },
   reportPeriod: ReportPeriod,
@@ -89,11 +94,11 @@ function viewContent(
   const role = session.role;
   if (view === "overview") return <Overview data={data} role={role} />;
   if (view === "calendar")
-    return <CalendarWorkspace role={role} userId={session.userId} services={data.services} staff={data.staff} assignments={data.serviceAssignments} stations={data.stations} />;
+    return <CalendarWorkspace role={role} userId={session.userId} services={data.services} staff={data.staff} assignments={data.serviceAssignments} stations={data.stations} studio={data.studio} availability={data.availability} />;
   if (view === "clients") return <Clients data={data} role={role} />;
   if (view === "sales") return <Sales data={data} />;
   if (view === "reports") return <Reports data={data} period={reportPeriod} />;
-  return <StudioSettings data={data} role={role} />;
+  return <StudioSettings data={data} role={role} section={settingsSection} />;
 }
 
 function Overview({
@@ -118,6 +123,19 @@ function Overview({
   const pendingEmails = data.deliveries.filter(
     (item) => item.status === "pending" || item.status === "failed",
   ).length;
+  const activeServices = data.services.filter((item) => item.isActive);
+  const hasActiveServices = activeServices.length > 0;
+  const hasQualifiedStaff = hasActiveServices && activeServices.every((service) =>
+    data.serviceAssignments.some((assignment) =>
+      assignment.serviceId === service.id &&
+      data.staff.some(
+        (person) =>
+          person.id === assignment.staffId &&
+          person.active &&
+          person.role === "piercer",
+      ),
+    ),
+  );
   return (
     <div className={featureView}>
       <div className={metricGrid}>
@@ -151,45 +169,29 @@ function Overview({
         )}
       </div>
       <div className={`${twoPanel} items-start`}>
-        <section className={panel}>
-          <PanelHead
-            title="Today’s appointments"
-            detail="Live records from the studio calendar"
-          />
-          {appointments.length ? (
-            <AppointmentList bookings={appointments} role={role} />
-          ) : (
-            <Empty
-              icon={<CalendarDays />}
-              title="No appointments today"
-              text="Confirmed online bookings and staff appointments will appear here."
-            />
-          )}
-        </section>
+        <TodayAppointments bookings={appointments} role={role} />
         <section className={panel}>
           <PanelHead
             title="Studio readiness"
             detail="Items affecting daily operations"
           />
-          <div className="flex flex-col [&>div]:grid [&>div]:min-h-[61px] [&>div]:grid-cols-[26px_1fr] [&>div]:items-center [&>div]:gap-x-[9px] [&>div]:border-b [&>div]:border-dashed [&>div]:border-[#d5a684] [&>div]:px-[17px] [&>div]:py-2.5 [&>div>span]:row-span-2 [&>div>span]:grid [&>div>span]:size-6 [&>div>span]:place-items-center [&>div>span]:rounded-full [&>div>span]:border [&>div>span]:border-hippy-ink [&>div>span]:text-[10px] [&>div>span]:font-black [&>div>span]:shadow-[1px_1px_0_#3b2923] [&_strong]:text-[10px] [&_small]:text-[8px] [&_small]:text-studio-muted">
+          <div className="flex flex-col [&>a:last-child]:border-b-0 [&_strong]:text-[10px] [&_small]:text-[8px] [&_small]:text-studio-muted">
             <Readiness
               label="Business hours"
               done={Object.keys(data.studio.businessHours).length > 0}
+              section="hours"
             />
             <Readiness
               label="Active services"
-              done={data.services.some((item) => item.isActive)}
+              done={hasActiveServices}
+              detail={hasActiveServices ? undefined : "No active services available"}
+              section="services"
             />
             <Readiness
               label="Qualified staff"
-              done={data.serviceAssignments.some((assignment) =>
-                data.staff.some(
-                  (person) =>
-                    person.id === assignment.staffId &&
-                    person.active &&
-                    person.role === "piercer",
-                ),
-              )}
+              done={hasQualifiedStaff}
+              detail={hasQualifiedStaff ? undefined : "A service needs an assigned piercer"}
+              section="team"
             />
             {role !== "piercer" && (
               <Readiness
@@ -200,6 +202,7 @@ function Overview({
                     ? `${pendingEmails} need attention`
                     : "All clear"
                 }
+                section="notifications"
               />
             )}
           </div>
@@ -265,21 +268,24 @@ function Reports({ data, period }: { data: Awaited<ReturnType<typeof getStaffDat
 function StudioSettings({
   data,
   role,
+  section,
 }: {
   data: Awaited<ReturnType<typeof getStaffData>>;
   role: string;
+  section: SettingsSection | null;
 }) {
   return (
     <div className={featureView}>
+      <SettingsSectionFocus section={section} />
       <div className={settingsStack}>
         <SettingsForm studio={data.studio} />
-        <ScheduleSettings studio={data.studio} staff={data.staff} availability={data.availability} closures={data.closures} />
-        <section className={settingSection}>
+        <ScheduleSettings studio={data.studio} staff={data.staff} availability={data.availability} closures={data.closures} sectionId="studio-settings-hours" />
+        <section id="studio-settings-services" className={settingSection} tabIndex={-1}>
           <PanelHead
             title="Services & pricing"
             detail="Only active, assigned services appear on public booking."
           />
-          <div className="flex flex-wrap items-center justify-start gap-2 px-[18px] py-3.5">
+          <div id="studio-settings-assignments" className="flex flex-wrap items-center justify-start gap-2 px-[18px] py-3.5" tabIndex={-1}>
             <ServiceForm staff={data.staff} />
             <ServiceAssignmentForm
               services={data.services}
@@ -289,7 +295,7 @@ function StudioSettings({
           </div>
           <ServiceList services={data.services} />
         </section>
-        <section className={settingSection}>
+        <section id="studio-settings-team" className={settingSection} tabIndex={-1}>
           <PanelHead
             title="Team, schedules & stations"
             detail="Owners manage invitations; managers configure operational availability."
@@ -317,7 +323,7 @@ function StudioSettings({
           </div>
         </section>
         <section className={twoPanel}>
-          <div className={settingSection}>
+          <div id="studio-settings-notifications" className={settingSection} tabIndex={-1}>
             <PanelHead
               title="Consent records"
               detail="Signed acknowledgements are stored against bookings."
@@ -354,49 +360,6 @@ function StudioSettings({
   );
 }
 
-function AppointmentList({
-  bookings,
-  role,
-}: {
-  bookings: BookingRecord[];
-  role: string;
-}) {
-  return (
-    <div>
-      {bookings.map((item) => (
-        <article className="grid min-h-[72px] grid-cols-[64px_34px_minmax(150px,1fr)_minmax(130px,.65fr)_82px_auto] items-center gap-2.5 border-b border-dashed border-[#dab08f] bg-transparent px-4 py-[9px] hover:bg-[#fff1cf] last:border-0 max-[1100px]:grid-cols-[60px_32px_1fr_80px_auto] max-[760px]:grid-cols-[52px_30px_1fr_auto] max-[760px]:px-2.5" key={item.id}>
-          <div className="flex flex-col [&_strong]:text-[10px] [&_strong]:text-hippy-ink [&_small]:mt-[3px] [&_small]:text-[8px] [&_small]:text-[#80675e]">
-            <strong>{formatTime(item.startsAt)}</strong>
-            <small>{formatTime(item.endsAt)}</small>
-          </div>
-          <span className="grid size-[33px] place-items-center rounded-[50%_42%_50%_45%] border border-hippy-ink bg-[#e98956] text-[10px] font-extrabold text-[#522b1b]">{initials(item.customer.name)}</span>
-          <div className="flex flex-col [&_strong]:text-[10px] [&_strong]:text-hippy-ink [&_small]:mt-[3px] [&_small]:text-[8px] [&_small]:text-[#80675e]">
-            <strong>{item.customer.name}</strong>
-            <small>
-              {item.services.map((service) => service.name).join(" + ")} · {item.reference}
-            </small>
-          </div>
-          <div className="flex items-center gap-[7px] text-[9px] max-[1100px]:hidden [&>i]:size-2 [&>i]:shrink-0 [&>i]:rounded-full [&>span]:flex [&>span]:flex-col [&_small]:mt-[3px] [&_small]:text-[8px] [&_small]:text-[#80675e]">
-            {item.piercer && <i style={{ background: item.piercer.color }} />}
-            <span>
-              {item.piercer?.name ?? "Unassigned"}
-              <small>{item.station ?? "No station"}</small>
-            </span>
-          </div>
-          <Status value={item.status} />
-          {["confirmed", "requested"].includes(item.status) && (
-            <BookingActions
-              id={item.id}
-              status={item.status}
-              canManage={role !== "piercer"}
-              startsAt={item.startsAt}
-            />
-          )}
-        </article>
-      ))}
-    </div>
-  );
-}
 function Metric({
   icon,
   label,
@@ -429,23 +392,6 @@ function PanelHead({ title, detail }: { title: string; detail: string }) {
     </div>
   );
 }
-function Empty({
-  icon,
-  title,
-  text,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  text: string;
-}) {
-  return (
-    <div className={emptyState}>
-      <span>{icon}</span>
-      <strong>{title}</strong>
-      <p>{text}</p>
-    </div>
-  );
-}
 function StateCard({ title, detail }: { title: string; detail: string }) {
   return (
     <section className={`${panel} ${emptyState} [&>svg]:z-1 [&>svg]:mb-3 [&>svg]:size-[45px] [&>svg]:rounded-full [&>svg]:border-[1.5px] [&>svg]:border-hippy-ink [&>svg]:bg-hippy-sage [&>svg]:p-[11px] [&>svg]:text-[#315342] [&>svg]:shadow-[3px_3px_0_#3b2923] [&_h2]:m-0 [&_h2]:font-display [&_h2]:text-2xl [&_h2]:font-[650]`}>
@@ -464,34 +410,31 @@ function Readiness({
   label,
   done,
   detail,
+  section,
 }: {
   label: string;
   done: boolean;
   detail?: string;
+  section: SettingsSection;
 }) {
+  const action = done || section === "notifications" ? "Review" : "Configure";
   return (
-    <div>
-      <span className={done ? "bg-hippy-sage text-[#274c3c]" : "bg-hippy-gold text-[#664219]"}>{done ? "✓" : "!"}</span>
-      <strong>{label}</strong>
-      <small>{detail ?? (done ? "Configured" : "Needs setup")}</small>
-    </div>
+    <Link
+      href={`/app/settings?section=${section}`}
+      className="group grid min-h-[61px] grid-cols-[26px_minmax(0,1fr)_auto_14px] items-center gap-x-[9px] border-b border-dashed border-[#d5a684] px-[17px] py-2.5 text-left transition-[background,transform] hover:translate-x-px hover:bg-[#fff1cf] focus-visible:bg-[#fff4d7] focus-visible:outline-3 focus-visible:outline-offset-[-4px] focus-visible:outline-[#efb83f88] max-[450px]:grid-cols-[26px_minmax(0,1fr)_14px] max-[450px]:gap-y-0.5"
+      aria-label={`${action} ${label}: ${detail ?? (done ? "Configured" : "Needs setup")}`}
+    >
+      <span className={`${done ? "bg-hippy-sage text-[#274c3c]" : "bg-hippy-gold text-[#664219]"} row-span-2 grid size-6 place-items-center rounded-full border border-hippy-ink text-[10px] font-black shadow-[1px_1px_0_#3b2923]`}>{done ? "✓" : "!"}</span>
+      <span className="flex min-w-0 flex-col">
+        <strong className="overflow-hidden text-ellipsis whitespace-nowrap">{label}</strong>
+        <small>{detail ?? (done ? "Configured" : "Needs setup")}</small>
+      </span>
+      <small className="justify-self-end text-[8px] font-black tracking-[.4px] text-[#7b574b] uppercase max-[450px]:col-start-2 max-[450px]:justify-self-start">{action}</small>
+      <ChevronRight className="w-3.5 text-[#6f5148] transition-transform group-hover:translate-x-0.5 max-[450px]:col-start-3 max-[450px]:row-span-2 max-[450px]:row-start-1" aria-hidden="true" />
+    </Link>
   );
 }
-function formatTime(value: string) {
-  return new Intl.DateTimeFormat("en-PH", {
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone: "Asia/Manila",
-  }).format(new Date(value));
-}
-function initials(value: string) {
-  return (
-    value
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((part) => part[0])
-      .join("")
-      .toUpperCase() || "PC"
-  );
+
+function resolveSettingsSection(value: string | undefined): SettingsSection | null {
+  return value === "hours" || value === "services" || value === "team" || value === "notifications" ? value : null;
 }
