@@ -3,13 +3,14 @@
 import { X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { operationDialog } from "./dashboard-styles";
+  Sheet,
+  SheetBody,
+  SheetClose,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 
 export function SideDrawer({
   title,
@@ -28,7 +29,7 @@ export function SideDrawer({
   const close = () => setOpen(false);
 
   return (
-    <Dialog
+    <Sheet
       open={open}
       onOpenChange={(nextOpen) => {
         if (nextOpen || !busy) setOpen(nextOpen);
@@ -38,21 +39,20 @@ export function SideDrawer({
       }}
       disablePointerDismissal={busy}
     >
-      <DialogContent
-        className={`${operationDialog} gap-0 p-0 ring-0`}
-        showCloseButton={false}
-      >
-        <header>
+      <SheetContent>
+        <SheetHeader>
           <div className="min-w-0">
-            <DialogTitle>{title}</DialogTitle>
-            {detail && <DialogDescription>{detail}</DialogDescription>}
+            <SheetTitle>{title}</SheetTitle>
+            {detail && <SheetDescription>{detail}</SheetDescription>}
           </div>
-          <DialogClose aria-label={`Close ${title}`} disabled={busy}>
+          <SheetClose aria-label={`Close ${title}`} disabled={busy}>
             <X />
-          </DialogClose>
-        </header>
-        {typeof children === "function" ? children(close) : children}
-      </DialogContent>
-    </Dialog>
+          </SheetClose>
+        </SheetHeader>
+        <SheetBody>
+          {typeof children === "function" ? children(close) : children}
+        </SheetBody>
+      </SheetContent>
+    </Sheet>
   );
 }
