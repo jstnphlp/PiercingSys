@@ -2,7 +2,11 @@ import "server-only";
 import { cache } from "react";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { StaffRole } from "@/lib/domain";
-import { measureServerTiming } from "@/lib/server-timing";
+import {
+  logServerTimingMarker,
+  measureServerTiming,
+  type ServerTimingLabel,
+} from "@/lib/server-timing";
 
 export type StaffSession = { userId: string; email: string; displayName: string; role: StaffRole };
 
@@ -14,6 +18,9 @@ export const getStaffSession = cache(async (): Promise<StaffSession | null> => {
       "auth.getClaims",
       () => supabase.auth.getClaims(),
     );
+    if (claimsData?.header) {
+      logServerTimingMarker(jwtSigningModeLabel(claimsData.header.alg));
+    }
     const userId = claimsData?.claims.sub;
     const email = claimsData?.claims.email;
     if (typeof userId !== "string" || typeof email !== "string") return null;
@@ -31,3 +38,10 @@ export const getStaffSession = cache(async (): Promise<StaffSession | null> => {
 });
 
 export function hasRole(role: StaffRole, allowed: StaffRole[]) { return allowed.includes(role); }
+
+export function jwtSigningModeLabel(algorithm: unknown): ServerTimingLabel {
+  if (typeof algorithm !== "string") return "auth.jwt.unknown";
+  if (algorithm.startsWith("HS")) return "auth.jwt.symmetric";
+  if (/^(ES|RS|PS|EdDSA)/.test(algorithm)) return "auth.jwt.asymmetric";
+  return "auth.jwt.unknown";
+}

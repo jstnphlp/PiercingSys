@@ -2,6 +2,9 @@ import "server-only";
 
 export type ServerTimingLabel =
   | "auth.getClaims"
+  | "auth.jwt.asymmetric"
+  | "auth.jwt.symmetric"
+  | "auth.jwt.unknown"
   | "auth.session.total"
   | "auth.staffProfile"
   | "staff.calendar.appointments"
@@ -34,6 +37,11 @@ function timingEnabled() {
 function logServerTiming(label: ServerTimingLabel, startedAt: number) {
   const durationMs = Number((performance.now() - startedAt).toFixed(1));
   console.info(JSON.stringify({ event: "server-timing", label, durationMs }));
+}
+
+export function logServerTimingMarker(label: ServerTimingLabel) {
+  if (!timingEnabled()) return;
+  console.info(JSON.stringify({ event: "server-timing", label }));
 }
 
 export async function measureServerTiming<T>(

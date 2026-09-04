@@ -110,7 +110,7 @@ export type CalendarAppointmentRecord = {
 };
 
 export const saleDetailSelect =
-  "id,reference,status,total_cents,created_at,booking_id,customer_id,customers(first_name,last_name),payments(method,amount_cents),sale_adjustments(kind,amount_cents),sale_items(id,description,unit_price_cents,min_price_cents,max_price_cents)";
+  "id,reference,status,total_cents,created_at,booking_id,customers(first_name,last_name),payments(method,amount_cents),sale_adjustments(amount_cents),sale_items(id,description,unit_price_cents,min_price_cents,max_price_cents)";
 
 export const bookingDetailSelect =
   "id,reference,status,starts_at,ends_at,notes,customers(id,first_name,last_name,email,phone),booking_services(id,service_id,position,name,price_cents,min_price_cents,max_price_cents,price_unit,duration_minutes),staff_profiles!bookings_assigned_piercer_id_fkey(user_id,display_name,color),stations(name),sales(id,status)";

@@ -65,4 +65,10 @@ describe("initial staff page data", () => {
     expect(salesQuery.range).toHaveBeenCalledWith(0, 24);
     expect(data.page).toEqual({ number: 1, size: 25, total: 27, totalPages: 2 });
   });
+
+  it("does not request unused sales-list relation fields", () => {
+    expect(saleDetailSelect).not.toContain("customer_id");
+    expect(saleDetailSelect).not.toContain("sale_adjustments(kind,");
+    expect(saleDetailSelect).toContain("sale_adjustments(amount_cents)");
+  });
 });
