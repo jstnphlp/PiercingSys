@@ -2,8 +2,8 @@
 
 import { Check, ChevronLeft, ChevronRight, Clock3, Plus, Search, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { combinedServiceDuration, manilaDate, manilaDateTime, manilaSchedulingEnd, shiftManilaDate, type BookingStatus, type Service, type StudioSettings } from "@/lib/domain";
-import type { AvailabilityRecord, StaffRecord } from "@/lib/data/staff";
+import { combinedServiceDuration, manilaDate, manilaDateTime, manilaSchedulingEnd, shiftManilaDate, type Service, type StudioSettings } from "@/lib/domain";
+import type { AvailabilityRecord, CalendarAppointmentRecord, StaffRecord } from "@/lib/data/staff";
 import { CustomerSelect } from "./customer-select";
 import { appointmentDayBoundary } from "./appointment-time";
 import { WORKSPACE_REFRESH_EVENT } from "./workspace-refresh";
@@ -15,15 +15,7 @@ import { StudioSelect } from "@/components/ui/studio-select";
 import { dashButton, dashError, dashField, featureView, operationBackdrop, operationDialog, operationForm, operationGrid, panel, statusClasses } from "./dashboard-styles";
 
 type Station = { id: string; name: string };
-type RawAppointment = {
-  id: string; reference: string; status: BookingStatus; starts_at: string; ends_at: string; notes: string | null;
-  assigned_piercer_id: string; station_id: string | null;
-  customers: { id: string; first_name: string; last_name: string; email: string; phone: string } | Array<{ id: string; first_name: string; last_name: string; email: string; phone: string }>;
-  booking_services: Array<{ id: string; service_id: string; position: number; name: string; duration_minutes: number }>;
-  staff_profiles: { user_id: string; display_name: string; color: string } | Array<{ user_id: string; display_name: string; color: string }> | null;
-  stations: Station | Station[] | null;
-  sales: { id: string; status: string } | Array<{ id: string; status: string }> | null;
-};
+type RawAppointment = CalendarAppointmentRecord;
 
 type Props = {
   role: string;
@@ -36,6 +28,7 @@ type Props = {
   availability: AvailabilityRecord[];
   initialDate: string;
   initialNow: string;
+  initialAppointments: CalendarAppointmentRecord[];
 };
 
 const dayNames = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
@@ -45,32 +38,38 @@ export function CalendarWorkspace(props: Props) {
   const [anchor, setAnchor] = useState(props.initialDate);
   const [piercerId, setPiercerId] = useState(props.role === "piercer" ? props.userId : "");
   const [stationId, setStationId] = useState("");
-  const [appointments, setAppointments] = useState<RawAppointment[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [appointments, setAppointments] = useState<RawAppointment[]>(props.initialAppointments);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [newOpen, setNewOpen] = useState(false);
   const [selected, setSelected] = useState<RawAppointment | null>(null);
   const [now, setNow] = useState(() => new Date(props.initialNow));
   const days = useMemo(() => mode === "week" ? weekDates(anchor) : [anchor], [anchor, mode]);
+  const requestUrl = useMemo(() => appointmentRequestUrl(days, piercerId, stationId), [days, piercerId, stationId]);
+  const loadedRequest = useRef(requestUrl);
+  const requestSequence = useRef(0);
   const visibleAppointments = useMemo(() => appointments.filter(isVisibleAppointment), [appointments]);
 
-  async function load(background = false) {
+  async function load(background = false, url = requestUrl) {
+    const sequence = ++requestSequence.current;
     if (!background) setLoading(true); setError("");
-    const query = new URLSearchParams({ from: days[0], to: days.at(-1)! });
-    if (piercerId) query.set("piercerId", piercerId);
-    if (stationId) query.set("stationId", stationId);
     try {
-      const response = await fetch(`/api/appointments?${query}`, { cache: "no-store" });
+      const response = await fetch(url, { cache: "no-store" });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error?.message ?? "Calendar could not be loaded.");
-      setAppointments(body.data ?? []);
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "Calendar could not be loaded."); }
-    finally { setLoading(false); }
+      if (sequence === requestSequence.current) setAppointments(body.data ?? []);
+    } catch (reason) {
+      if (sequence === requestSequence.current) setError(reason instanceof Error ? reason.message : "Calendar could not be loaded.");
+    } finally {
+      if (sequence === requestSequence.current) setLoading(false);
+    }
   }
   useEffect(() => {
-    const timer = window.setTimeout(() => void load(), 0);
+    if (loadedRequest.current === requestUrl) return;
+    loadedRequest.current = requestUrl;
+    const timer = window.setTimeout(() => void load(false, requestUrl), 0);
     return () => window.clearTimeout(timer);
-  }, [anchor, mode, piercerId, stationId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [requestUrl]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     function refresh() { void load(true); }
     window.addEventListener(WORKSPACE_REFRESH_EVENT, refresh);
@@ -348,6 +347,12 @@ function one<T>(value: T | T[] | null) { return Array.isArray(value) ? value[0] 
 function byPosition(a: { position: number }, b: { position: number }) { return a.position - b.position; }
 function isPiercer(person: StaffRecord) { return person.role === "piercer" && person.active; }
 function isVisibleAppointment(item: RawAppointment) { return !["cancelled", "rejected"].includes(item.status); }
+function appointmentRequestUrl(days: string[], piercerId: string, stationId: string) {
+  const query = new URLSearchParams({ from: days[0], to: days.at(-1)! });
+  if (piercerId) query.set("piercerId", piercerId);
+  if (stationId) query.set("stationId", stationId);
+  return `/api/appointments?${query}`;
+}
 function clientName(item: RawAppointment) { const customer = one(item.customers); return customer ? `${customer.first_name} ${customer.last_name}` : "Client"; }
 function servicesLabel(item: RawAppointment) { return [...item.booking_services].sort(byPosition).map((service) => service.name).join(" + ") || "No services"; }
 function initials(value: string) { return value.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "PC"; }

@@ -18,28 +18,37 @@ import type { PageMeta } from "@/lib/pagination";
 import { formatPaymentMethods, formatSaleItems } from "@/lib/sales-display";
 import { DraftSaleActions, SaleAdjustment, SaleForm } from "./controls";
 import { dashButton, dashField, featureView, metricCard, metricGridThree, operationDialog, stateCard, statusClasses, tablePanel } from "./dashboard-styles";
+import { WORKSPACE_REFRESH_EVENT } from "./workspace-refresh";
 
 type SalesResponse = { data: SaleRecord[]; page: PageMeta };
 
-export function SalesView({ initialSales, services }: { initialSales: SaleRecord[]; services: Service[] }) {
+export function SalesView({ initialSales, initialPage: initialPageMeta, services }: { initialSales: SaleRecord[]; initialPage: PageMeta; services: Service[] }) {
   const urlParams = useSearchParams();
   const initialSearch = urlParams.get("q") ?? "";
   const initialPage = Math.max(1, Number(urlParams.get("page") ?? 1) || 1);
   const [search, setSearch] = useState(initialSearch);
   const [page, setPage] = useState(initialPage);
+  const [serverDataValid, setServerDataValid] = useState(!initialSearch.trim() && initialPage === 1);
   const [selected, setSelected] = useState<SaleRecord | null>(null);
   const query = search.trim();
+  useEffect(() => {
+    function invalidateServerData() { setServerDataValid(false); }
+    window.addEventListener(WORKSPACE_REFRESH_EVENT, invalidateServerData);
+    return () => window.removeEventListener(WORKSPACE_REFRESH_EVENT, invalidateServerData);
+  }, []);
   useEffect(() => {
     const url = new URL(window.location.href);
     if (query) url.searchParams.set("q", query); else url.searchParams.delete("q");
     if (page > 1) url.searchParams.set("page", String(page)); else url.searchParams.delete("page");
     window.history.replaceState(null, "", url);
   }, [page, query]);
-  const key = `/api/sales?q=${encodeURIComponent(query)}&page=${page}&pageSize=25`;
-  const { data: response, error, isLoading, isValidating, mutate } = useSWR<SalesResponse>(key, {
-    fallbackData: page === 1 && !query ? { data: initialSales, page: { number: 1, size: 25, total: initialSales.length, totalPages: 1 } } : undefined,
+  const isInitialRequest = page === 1 && !query;
+  const useServerData = isInitialRequest && serverDataValid;
+  const key = useServerData ? null : `/api/sales?q=${encodeURIComponent(query)}&page=${page}&pageSize=25`;
+  const { data: apiResponse, error, isLoading, isValidating, mutate } = useSWR<SalesResponse>(key, {
     keepPreviousData: true,
   });
+  const response = useServerData ? { data: initialSales, page: initialPageMeta } : apiResponse;
   const sales = response?.data ?? [];
   const total = sales.filter((item) => item.status === "completed").reduce((sum, item) => sum + item.totalCents - item.adjustmentCents, 0);
   const outstanding = sales.filter((item) => item.status === "draft").reduce((sum, item) => sum + calculateBalance(item.totalCents, [item.paidCents]), 0);
@@ -52,7 +61,7 @@ export function SalesView({ initialSales, services }: { initialSales: SaleRecord
       <Metric icon={<Clock3 />} label="Outstanding" value={formatPhp(outstanding)} note="Current page" />
     </div>
     <div className="grid grid-cols-[minmax(220px,1fr)_auto] items-end gap-3 max-[640px]:grid-cols-1">
-      <div className="relative"><label className={`${dashField} w-full`}>Search sales<input className="pr-10" type="search" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Reference or client" /></label>{isValidating && <LoaderCircle className="absolute right-3 bottom-[11px] size-4 animate-[spin_1s_linear_infinite] text-hippy-orange" aria-label="Updating sales" />}</div>
+      <div className="relative"><label className={`${dashField} w-full`}>Search sales<input className="pr-10" type="search" value={search} onChange={(event) => { setServerDataValid(false); setSearch(event.target.value); setPage(1); }} placeholder="Reference or client" /></label>{isValidating && <LoaderCircle className="absolute right-3 bottom-[11px] size-4 animate-[spin_1s_linear_infinite] text-hippy-orange" aria-label="Updating sales" />}</div>
       <SaleForm services={services} />
     </div>
     {error && <State title="Sales could not be loaded" detail={error.message}><button className={dashButton({ variant: "secondary" })} onClick={() => void mutate()}>Retry</button></State>}
@@ -60,7 +69,7 @@ export function SalesView({ initialSales, services }: { initialSales: SaleRecord
     {!error && response && sales.length ? <section className={tablePanel}><table><thead><tr><th>Reference</th><th>Client</th><th>Total</th><th>Paid</th><th>Method</th><th>Status</th><th>Items</th></tr></thead><tbody>{sales.map((sale) => <tr key={sale.id} className="cursor-pointer focus:bg-[#f7dfb3] focus:outline-2 focus:-outline-offset-2 focus:outline-[#d66335]" tabIndex={0} onClick={() => setSelected(sale)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelected(sale); } }}>
       <td><span className="flex flex-col gap-1"><strong>{sale.reference}</strong><small>{formatDate(sale.createdAt)}</small></span></td><td>{sale.customerName}</td><td>{formatPhp(sale.totalCents)}</td><td>{formatPhp(sale.paidCents)}</td><td>{formatPaymentMethods(sale.methods)}</td><td><span className={statusClasses(sale.status)}>{sale.status.replace("_", " ")}</span></td>
       <td><small>{formatSaleItems(sale.items)}</small></td>
-    </tr>)}</tbody></table><Pagination meta={meta} onPage={setPage}/></section> : !error && response && !sales.length ? <State title="No sales found" detail={query ? "Try a different search." : "Record a sale to begin."} /> : null}
+    </tr>)}</tbody></table><Pagination meta={meta} onPage={(nextPage) => { setServerDataValid(false); setPage(nextPage); }}/></section> : !error && response && !sales.length ? <State title="No sales found" detail={query ? "Try a different search." : "Record a sale to begin."} /> : null}
     <SaleDetailsDialog sale={selected} onClose={() => setSelected(null)} />
   </div>;
 }

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { connection } from "next/server";
 import { Suspense } from "react";
 import {
   CalendarDays,
@@ -13,8 +14,12 @@ import { getStaffSession, type StaffSession } from "@/lib/auth";
 import {
   formatPhp,
   manilaDate,
+  manilaDateTime,
+  manilaWeekDates,
+  shiftManilaDate,
 } from "@/lib/domain";
 import {
+  getCalendarAppointments,
   getCalendarReferenceData,
   getClientsPage,
   getOverviewBookings,
@@ -89,6 +94,8 @@ async function AuthorizedStaffView({
   view: StaffView;
   searchParams: Promise<StaffSearchParams>;
 }) {
+  await connection();
+
   const [session, params] = await Promise.all([getStaffSession(), searchParams]);
   if (!session) redirect("/login");
   if (!allowedViews(session.role).includes(view)) redirect("/app");
@@ -235,10 +242,23 @@ async function OverviewReadiness({ role }: { role: string }) {
 }
 
 async function Calendar({ role, userId }: { role: string; userId: string }) {
-  const data = await getCalendarReferenceData();
-  if (data.error) return <StateCard title="Calendar could not be loaded" detail={data.error} />;
   const now = new Date();
-  return <CalendarWorkspace role={role} userId={userId} services={data.services} staff={data.staff} assignments={data.serviceAssignments} stations={data.stations} studio={data.studio} availability={data.availability} initialDate={manilaDate(now)} initialNow={now.toISOString()} />;
+  const initialDate = manilaDate(now);
+  const initialDays = manilaWeekDates(initialDate);
+  const initialFrom = manilaDateTime(initialDays[0], "00:00").toISOString();
+  const nextDay = shiftManilaDate(initialDays.at(-1)!, 1);
+  const initialTo = new Date(manilaDateTime(nextDay, "00:00").getTime() - 1).toISOString();
+  const [data, appointmentData] = await Promise.all([
+    getCalendarReferenceData(),
+    getCalendarAppointments({
+      from: initialFrom,
+      to: initialTo,
+      piercerId: role === "piercer" ? userId : undefined,
+    }),
+  ]);
+  const error = [data.error, appointmentData.error].filter(Boolean).join(" ");
+  if (error) return <StateCard title="Calendar could not be loaded" detail={error} />;
+  return <CalendarWorkspace role={role} userId={userId} services={data.services} staff={data.staff} assignments={data.serviceAssignments} stations={data.stations} studio={data.studio} availability={data.availability} initialDate={initialDate} initialNow={now.toISOString()} initialAppointments={appointmentData.appointments} />;
 }
 
 async function Clients({ role }: { role: string }) {
@@ -248,6 +268,7 @@ async function Clients({ role }: { role: string }) {
     <div className={featureView}>
       <ClientRecords
         customers={data.customers}
+        initialPage={data.page}
         canCreate={role === "owner" || role === "manager"}
       />
     </div>
@@ -257,7 +278,7 @@ async function Clients({ role }: { role: string }) {
 async function Sales() {
   const data = await getSalesPage();
   if (data.error) return <StateCard title="Sales could not be loaded" detail={data.error} />;
-  return <SalesView initialSales={data.sales} services={data.services} />;
+  return <SalesView initialSales={data.sales} initialPage={data.page} services={data.services} />;
 }
 
 const reportPresets: Array<{ value: ReportPreset; label: string }> = [

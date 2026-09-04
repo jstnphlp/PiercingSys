@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { getStaffSession } from "@/lib/auth";
 import { queueBookingEmail } from "@/lib/booking-side-effects";
+import { getCalendarAppointments } from "@/lib/data/staff";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { philippineMobilePhone, validationError } from "@/lib/validation";
 
@@ -48,15 +49,14 @@ export async function GET(request: Request) {
   if (session.role === "piercer" && requestedPiercer && requestedPiercer !== session.userId) {
     return Response.json({ error: { code: "FORBIDDEN", message: "You can only view your appointments." } }, { status: 403 });
   }
-  const supabase = await createSupabaseServerClient();
-  let query = supabase!.from("bookings").select(
-    "id,reference,status,starts_at,ends_at,notes,station_id,assigned_piercer_id,customers(id,first_name,last_name,email,phone),booking_services(id,service_id,position,name,duration_minutes,price_cents,min_price_cents,max_price_cents,price_unit),staff_profiles!bookings_assigned_piercer_id_fkey(user_id,display_name,color),stations(id,name),sales(id,status)",
-  ).lt("starts_at", to.toISOString()).gt("ends_at", from.toISOString()).order("starts_at");
-  if (requestedPiercer) query = query.eq("assigned_piercer_id", requestedPiercer);
-  if (stationId) query = query.eq("station_id", stationId);
-  const { data, error } = await query;
-  if (error) return Response.json({ error: { code: "LOOKUP_FAILED", message: error.message } }, { status: 400 });
-  return Response.json({ data: data ?? [], meta: { timezone: "Asia/Manila", from: from.toISOString(), to: to.toISOString() } });
+  const result = await getCalendarAppointments({
+    from: from.toISOString(),
+    to: to.toISOString(),
+    piercerId: requestedPiercer ?? undefined,
+    stationId: stationId ?? undefined,
+  });
+  if (result.error) return Response.json({ error: { code: "LOOKUP_FAILED", message: result.error } }, { status: 400 });
+  return Response.json({ data: result.appointments, meta: { timezone: "Asia/Manila", from: from.toISOString(), to: to.toISOString() } });
 }
 
 export async function POST(request: Request) {

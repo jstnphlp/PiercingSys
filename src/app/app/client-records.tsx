@@ -7,10 +7,10 @@ import useSWR from "swr";
 import type { BookingRecord, CustomerRecord } from "@/lib/data/staff";
 import type { PageMeta } from "@/lib/pagination";
 import { isValidPhilippineMobilePhone } from "@/lib/validation";
-import { requestWorkspaceRefresh } from "./workspace-refresh";
+import { requestWorkspaceRefresh, WORKSPACE_REFRESH_EVENT } from "./workspace-refresh";
 import { clientTablePanel, dashButton, dashError, dashField, operationBackdrop, operationDialog, operationForm, operationGrid, pagination, stateCard, statusClasses, statusNote } from "./dashboard-styles";
 
-export function ClientRecords({ customers, canCreate }: { customers: CustomerRecord[]; canCreate: boolean }) {
+export function ClientRecords({ customers, initialPage: initialPageMeta, canCreate }: { customers: CustomerRecord[]; initialPage: PageMeta; canCreate: boolean }) {
   const urlParams = useSearchParams();
   const [selected, setSelected] = useState<CustomerRecord | null>(null);
   const [creating, setCreating] = useState(false);
@@ -19,11 +19,23 @@ export function ClientRecords({ customers, canCreate }: { customers: CustomerRec
   const [search, setSearch] = useState(initialSearch);
   const [debouncedSearch, setDebouncedSearch] = useState(normalizeSearch(initialSearch));
   const [page, setPage] = useState(initialPage);
+  const [serverDataValid, setServerDataValid] = useState(!normalizeSearch(initialSearch) && initialPage === 1);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => { setDebouncedSearch(normalizeSearch(search)); setPage(1); }, 300);
+    const normalizedSearch = normalizeSearch(search);
+    if (normalizedSearch === debouncedSearch) return;
+    const timer = window.setTimeout(() => {
+      setServerDataValid(false);
+      setDebouncedSearch(normalizedSearch);
+      setPage(1);
+    }, 300);
     return () => window.clearTimeout(timer);
-  }, [search]);
+  }, [debouncedSearch, search]);
+  useEffect(() => {
+    function invalidateServerData() { setServerDataValid(false); }
+    window.addEventListener(WORKSPACE_REFRESH_EVENT, invalidateServerData);
+    return () => window.removeEventListener(WORKSPACE_REFRESH_EVENT, invalidateServerData);
+  }, []);
   useEffect(() => {
     const url = new URL(window.location.href);
     if (debouncedSearch) url.searchParams.set("q", debouncedSearch); else url.searchParams.delete("q");
@@ -31,13 +43,13 @@ export function ClientRecords({ customers, canCreate }: { customers: CustomerRec
     window.history.replaceState(null, "", url);
   }, [debouncedSearch, page]);
 
-  const key = `/api/customers?q=${encodeURIComponent(debouncedSearch)}&page=${page}&pageSize=25`;
-  const { data: response, error, isLoading, isValidating, mutate } = useSWR<{ data: CustomerRecord[]; page: PageMeta }>(key, {
-    fallbackData: page === 1 && !debouncedSearch ? {
-      data: customers,
-      page: { number: 1, size: 25, total: customers.length, totalPages: 1 },
-    } : undefined,
+  const isInitialRequest = page === 1 && !debouncedSearch;
+  const useServerData = isInitialRequest && serverDataValid;
+  const key = useServerData ? null : `/api/customers?q=${encodeURIComponent(debouncedSearch)}&page=${page}&pageSize=25`;
+  const { data: apiResponse, error, isLoading, isValidating, mutate } = useSWR<{ data: CustomerRecord[]; page: PageMeta }>(key, {
+    keepPreviousData: true,
   });
+  const response = useServerData ? { data: customers, page: initialPageMeta } : apiResponse;
   const visibleCustomers = response?.data ?? [];
   const meta = response?.page;
 
@@ -58,9 +70,14 @@ export function ClientRecords({ customers, canCreate }: { customers: CustomerRec
         <thead><tr><th>Client</th><th>Email</th><th>Contact number</th><th>Appointments</th><th>Last activity</th><th><span className="sr-only">Open details</span></th></tr></thead>
         <tbody>{visibleCustomers.map((customer) => <ClientRow key={customer.id} customer={customer} onOpen={() => setSelected(customer)}/>)}</tbody>
       </table>
-      <PageControls meta={meta} onPage={setPage}/>
+      <PageControls meta={meta} onPage={(nextPage) => { setServerDataValid(false); setPage(nextPage); }}/>
     </section> : !error && !isLoading ? <section className={stateCard}><CalendarDays/><h2>No clients found</h2><p>{debouncedSearch ? "Try a different name, email, or contact number." : "Add a client manually or create one with their first confirmed booking."}</p></section> : null}
-    {creating && <AddClientDialog onClose={() => setCreating(false)} onCreated={() => { setCreating(false); requestWorkspaceRefresh(); void mutate(); }}/>}
+    {creating && (
+      <AddClientDialog
+        onClose={() => setCreating(false)}
+        onCreated={() => { setCreating(false); requestWorkspaceRefresh(); }}
+      />
+    )}
     {selected && <ClientDrawer key={selected.id} customer={selected} onClose={() => setSelected(null)}/>}
   </>;
 }

@@ -9,6 +9,7 @@ import type {
   StudioSettings,
 } from "@/lib/domain";
 import { manilaDayBounds } from "@/lib/domain";
+import { pageMeta, type PageMeta } from "@/lib/pagination";
 import { seededStudio } from "@/lib/data/public";
 import type { ReportPeriod } from "@/lib/report-period";
 import { measureServerTiming } from "@/lib/server-timing";
@@ -92,6 +93,21 @@ export type AvailabilityRecord = {
   endsAt: string;
   availabilityDate: string | null;
 };
+export type CalendarAppointmentRecord = {
+  id: string;
+  reference: string;
+  status: BookingStatus;
+  starts_at: string;
+  ends_at: string;
+  notes: string | null;
+  assigned_piercer_id: string;
+  station_id: string | null;
+  customers: { id: string; first_name: string; last_name: string; email: string; phone: string } | Array<{ id: string; first_name: string; last_name: string; email: string; phone: string }>;
+  booking_services: Array<{ id: string; service_id: string; position: number; name: string; duration_minutes: number }>;
+  staff_profiles: { user_id: string; display_name: string; color: string } | Array<{ user_id: string; display_name: string; color: string }> | null;
+  stations: { id: string; name: string } | Array<{ id: string; name: string }> | null;
+  sales: { id: string; status: string } | Array<{ id: string; status: string }> | null;
+};
 
 export const saleDetailSelect =
   "id,reference,status,total_cents,created_at,booking_id,customer_id,customers(first_name,last_name),payments(method,amount_cents),sale_adjustments(kind,amount_cents),sale_items(id,description,unit_price_cents,min_price_cents,max_price_cents)";
@@ -101,6 +117,9 @@ export const bookingDetailSelect =
 
 const overviewBookingSelect =
   "id,reference,status,starts_at,ends_at,notes,customers(id,first_name,last_name,email,phone),booking_services(service_id,position,name),staff_profiles!bookings_assigned_piercer_id_fkey(user_id,display_name,color),stations(name),sales(status)";
+
+export const calendarAppointmentSelect =
+  "id,reference,status,starts_at,ends_at,notes,station_id,assigned_piercer_id,customers(id,first_name,last_name,email,phone),booking_services(id,service_id,position,name,duration_minutes),staff_profiles!bookings_assigned_piercer_id_fkey(user_id,display_name,color),stations(id,name),sales(id,status)";
 
 type Relation = Record<string, unknown> | Array<Record<string, unknown>> | null;
 function one(value: Relation) {
@@ -459,14 +478,43 @@ export async function getCalendarReferenceData() {
   };
 }
 
-export async function getClientsPage(): Promise<DataResult<{ customers: CustomerRecord[] }>> {
+export async function getCalendarAppointments({
+  from,
+  to,
+  piercerId,
+  stationId,
+}: {
+  from: string;
+  to: string;
+  piercerId?: string;
+  stationId?: string;
+}): Promise<DataResult<{ appointments: CalendarAppointmentRecord[] }>> {
   const supabase = await createSupabaseServerClient();
-  if (!supabase) return { customers: [], error: "Supabase is not configured." };
+  if (!supabase) return { appointments: [], error: "Supabase is not configured." };
+  let query = supabase
+    .from("bookings")
+    .select(calendarAppointmentSelect)
+    .lt("starts_at", to)
+    .gt("ends_at", from)
+    .order("starts_at");
+  if (piercerId) query = query.eq("assigned_piercer_id", piercerId);
+  if (stationId) query = query.eq("station_id", stationId);
+  const result = await measureServerTiming("staff.calendar.appointments", () => query);
+  return {
+    appointments: (result.data ?? []) as unknown as CalendarAppointmentRecord[],
+    error: errors(result.error),
+  };
+}
+
+export async function getClientsPage(): Promise<DataResult<{ customers: CustomerRecord[]; page: PageMeta }>> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return { customers: [], page: pageMeta(1, 25, 0), error: "Supabase is not configured." };
   const result = await measureServerTiming("staff.clients.page", () => supabase
     .from("customer_directory")
-    .select("id,first_name,last_name,email,phone,created_at,appointment_count,last_appointment_at")
+    .select("id,first_name,last_name,email,phone,created_at,appointment_count,last_appointment_at", { count: "exact" })
     .order("created_at", { ascending: false })
-    .limit(25));
+    .order("id", { ascending: false })
+    .range(0, 24));
   const customers: CustomerRecord[] = (result.data ?? []).map((row) => {
     const contact = customerDisplayContact(row.email, row.phone);
     return {
@@ -478,23 +526,25 @@ export async function getClientsPage(): Promise<DataResult<{ customers: Customer
       lastActivityAt: row.last_appointment_at ?? null,
     };
   });
-  return { customers, error: errors(result.error) };
+  return { customers, page: pageMeta(1, 25, result.count ?? 0), error: errors(result.error) };
 }
 
-export async function getSalesPage(): Promise<DataResult<{ sales: SaleRecord[]; services: Service[] }>> {
+export async function getSalesPage(): Promise<DataResult<{ sales: SaleRecord[]; services: Service[]; page: PageMeta }>> {
   const supabase = await createSupabaseServerClient();
-  if (!supabase) return { sales: [], services: [], error: "Supabase is not configured." };
+  if (!supabase) return { sales: [], services: [], page: pageMeta(1, 25, 0), error: "Supabase is not configured." };
   const [services, salesResult] = await Promise.all([
     getServicesReference(),
     measureServerTiming("staff.sales.page", () => supabase
       .from("sales")
-      .select(saleDetailSelect)
+      .select(saleDetailSelect, { count: "exact" })
       .order("created_at", { ascending: false })
-      .limit(25)),
+      .order("id", { ascending: false })
+      .range(0, 24)),
   ]);
   return {
     services: services.services,
     sales: (salesResult.data ?? []).map((row) => mapSaleRow(row as Record<string, unknown>)),
+    page: pageMeta(1, 25, salesResult.count ?? 0),
     error: errors(services.error ?? "", salesResult.error),
   };
 }
