@@ -1,5 +1,6 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { CalendarDays, CircleDollarSign, ShoppingBag } from "lucide-react";
 import { formatPhp } from "@/lib/domain";
@@ -7,6 +8,8 @@ import { validateReportRange, type ReportPeriod, type ReportPreset } from "@/lib
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { ReportPeriodControls, type PresetLink } from "./report-period-controls";
 import { dashError, emptyState, featureView, metricCard, metricGridThree, panel, panelHead, twoPanel } from "./dashboard-styles";
+import { pageSnapshotKey } from "./page-snapshot-policy";
+import { usePageSnapshotNavigation } from "./page-snapshots";
 import { WORKSPACE_REFRESH_EVENT } from "./workspace-refresh";
 
 export type ReportSummary = {
@@ -16,6 +19,11 @@ export type ReportSummary = {
   booking_count?: number;
   booking_statuses?: Record<string, number>;
   methods?: Record<string, number>;
+};
+
+type ReportsPageSnapshot = {
+  period: ReportPeriod;
+  summary: ReportSummary;
 };
 
 function Metric({ icon, label, value, note }: { icon: ReactNode; label: string; value: string; note: string }) {
@@ -32,12 +40,20 @@ export function ReportsView({ initialPeriod, initialSummary, presets }: {
   presets: PresetLink[];
 }) {
   const [supabase] = useState(createSupabaseBrowserClient);
-  const [period, setPeriod] = useState(initialPeriod);
-  const [summary, setSummary] = useState(initialSummary);
+  const snapshots = usePageSnapshotNavigation();
+  const snapshotKey = pageSnapshotKey("reports", useSearchParams());
+  const [initialSnapshot] = useState(
+    () => snapshots?.readData<ReportsPageSnapshot>(snapshotKey),
+  );
+  const [period, setPeriod] = useState(initialSnapshot?.period ?? initialPeriod);
+  const [summary, setSummary] = useState(initialSnapshot?.summary ?? initialSummary);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const requestId = useRef(0);
-  const cache = useRef(new Map([[`${initialPeriod.from}:${initialPeriod.to}`, initialSummary]]));
+  const cache = useRef(new Map([[
+    `${initialSnapshot?.period.from ?? initialPeriod.from}:${initialSnapshot?.period.to ?? initialPeriod.to}`,
+    initialSnapshot?.summary ?? initialSummary,
+  ]]));
 
   useEffect(() => {
     if (!supabase) return;
@@ -47,15 +63,24 @@ export function ReportsView({ initialPeriod, initialSummary, presets }: {
         p_start: period.startUtc,
         p_end: period.endUtc,
       });
-      if (cancelled || queryError) return;
+      if (cancelled) return;
+      if (queryError) {
+        setError(queryError.message);
+        return;
+      }
       const nextSummary = (data ?? {}) as ReportSummary;
       cache.current.set(`${period.from}:${period.to}`, nextSummary);
       setSummary(nextSummary);
+      setError(null);
     }
     function onRefresh() { void refresh(); }
     window.addEventListener(WORKSPACE_REFRESH_EVENT, onRefresh);
     return () => { cancelled = true; window.removeEventListener(WORKSPACE_REFRESH_EVENT, onRefresh); };
   }, [period, supabase]);
+
+  useEffect(() => {
+    snapshots?.writeData("reports", snapshotKey, { period, summary });
+  }, [period, snapshotKey, snapshots, summary]);
 
   async function selectPeriod(selection: { preset: ReportPreset; from: string; to: string; href: string }) {
     const validated = validateReportRange(selection.from, selection.to);

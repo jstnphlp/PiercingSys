@@ -18,17 +18,25 @@ import type { PageMeta } from "@/lib/pagination";
 import { formatPaymentMethods, formatSaleItems } from "@/lib/sales-display";
 import { DraftSaleActions, SaleAdjustment, SaleForm } from "./controls";
 import { dashButton, dashField, featureView, metricCard, metricGridThree, operationDialog, stateCard, statusClasses, tablePanel } from "./dashboard-styles";
+import { pageSnapshotKey } from "./page-snapshot-policy";
+import { usePageSnapshotNavigation } from "./page-snapshots";
 import { WORKSPACE_REFRESH_EVENT } from "./workspace-refresh";
 
 type SalesResponse = { data: SaleRecord[]; page: PageMeta };
 
-export function SalesView({ initialSales, initialPage: initialPageMeta, services }: { initialSales: SaleRecord[]; initialPage: PageMeta; services: Service[] }) {
+export function SalesView({ initialSales, initialPage: initialPageMeta, initialQuery, services }: { initialSales: SaleRecord[]; initialPage: PageMeta; initialQuery: { q: string; page: number }; services: Service[] }) {
   const urlParams = useSearchParams();
+  const snapshots = usePageSnapshotNavigation();
+  const snapshotKey = pageSnapshotKey("sales", urlParams);
+  const restoringSnapshot = snapshots?.pending?.key === snapshotKey &&
+    snapshots.pending.view === "sales" && Boolean(snapshots.pending.snapshot);
   const initialSearch = urlParams.get("q") ?? "";
   const initialPage = Math.max(1, Number(urlParams.get("page") ?? 1) || 1);
   const [search, setSearch] = useState(initialSearch);
   const [page, setPage] = useState(initialPage);
-  const [serverDataValid, setServerDataValid] = useState(!initialSearch.trim() && initialPage === 1);
+  const [serverDataValid, setServerDataValid] = useState(
+    initialQuery.q.trim() === initialSearch.trim() && initialQuery.page === initialPage,
+  );
   const [selected, setSelected] = useState<SaleRecord | null>(null);
   const query = search.trim();
   const isInitialRequest = page === 1 && !query;
@@ -37,6 +45,7 @@ export function SalesView({ initialSales, initialPage: initialPageMeta, services
   const { data: apiResponse, error, isLoading, isValidating, mutate } = useSWR<SalesResponse>(key, {
     keepPreviousData: true,
     dedupingInterval: 5_000,
+    revalidateOnMount: restoringSnapshot ? false : undefined,
   });
   useEffect(() => {
     function refreshSales() {

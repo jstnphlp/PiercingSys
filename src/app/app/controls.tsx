@@ -81,7 +81,9 @@ export function BookingActions({
         body: JSON.stringify({ status: next }),
       })
     )
-      requestWorkspaceRefresh();
+      requestWorkspaceRefresh(next === "completed"
+        ? ["calendar", "sales", "overview", "reports"]
+        : ["calendar"]);
   }
   async function reschedule(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -94,7 +96,7 @@ export function BookingActions({
         body: JSON.stringify({ startsAt }),
       })
     )
-      requestWorkspaceRefresh();
+      requestWorkspaceRefresh(["calendar"]);
   }
   return (
     <div className="relative flex flex-wrap gap-1 [&>button]:cursor-pointer [&>button]:rounded-[7px] [&>button]:border [&>button]:border-hippy-ink [&>button]:bg-[#fff7e3] [&>button]:px-[7px] [&>button]:py-[5px] [&>button]:text-[8px] [&>button]:font-extrabold [&>button]:text-[#70402e] [&>button]:shadow-[1px_1px_0_#3b2923] [&>button:hover]:bg-[#f6d19c] [&>small]:absolute [&>small]:top-full [&>small]:right-0 [&>small]:w-[150px] [&>small]:text-[7px] [&>small]:text-danger">
@@ -194,7 +196,7 @@ export function SettingsForm({ studio }: { studio: StudioSettings }) {
         timeout: 3_000,
         priority: "low",
       });
-      requestWorkspaceRefresh();
+      requestWorkspaceRefresh(["settings", "calendar", "overview"]);
     }
   }
   return (
@@ -331,7 +333,7 @@ export function ServiceForm({ staff }: { staff: StaffRecord[] }) {
     });
     if (ok) {
       setOpen(false);
-      requestWorkspaceRefresh();
+      requestWorkspaceRefresh(["settings", "calendar", "overview"]);
     }
   }
   return (
@@ -431,7 +433,7 @@ export function ServiceAssignmentForm({
     });
     if (ok) {
       setOpen(false);
-      requestWorkspaceRefresh();
+      requestWorkspaceRefresh(["settings", "calendar", "overview"]);
     }
   }
   return (
@@ -519,7 +521,7 @@ export function AvailabilityForm({ staff }: { staff: StaffRecord[] }) {
         endsAt: String(form.get("endsAt")),
       }),
     });
-    if (ok) requestWorkspaceRefresh();
+    if (ok) requestWorkspaceRefresh(["settings", "calendar", "overview"]);
   }
   if (!open)
     return (
@@ -578,7 +580,7 @@ export function StationForm() {
       });
     if (ok) {
       setOpen(false);
-      requestWorkspaceRefresh();
+      requestWorkspaceRefresh(["settings", "calendar", "overview"]);
     }
   }
   return (
@@ -628,7 +630,7 @@ export function InviteForm() {
     });
     if (ok) {
       setOpen(false);
-      requestWorkspaceRefresh();
+      requestWorkspaceRefresh(["settings", "calendar", "overview"]);
     }
   }
   return (
@@ -691,7 +693,7 @@ export function StaffActions({
       });
     if (ok) {
       setOpen(false);
-      requestWorkspaceRefresh();
+      requestWorkspaceRefresh(["settings", "calendar", "overview"]);
     }
   }
   const summary = <>
@@ -778,7 +780,7 @@ export function SaleForm({
         complete: amount >= totalCents,
       }),
     });
-    if (ok) { setOpen(false); requestWorkspaceRefresh(); }
+    if (ok) { setOpen(false); requestWorkspaceRefresh(["sales", "overview", "reports"]); }
   }
   return (
     <Dialog
@@ -877,7 +879,7 @@ export function SaleAdjustment({
         }),
       })
     ) {
-      requestWorkspaceRefresh();
+      requestWorkspaceRefresh(["sales", "overview", "reports"]);
       onSaved?.();
     }
   }
@@ -924,11 +926,11 @@ export function DraftSaleActions({ sale, onSaved }: { sale: SaleRecord; onSaved?
   const unresolved = sale.items.filter((item) => item.unitPriceCents === null);
   async function resolve(event: React.FormEvent<HTMLFormElement>, itemId: string) {
     event.preventDefault(); const form = new FormData(event.currentTarget);
-    if (await mutation.run(`/api/sales/${sale.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "resolve_price", itemId, unitPriceCents: Math.round(Number(form.get("price")) * 100) }) })) { requestWorkspaceRefresh(); onSaved?.(); }
+    if (await mutation.run(`/api/sales/${sale.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "resolve_price", itemId, unitPriceCents: Math.round(Number(form.get("price")) * 100) }) })) { requestWorkspaceRefresh(["sales", "overview", "reports"]); onSaved?.(); }
   }
   async function payment(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault(); const form = new FormData(event.currentTarget);
-    if (await mutation.run(`/api/sales/${sale.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "add_payment", method: form.get("method"), amountCents: Math.round(Number(form.get("amount")) * 100), reference: form.get("reference") || null }) })) { requestWorkspaceRefresh(); onSaved?.(); }
+    if (await mutation.run(`/api/sales/${sale.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "add_payment", method: form.get("method"), amountCents: Math.round(Number(form.get("amount")) * 100), reference: form.get("reference") || null }) })) { requestWorkspaceRefresh(["sales", "overview", "reports"]); onSaved?.(); }
   }
   return <div className="mt-2 flex min-w-0 flex-col gap-3">
     {unresolved.map((item) => <form className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 rounded-xl border-[1.5px] border-dashed border-[#b76c4c] bg-[#fae1b8] p-3" key={item.id} onSubmit={(event) => void resolve(event, item.id)}>
@@ -965,7 +967,7 @@ export function ClosureForm() {
         }),
       })
     )
-      requestWorkspaceRefresh();
+      requestWorkspaceRefresh(["settings", "calendar", "overview"]);
   }
   if (!open)
     return (

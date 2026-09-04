@@ -3,11 +3,17 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, type ReactNode } from "react";
 import { SWRConfig } from "swr";
+import { invalidatePageSnapshots } from "./page-snapshots";
+import type { StaffView } from "./view-config";
 
 export const WORKSPACE_REFRESH_EVENT = "piercing-workspace-refresh";
 
-export function requestWorkspaceRefresh() {
-  window.dispatchEvent(new Event(WORKSPACE_REFRESH_EVENT));
+export function requestWorkspaceRefresh(invalidate: readonly StaffView[] = []) {
+  const scopes = [...new Set(invalidate)];
+  if (scopes.length) invalidatePageSnapshots(scopes);
+  window.dispatchEvent(new CustomEvent(WORKSPACE_REFRESH_EVENT, {
+    detail: { invalidate: scopes },
+  }));
 }
 
 async function fetchJson(url: string) {

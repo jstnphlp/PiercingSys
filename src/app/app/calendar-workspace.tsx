@@ -1,6 +1,7 @@
 "use client";
 
 import { Check, ChevronLeft, ChevronRight, Clock3, Plus, Search, X } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { combinedServiceDuration, manilaDate, manilaDateTime, manilaSchedulingEnd, shiftManilaDate, type Service, type StudioSettings } from "@/lib/domain";
 import type { AvailabilityRecord, CalendarAppointmentRecord, StaffRecord } from "@/lib/data/staff";
@@ -9,6 +10,8 @@ import { appointmentDayBoundary } from "./appointment-time";
 import { WORKSPACE_REFRESH_EVENT } from "./workspace-refresh";
 import { calendarBodyHeight, calendarEndLabel, calendarEventStyle, calendarHeaderHeight, calendarHourLabels, calendarMinuteTop, isCalendarMinuteVisible } from "./calendar-geometry";
 import { layoutOverlappingAppointments } from "./calendar-layout";
+import { pageSnapshotKey } from "./page-snapshot-policy";
+import { invalidatePageSnapshots, usePageSnapshotNavigation } from "./page-snapshots";
 import { CalendarGridSkeleton, DayListSkeleton } from "./staff-skeletons";
 import { cn } from "@/lib/utils";
 import { StudioSelect } from "@/components/ui/studio-select";
@@ -27,18 +30,34 @@ type Props = {
   studio: StudioSettings;
   availability: AvailabilityRecord[];
   initialDate: string;
+  initialMode: "week" | "day";
   initialNow: string;
+  initialPiercerId: string;
+  initialStationId: string;
   initialAppointments: CalendarAppointmentRecord[];
 };
 
 const dayNames = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 
+type CalendarPageSnapshot = {
+  anchor: string;
+  appointments: RawAppointment[];
+  mode: "week" | "day";
+  piercerId: string;
+  stationId: string;
+};
+
 export function CalendarWorkspace(props: Props) {
-  const [mode, setMode] = useState<"week" | "day">("week");
-  const [anchor, setAnchor] = useState(props.initialDate);
-  const [piercerId, setPiercerId] = useState(props.role === "piercer" ? props.userId : "");
-  const [stationId, setStationId] = useState("");
-  const [appointments, setAppointments] = useState<RawAppointment[]>(props.initialAppointments);
+  const snapshots = usePageSnapshotNavigation();
+  const snapshotKey = pageSnapshotKey("calendar", useSearchParams());
+  const [initialSnapshot] = useState(
+    () => snapshots?.readData<CalendarPageSnapshot>(snapshotKey),
+  );
+  const [mode, setMode] = useState<"week" | "day">(initialSnapshot?.mode ?? props.initialMode);
+  const [anchor, setAnchor] = useState(initialSnapshot?.anchor ?? props.initialDate);
+  const [piercerId, setPiercerId] = useState(initialSnapshot?.piercerId ?? props.initialPiercerId);
+  const [stationId, setStationId] = useState(initialSnapshot?.stationId ?? props.initialStationId);
+  const [appointments, setAppointments] = useState<RawAppointment[]>(initialSnapshot?.appointments ?? props.initialAppointments);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [newOpen, setNewOpen] = useState(false);
@@ -50,6 +69,26 @@ export function CalendarWorkspace(props: Props) {
   const requestSequence = useRef(0);
   const inFlightRequests = useRef(new Map<string, Promise<void>>());
   const visibleAppointments = useMemo(() => appointments.filter(isVisibleAppointment), [appointments]);
+
+  function updateRoute(next: Partial<Pick<CalendarPageSnapshot, "anchor" | "mode" | "piercerId" | "stationId">>) {
+    const route = {
+      anchor: next.anchor ?? anchor,
+      mode: next.mode ?? mode,
+      piercerId: next.piercerId ?? piercerId,
+      stationId: next.stationId ?? stationId,
+    };
+    setAnchor(route.anchor);
+    setMode(route.mode);
+    setPiercerId(route.piercerId);
+    setStationId(route.stationId);
+    const query = new URLSearchParams({
+      date: route.anchor,
+      view: route.mode,
+      piercer: route.piercerId || "all",
+      station: route.stationId || "all",
+    });
+    window.history.replaceState(null, "", `/app/calendar?${query}`);
+  }
 
   async function load(background = false, url = requestUrl) {
     const existingRequest = inFlightRequests.current.get(url);
@@ -89,28 +128,58 @@ export function CalendarWorkspace(props: Props) {
     const timer = window.setInterval(() => setNow(new Date()), 60_000);
     return () => window.clearInterval(timer);
   }, []);
+  useEffect(() => {
+    const snapshot = { anchor, appointments, mode, piercerId, stationId };
+    snapshots?.writeData("calendar", snapshotKey, snapshot);
+  }, [anchor, appointments, mode, piercerId, snapshotKey, snapshots, stationId]);
 
   return <div className={`${featureView} relative`}>
     <div className="mb-[15px] flex min-h-[58px] flex-wrap items-center gap-2 overflow-x-auto rounded-[17px_13px_18px_14px] border-2 border-hippy-ink bg-[#f1d39c] px-2.5 py-[9px] shadow-[3px_3px_0_#3b2923] max-[760px]:flex-nowrap" aria-label="Calendar controls">
-      <button type="button" className={`${dashButton({ variant: "secondary" })} min-h-[38px] w-[39px] p-0 text-[10px] shadow-[1px_2px_0_#3b2923]`} aria-label={`Previous ${mode}`} onClick={() => setAnchor(shiftManilaDate(anchor, mode === "week" ? -7 : -1))}><ChevronLeft className="size-[18px] shrink-0 stroke-[#3b2923] stroke-[2.75]" aria-hidden="true"/></button>
-      <button className={`${dashButton({ variant: "secondary" })} min-h-[38px] text-[10px] shadow-[1px_2px_0_#3b2923]`} onClick={() => setAnchor(manilaDate(new Date()))}>Today</button>
-      <button type="button" className={`${dashButton({ variant: "secondary" })} min-h-[38px] w-[39px] p-0 text-[10px] shadow-[1px_2px_0_#3b2923]`} aria-label={`Next ${mode}`} onClick={() => setAnchor(shiftManilaDate(anchor, mode === "week" ? 7 : 1))}><ChevronRight className="size-[18px] shrink-0 stroke-[#3b2923] stroke-[2.75]" aria-hidden="true"/></button>
-      <StudioSelect ariaLabel="Filter by piercer" value={piercerId} disabled={props.role === "piercer"} onValueChange={setPiercerId} triggerClassName="h-[38px] min-h-[38px] w-auto min-w-[145px] shadow-[1px_2px_0_#3b2923]" options={[{ value: "", label: "All piercers" }, ...props.staff.filter(isPiercer).map((person) => ({ value: person.id, label: person.displayName }))]} />
-      <StudioSelect ariaLabel="Filter by station" value={stationId} onValueChange={setStationId} triggerClassName="h-[38px] min-h-[38px] w-auto min-w-[145px] shadow-[1px_2px_0_#3b2923]" options={[{ value: "", label: "All stations" }, ...props.stations.map((station) => ({ value: station.id, label: station.name }))]} />
+      <button type="button" className={`${dashButton({ variant: "secondary" })} min-h-[38px] w-[39px] p-0 text-[10px] shadow-[1px_2px_0_#3b2923]`} aria-label={`Previous ${mode}`} onClick={() => updateRoute({ anchor: shiftManilaDate(anchor, mode === "week" ? -7 : -1) })}><ChevronLeft className="size-[18px] shrink-0 stroke-[#3b2923] stroke-[2.75]" aria-hidden="true"/></button>
+      <button className={`${dashButton({ variant: "secondary" })} min-h-[38px] text-[10px] shadow-[1px_2px_0_#3b2923]`} onClick={() => updateRoute({ anchor: manilaDate(new Date()) })}>Today</button>
+      <button type="button" className={`${dashButton({ variant: "secondary" })} min-h-[38px] w-[39px] p-0 text-[10px] shadow-[1px_2px_0_#3b2923]`} aria-label={`Next ${mode}`} onClick={() => updateRoute({ anchor: shiftManilaDate(anchor, mode === "week" ? 7 : 1) })}><ChevronRight className="size-[18px] shrink-0 stroke-[#3b2923] stroke-[2.75]" aria-hidden="true"/></button>
+      <StudioSelect ariaLabel="Filter by piercer" value={piercerId} disabled={props.role === "piercer"} onValueChange={(value) => updateRoute({ piercerId: value })} triggerClassName="h-[38px] min-h-[38px] w-auto min-w-[145px] shadow-[1px_2px_0_#3b2923]" options={[{ value: "", label: "All piercers" }, ...props.staff.filter(isPiercer).map((person) => ({ value: person.id, label: person.displayName }))]} />
+      <StudioSelect ariaLabel="Filter by station" value={stationId} onValueChange={(value) => updateRoute({ stationId: value })} triggerClassName="h-[38px] min-h-[38px] w-auto min-w-[145px] shadow-[1px_2px_0_#3b2923]" options={[{ value: "", label: "All stations" }, ...props.stations.map((station) => ({ value: station.id, label: station.name }))]} />
       <div className="ml-auto flex shrink-0 rounded-[12px_9px_13px_10px] border-[1.5px] border-hippy-ink bg-[#d8aa82] p-[3px] shadow-[1px_2px_0_#3b2923] max-[760px]:ml-0" aria-label="Calendar view">
-        <button className={cn("cursor-pointer rounded-lg border-0 bg-transparent px-[13px] py-[7px] font-extrabold text-[#654a41]", mode === "week" && "bg-[#fff3d0] text-[#b74827] shadow-[inset_0_0_0_1px_#3b2923]")} aria-pressed={mode === "week"} onClick={() => setMode("week")}>Week</button>
-        <button className={cn("cursor-pointer rounded-lg border-0 bg-transparent px-[13px] py-[7px] font-extrabold text-[#654a41]", mode === "day" && "bg-[#fff3d0] text-[#b74827] shadow-[inset_0_0_0_1px_#3b2923]")} aria-pressed={mode === "day"} onClick={() => setMode("day")}>Day</button>
+        <button className={cn("cursor-pointer rounded-lg border-0 bg-transparent px-[13px] py-[7px] font-extrabold text-[#654a41]", mode === "week" && "bg-[#fff3d0] text-[#b74827] shadow-[inset_0_0_0_1px_#3b2923]")} aria-pressed={mode === "week"} onClick={() => updateRoute({ mode: "week" })}>Week</button>
+        <button className={cn("cursor-pointer rounded-lg border-0 bg-transparent px-[13px] py-[7px] font-extrabold text-[#654a41]", mode === "day" && "bg-[#fff3d0] text-[#b74827] shadow-[inset_0_0_0_1px_#3b2923]")} aria-pressed={mode === "day"} onClick={() => updateRoute({ mode: "day" })}>Day</button>
       </div>
       <button className={`${dashButton({ variant: "primary" })} min-h-[38px] text-[10px]`} onClick={() => setNewOpen(true)}><Plus size={16}/> New appointment</button>
     </div>
     {error && <p className={dashError} role="alert">{error}</p>}
     <section className={`${panel} relative border-2 shadow-[5px_5px_0_#3b2923]`} aria-busy={loading}>
       {loading ? <><span className="sr-only" role="status">Loading live appointments</span>{mode === "week" ? <div className="overflow-x-auto [scrollbar-color:#d5aa89_transparent] [scrollbar-width:thin]"><CalendarGridSkeleton/></div> : <DayListSkeleton/>}</>
-        : mode === "week" ? <WeekCalendar days={days} anchor={anchor} appointments={visibleAppointments} now={now} onSelectDate={(date) => { setAnchor(date); setMode("day"); }} onSelectAppointment={setSelected}/>
+        : mode === "week" ? <WeekCalendar days={days} anchor={anchor} appointments={visibleAppointments} now={now} onSelectDate={(date) => updateRoute({ anchor: date, mode: "day" })} onSelectAppointment={setSelected}/>
           : <DayCalendar date={anchor} appointments={visibleAppointments} now={now} onSelectAppointment={setSelected}/>}
     </section>
-    {newOpen && <AppointmentFormDialog {...props} initialDate={anchor} onClose={() => setNewOpen(false)} onSaved={async () => { setNewOpen(false); await load(); }}/>} 
-    {selected && <AppointmentDialog appointment={selected} {...props} onClose={() => setSelected(null)} onSaved={async () => { setSelected(null); await load(); }}/>} 
+    {newOpen && (
+      <AppointmentFormDialog
+        {...props}
+        initialDate={anchor}
+        onClose={() => setNewOpen(false)}
+        onSaved={async (createdClient) => {
+          setNewOpen(false);
+          invalidatePageSnapshots(createdClient
+            ? ["calendar", "clients", "overview"]
+            : ["calendar"]);
+          await load();
+        }}
+      />
+    )}
+    {selected && (
+      <AppointmentDialog
+        appointment={selected}
+        {...props}
+        onClose={() => setSelected(null)}
+        onSaved={async (completed) => {
+          setSelected(null);
+          invalidatePageSnapshots(completed
+            ? ["calendar", "sales", "overview", "reports"]
+            : ["calendar"]);
+          await load();
+        }}
+      />
+    )}
   </div>;
 }
 
@@ -182,7 +251,7 @@ function DayCalendar({ date, appointments, now, onSelectAppointment }: { date: s
   </div>;
 }
 
-function AppointmentFormDialog(props: Props & { initialDate: string; onClose: () => void; onSaved: () => void }) {
+function AppointmentFormDialog(props: Props & { initialDate: string; onClose: () => void; onSaved: (createdClient: boolean) => void }) {
   const activeServices = props.services.filter((service) => service.isActive);
   const [serviceIds, setServiceIds] = useState<string[]>([]);
   const [serviceSearch, setServiceSearch] = useState("");
@@ -214,7 +283,7 @@ function AppointmentFormDialog(props: Props & { initialDate: string; onClose: ()
     const response = await fetch("/api/appointments", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
     const body = await response.json(); setBusy(false);
     if (!response.ok) { setError(body.error?.message ?? "Appointment could not be created."); return; }
-    props.onSaved();
+    props.onSaved(clientMode === "new");
   }
   const chosenPiercer = props.staff.find((person) => person.id === effectivePiercerId);
   const chosenStation = props.stations.find((station) => station.id === stationId);
@@ -317,11 +386,11 @@ function cleanClientLabel(value: string) {
   return value.replace(/\s+·\s+.+$/, "");
 }
 
-function AppointmentDialog(props: Props & { appointment: RawAppointment; onClose: () => void; onSaved: () => void }) {
+function AppointmentDialog(props: Props & { appointment: RawAppointment; onClose: () => void; onSaved: (completed: boolean) => void }) {
   const item = props.appointment; const [reschedule, setReschedule] = useState(false); const [busy, setBusy] = useState(false); const [error, setError] = useState("");
   const services = item.booking_services.sort(byPosition); const customer = one(item.customers)!; const piercer = one(item.staff_profiles); const station = one(item.stations); const sale = one(item.sales);
   const eligible = props.staff.filter((person) => isPiercer(person) && person.active && services.every((service) => props.assignments.some((assignment) => assignment.serviceId === service.service_id && assignment.staffId === person.id)));
-  async function mutate(payload: Record<string, unknown>) { setBusy(true); setError(""); const response = await fetch(`/api/appointments/${item.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) }); const body = await response.json(); setBusy(false); if (!response.ok) { setError(body.error?.message ?? "Appointment could not be updated."); return; } props.onSaved(); }
+  async function mutate(payload: Record<string, unknown>) { setBusy(true); setError(""); const response = await fetch(`/api/appointments/${item.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) }); const body = await response.json(); setBusy(false); if (!response.ok) { setError(body.error?.message ?? "Appointment could not be updated."); return; } props.onSaved(payload.status === "completed"); }
   async function submit(event: React.FormEvent<HTMLFormElement>) { event.preventDefault(); const form = new FormData(event.currentTarget); await mutate({ startsAt: `${form.get("date")}T${form.get("time")}:00+08:00`, piercerId: props.role === "piercer" ? item.assigned_piercer_id : form.get("piercerId"), stationId: form.get("stationId") || null }); }
   return <Dialog title={reschedule ? "Reschedule appointment" : `${customer.first_name} ${customer.last_name}`} detail={`${item.reference} · ${item.status.replace("_", " ")}`} onClose={props.onClose}>
     {reschedule ? <form className={operationForm} onSubmit={submit}>

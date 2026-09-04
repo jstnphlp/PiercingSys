@@ -1,5 +1,5 @@
-import { StaffViewSkeleton } from "../staff-skeletons";
+import { PageSnapshotLoading } from "../page-snapshots";
 
 export default function Loading() {
-  return <StaffViewSkeleton view="reports" label="Loading reports" />;
+  return <PageSnapshotLoading view="reports" />;
 }

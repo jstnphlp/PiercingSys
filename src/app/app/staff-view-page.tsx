@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
@@ -32,6 +31,7 @@ import {
   getSettingsReferenceData,
 } from "@/lib/data/staff";
 import { resolveReportPeriod, type ReportPeriod, type ReportPreset } from "@/lib/report-period";
+import { parsePageQuery } from "@/lib/pagination";
 import { measureServerTiming, measureServerTimingGroup } from "@/lib/server-timing";
 import {
   InviteForm,
@@ -43,6 +43,7 @@ import {
 } from "./controls";
 import { CalendarWorkspace } from "./calendar-workspace";
 import { ClientRecords } from "./client-records";
+import { PageSnapshotCapture, PageSnapshotFailed, PageSnapshotLink, PageSnapshotReady } from "./page-snapshots";
 import { ScheduleSettings } from "./schedule-settings";
 import { ReportsView } from "./reports-view";
 import { SalesView } from "./sales-view";
@@ -63,10 +64,23 @@ import { emptyState, featureView, metricCard, metricGrid, panel, panelHead, sett
 import { allowedViews, type StaffView } from "./view-config";
 
 type StaffSearchParams = {
+  date?: string;
+  page?: string;
+  piercer?: string;
+  q?: string;
   section?: string;
   period?: string;
+  station?: string;
   from?: string;
   to?: string;
+  view?: string;
+};
+
+type CalendarRouteState = {
+  date: string;
+  mode: "week" | "day";
+  piercerId: string;
+  stationId: string;
 };
 
 export function StaffViewPage({
@@ -99,7 +113,14 @@ async function AuthorizedStaffView({
   if (!allowedViews(session.role).includes(view)) redirect("/app");
   const reportPeriod = view === "reports" ? resolveReportPeriod(params) : null;
   const settingsSection = view === "settings" ? resolveSettingsSection(params.section) : null;
-  return viewContent(view, settingsSection, session, reportPeriod);
+  return viewContent(
+    view,
+    settingsSection,
+    session,
+    reportPeriod,
+    params,
+    crypto.randomUUID(),
+  );
 }
 
 function viewContent(
@@ -107,18 +128,80 @@ function viewContent(
   settingsSection: SettingsSection | null,
   session: StaffSession,
   reportPeriod: ReportPeriod | null,
+  params: StaffSearchParams,
+  renderId: string,
 ) {
   const role = session.role;
-  if (view === "overview") return <Overview role={role} />;
-  if (view === "calendar")
-    return <Suspense fallback={<StaffViewSkeleton view="calendar" label="Loading calendar" />}><Calendar role={role} userId={session.userId} /></Suspense>;
-  if (view === "clients") return <Suspense fallback={<StaffViewSkeleton view="clients" label="Loading clients" />}><Clients role={role} /></Suspense>;
-  if (view === "sales") return <Suspense fallback={<StaffViewSkeleton view="sales" label="Loading sales" />}><Sales /></Suspense>;
-  if (view === "reports" && reportPeriod) return <Suspense fallback={<StaffViewSkeleton view="reports" label="Loading reports" />}><Reports period={reportPeriod} /></Suspense>;
-  return <StudioSettings role={role} section={settingsSection} />;
+  if (view === "overview") return <Overview role={role} renderId={renderId} />;
+  if (view === "calendar") {
+    const routeState = resolveCalendarRouteState(params, session);
+    return <Suspense fallback={<StaffViewSkeleton view="calendar" label="Loading calendar" />}><Calendar role={role} userId={session.userId} routeState={routeState} renderId={renderId} /></Suspense>;
+  }
+  if (view === "clients") {
+    const query = resolveListQuery(params);
+    return <Suspense fallback={<StaffViewSkeleton view="clients" label="Loading clients" />}><Clients role={role} query={query} renderId={renderId} /></Suspense>;
+  }
+  if (view === "sales") {
+    const query = resolveListQuery(params);
+    return <Suspense fallback={<StaffViewSkeleton view="sales" label="Loading sales" />}><Sales query={query} renderId={renderId} /></Suspense>;
+  }
+  if (view === "reports" && reportPeriod) return <Suspense fallback={<StaffViewSkeleton view="reports" label="Loading reports" />}><Reports period={reportPeriod} renderId={renderId} /></Suspense>;
+  return <StudioSettings role={role} section={settingsSection} renderId={renderId} />;
 }
 
-function Overview({ role }: { role: string }) {
+function resolveListQuery(params: StaffSearchParams) {
+  const url = new URL("https://staff-page.invalid");
+  if (params.q) url.searchParams.set("q", params.q);
+  if (params.page) url.searchParams.set("page", params.page);
+  const { q, page, pageSize } = parsePageQuery(url);
+  return { q, page, pageSize };
+}
+
+function resolveCalendarRouteState(
+  params: StaffSearchParams,
+  session: StaffSession,
+): CalendarRouteState {
+  const today = manilaDate(new Date());
+  const date = params.date && isIsoDate(params.date) ? params.date : today;
+  return {
+    date,
+    mode: params.view === "day" ? "day" : "week",
+    piercerId: session.role === "piercer"
+      ? session.userId
+      : params.piercer && isUuid(params.piercer) ? params.piercer : "",
+    stationId: params.station && isUuid(params.station) ? params.station : "",
+  };
+}
+
+function isIsoDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T12:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+async function PageSnapshotCompletion({
+  renderId,
+  view,
+  waitFor,
+}: {
+  renderId: string;
+  view: StaffView;
+  waitFor: readonly Promise<unknown>[];
+}) {
+  const results = await Promise.all(waitFor);
+  const failed = results.some((result) =>
+    typeof result === "object" && result !== null &&
+    "error" in result && Boolean(result.error));
+  return failed
+    ? <PageSnapshotFailed view={view} />
+    : <PageSnapshotReady view={view} renderId={renderId} />;
+}
+
+function Overview({ role, renderId }: { role: string; renderId: string }) {
   const [bookings, customerCount, revenue, readiness] = measureServerTimingGroup(
     "staff.page.overview.total",
     () => [
@@ -132,19 +215,25 @@ function Overview({ role }: { role: string }) {
   );
 
   return (
-    <div className={featureView}>
-      <Suspense fallback={<OverviewMetricsSkeleton />}>
-        <OverviewMetrics bookings={bookings} customerCount={customerCount} revenue={revenue} role={role} />
-      </Suspense>
-      <div className={`${twoPanel} items-start`}>
-        <Suspense fallback={<OverviewAppointmentsSkeleton />}>
-          <OverviewAppointments bookings={bookings} role={role} />
+    <PageSnapshotCapture
+      view="overview"
+      renderId={renderId}
+      readySignal={<Suspense fallback={null}><PageSnapshotCompletion view="overview" renderId={renderId} waitFor={[bookings, customerCount, revenue, readiness]} /></Suspense>}
+    >
+      <div className={featureView}>
+        <Suspense fallback={<OverviewMetricsSkeleton />}>
+          <OverviewMetrics bookings={bookings} customerCount={customerCount} revenue={revenue} role={role} />
         </Suspense>
-        <Suspense fallback={<OverviewReadinessSkeleton />}>
-          <OverviewReadiness data={readiness} role={role} />
-        </Suspense>
+        <div className={`${twoPanel} items-start`}>
+          <Suspense fallback={<OverviewAppointmentsSkeleton />}>
+            <OverviewAppointments bookings={bookings} role={role} />
+          </Suspense>
+          <Suspense fallback={<OverviewReadinessSkeleton />}>
+            <OverviewReadiness data={readiness} role={role} />
+          </Suspense>
+        </div>
       </div>
-    </div>
+    </PageSnapshotCapture>
   );
 }
 
@@ -251,10 +340,21 @@ async function OverviewReadiness({
   );
 }
 
-async function Calendar({ role, userId }: { role: string; userId: string }) {
+async function Calendar({
+  renderId,
+  role,
+  routeState,
+  userId,
+}: {
+  renderId: string;
+  role: string;
+  routeState: CalendarRouteState;
+  userId: string;
+}) {
   const now = new Date();
-  const initialDate = manilaDate(now);
-  const initialDays = manilaWeekDates(initialDate);
+  const initialDays = routeState.mode === "week"
+    ? manilaWeekDates(routeState.date)
+    : [routeState.date];
   const initialFrom = manilaDateTime(initialDays[0], "00:00").toISOString();
   const nextDay = shiftManilaDate(initialDays.at(-1)!, 1);
   const initialTo = new Date(manilaDateTime(nextDay, "00:00").getTime() - 1).toISOString();
@@ -265,33 +365,38 @@ async function Calendar({ role, userId }: { role: string; userId: string }) {
       getCalendarAppointments({
         from: initialFrom,
         to: initialTo,
-        piercerId: role === "piercer" ? userId : undefined,
+        piercerId: role === "piercer" ? userId : routeState.piercerId || undefined,
+        stationId: routeState.stationId || undefined,
       }),
     ]),
   );
   const error = [data.error, appointmentData.error].filter(Boolean).join(" ");
-  if (error) return <StateCard title="Calendar could not be loaded" detail={error} />;
-  return <CalendarWorkspace role={role} userId={userId} services={data.services} staff={data.staff} assignments={data.serviceAssignments} stations={data.stations} studio={data.studio} availability={data.availability} initialDate={initialDate} initialNow={now.toISOString()} initialAppointments={appointmentData.appointments} />;
+  if (error) return <><PageSnapshotFailed view="calendar" /><StateCard title="Calendar could not be loaded" detail={error} /></>;
+  return <PageSnapshotCapture view="calendar" renderId={renderId} ready><CalendarWorkspace role={role} userId={userId} services={data.services} staff={data.staff} assignments={data.serviceAssignments} stations={data.stations} studio={data.studio} availability={data.availability} initialDate={routeState.date} initialMode={routeState.mode} initialPiercerId={routeState.piercerId} initialStationId={routeState.stationId} initialNow={now.toISOString()} initialAppointments={appointmentData.appointments} /></PageSnapshotCapture>;
 }
 
-async function Clients({ role }: { role: string }) {
-  const data = await measureServerTiming("staff.page.clients.total", getClientsPage);
-  if (data.error) return <StateCard title="Clients could not be loaded" detail={data.error} />;
-  return (
+async function Clients({
+  query,
+  renderId,
+  role,
+}: {
+  query: ReturnType<typeof resolveListQuery>;
+  renderId: string;
+  role: string;
+}) {
+  const data = await measureServerTiming("staff.page.clients.total", () => getClientsPage(query));
+  if (data.error) return <><PageSnapshotFailed view="clients" /><StateCard title="Clients could not be loaded" detail={data.error} /></>;
+  return <PageSnapshotCapture view="clients" renderId={renderId} ready>
     <div className={featureView}>
-      <ClientRecords
-        customers={data.customers}
-        initialPage={data.page}
-        canCreate={role === "owner" || role === "manager"}
-      />
+      <ClientRecords customers={data.customers} initialPage={data.page} initialQuery={{ q: query.q, page: query.page }} canCreate={role === "owner" || role === "manager"} />
     </div>
-  );
+  </PageSnapshotCapture>;
 }
 
-async function Sales() {
-  const data = await measureServerTiming("staff.page.sales.total", getSalesPage);
-  if (data.error) return <StateCard title="Sales could not be loaded" detail={data.error} />;
-  return <SalesView initialSales={data.sales} initialPage={data.page} services={data.services} />;
+async function Sales({ query, renderId }: { query: ReturnType<typeof resolveListQuery>; renderId: string }) {
+  const data = await measureServerTiming("staff.page.sales.total", () => getSalesPage(query));
+  if (data.error) return <><PageSnapshotFailed view="sales" /><StateCard title="Sales could not be loaded" detail={data.error} /></>;
+  return <PageSnapshotCapture view="sales" renderId={renderId} ready><SalesView initialSales={data.sales} initialPage={data.page} initialQuery={{ q: query.q, page: query.page }} services={data.services} /></PageSnapshotCapture>;
 }
 
 const reportPresets: Array<{ value: ReportPreset; label: string }> = [
@@ -302,12 +407,12 @@ const reportPresets: Array<{ value: ReportPreset; label: string }> = [
   { value: "custom", label: "Custom Range" },
 ];
 
-async function Reports({ period }: { period: ReportPeriod }) {
+async function Reports({ period, renderId }: { period: ReportPeriod; renderId: string }) {
   const data = await measureServerTiming(
     "staff.page.reports.total",
     () => getReportsData(period),
   );
-  if (data.error) return <StateCard title="Reports could not be loaded" detail={data.error} />;
+  if (data.error) return <><PageSnapshotFailed view="reports" /><StateCard title="Reports could not be loaded" detail={data.error} /></>;
   const presetLinks = reportPresets.map((item) => {
     const resolved = resolveReportPeriod({ period: item.value });
     return {
@@ -317,7 +422,7 @@ async function Reports({ period }: { period: ReportPeriod }) {
         : `/app/reports?period=${item.value}&from=${resolved.from}&to=${resolved.to}`,
     };
   });
-  return <ReportsView
+  return <PageSnapshotCapture view="reports" renderId={renderId} ready><ReportsView
     initialPeriod={period}
     presets={presetLinks}
     initialSummary={{
@@ -328,13 +433,15 @@ async function Reports({ period }: { period: ReportPeriod }) {
       booking_statuses: data.bookingStatusCounts,
       methods: data.paymentMethodTotals,
     }}
-  />;
+  /></PageSnapshotCapture>;
 }
 
 function StudioSettings({
+  renderId,
   role,
   section,
 }: {
+  renderId: string;
   role: string;
   section: SettingsSection | null;
 }) {
@@ -347,28 +454,34 @@ function StudioSettings({
   );
 
   return (
-    <div className={featureView}>
-      <SettingsSectionFocus section={section} />
-      <div className={settingsStack}>
-        <Suspense fallback={<SettingsFormSkeleton />}><SettingsGeneral data={reference} /></Suspense>
-        <Suspense fallback={<SettingsScheduleSkeleton />}><SettingsSchedule data={reference} /></Suspense>
-        <Suspense fallback={<SettingsListSkeleton />}><SettingsServices data={reference} /></Suspense>
-        <Suspense fallback={<SettingsListSkeleton rows={5} />}><SettingsTeam data={reference} role={role} /></Suspense>
-        <section className={twoPanel}>
-          <div id="studio-settings-notifications" className={settingSection} tabIndex={-1}>
-            <PanelHead
-              title="Consent records"
-              detail="Signed acknowledgements are stored against bookings."
-            />
-            <p className={`${statusNote} mx-[18px] my-2.5`}>
-              Consent records become visible from the associated client and
-              appointment once submitted.
-            </p>
-          </div>
-          <Suspense fallback={<SettingsNotificationSkeleton />}><SettingsNotifications data={deliveries} /></Suspense>
-        </section>
+    <PageSnapshotCapture
+      view="settings"
+      renderId={renderId}
+      readySignal={<Suspense fallback={null}><PageSnapshotCompletion view="settings" renderId={renderId} waitFor={[reference, deliveries]} /></Suspense>}
+    >
+      <div className={featureView}>
+        <SettingsSectionFocus section={section} />
+        <div className={settingsStack}>
+          <Suspense fallback={<SettingsFormSkeleton />}><SettingsGeneral data={reference} /></Suspense>
+          <Suspense fallback={<SettingsScheduleSkeleton />}><SettingsSchedule data={reference} /></Suspense>
+          <Suspense fallback={<SettingsListSkeleton />}><SettingsServices data={reference} /></Suspense>
+          <Suspense fallback={<SettingsListSkeleton rows={5} />}><SettingsTeam data={reference} role={role} /></Suspense>
+          <section className={twoPanel}>
+            <div id="studio-settings-notifications" className={settingSection} tabIndex={-1}>
+              <PanelHead
+                title="Consent records"
+                detail="Signed acknowledgements are stored against bookings."
+              />
+              <p className={`${statusNote} mx-[18px] my-2.5`}>
+                Consent records become visible from the associated client and
+                appointment once submitted.
+              </p>
+            </div>
+            <Suspense fallback={<SettingsNotificationSkeleton />}><SettingsNotifications data={deliveries} /></Suspense>
+          </section>
+        </div>
       </div>
-    </div>
+    </PageSnapshotCapture>
   );
 }
 
@@ -545,8 +658,9 @@ function Readiness({
 }) {
   const action = done || section === "notifications" ? "Review" : "Configure";
   return (
-    <Link
+    <PageSnapshotLink
       href={`/app/settings?section=${section}`}
+      view="settings"
       className="group grid min-h-[61px] grid-cols-[26px_minmax(0,1fr)_auto_14px] items-center gap-x-[9px] border-b border-dashed border-[#d5a684] px-[17px] py-2.5 text-left transition-[background,transform] hover:translate-x-px hover:bg-[#fff1cf] focus-visible:bg-[#fff4d7] focus-visible:outline-3 focus-visible:outline-offset-[-4px] focus-visible:outline-[#efb83f88] max-[450px]:grid-cols-[26px_minmax(0,1fr)_14px] max-[450px]:gap-y-0.5"
       aria-label={`${action} ${label}: ${detail ?? (done ? "Configured" : "Needs setup")}`}
     >
@@ -557,7 +671,7 @@ function Readiness({
       </span>
       <small className="justify-self-end text-[8px] font-black tracking-[.4px] text-[#7b574b] uppercase max-[450px]:col-start-2 max-[450px]:justify-self-start">{action}</small>
       <ChevronRight className="w-3.5 text-[#6f5148] transition-transform group-hover:translate-x-0.5 max-[450px]:col-start-3 max-[450px]:row-span-2 max-[450px]:row-start-1" aria-hidden="true" />
-    </Link>
+    </PageSnapshotLink>
   );
 }
 

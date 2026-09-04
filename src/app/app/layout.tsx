@@ -6,6 +6,7 @@ import { getStaffSession } from "@/lib/auth";
 import { Toaster } from "@/components/ui/toast";
 import { StaffShell } from "./staff-shell";
 import { StaffShellLoading } from "./staff-shell-loading";
+import { PageSnapshotProvider } from "./page-snapshots";
 import { WorkspaceRefreshProvider } from "./workspace-refresh";
 
 export const metadata: Metadata = { title: "Studio operations" };
@@ -26,5 +27,6 @@ async function AuthenticatedApp({ children }: { children: ReactNode }) {
   await connection();
   const session = await getStaffSession();
   if (!session) redirect("/login");
-  return <Toaster timeout={3_000}><WorkspaceRefreshProvider><StaffShell session={session}>{children}</StaffShell></WorkspaceRefreshProvider></Toaster>;
+  const sessionKey = `${session.userId}:${session.role}`;
+  return <Toaster timeout={3_000}><PageSnapshotProvider key={sessionKey} sessionKey={sessionKey}><WorkspaceRefreshProvider><StaffShell session={session}>{children}</StaffShell></WorkspaceRefreshProvider></PageSnapshotProvider></Toaster>;
 }

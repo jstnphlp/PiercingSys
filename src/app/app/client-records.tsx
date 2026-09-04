@@ -7,11 +7,17 @@ import useSWR from "swr";
 import type { BookingRecord, CustomerRecord } from "@/lib/data/staff";
 import type { PageMeta } from "@/lib/pagination";
 import { isValidPhilippineMobilePhone } from "@/lib/validation";
+import { pageSnapshotKey } from "./page-snapshot-policy";
+import { usePageSnapshotNavigation } from "./page-snapshots";
 import { requestWorkspaceRefresh, WORKSPACE_REFRESH_EVENT } from "./workspace-refresh";
 import { clientTablePanel, dashButton, dashError, dashField, operationBackdrop, operationDialog, operationForm, operationGrid, pagination, stateCard, statusClasses, statusNote } from "./dashboard-styles";
 
-export function ClientRecords({ customers, initialPage: initialPageMeta, canCreate }: { customers: CustomerRecord[]; initialPage: PageMeta; canCreate: boolean }) {
+export function ClientRecords({ customers, initialPage: initialPageMeta, initialQuery, canCreate }: { customers: CustomerRecord[]; initialPage: PageMeta; initialQuery: { q: string; page: number }; canCreate: boolean }) {
   const urlParams = useSearchParams();
+  const snapshots = usePageSnapshotNavigation();
+  const snapshotKey = pageSnapshotKey("clients", urlParams);
+  const restoringSnapshot = snapshots?.pending?.key === snapshotKey &&
+    snapshots.pending.view === "clients" && Boolean(snapshots.pending.snapshot);
   const [selected, setSelected] = useState<CustomerRecord | null>(null);
   const [creating, setCreating] = useState(false);
   const initialSearch = urlParams.get("q") ?? "";
@@ -19,13 +25,17 @@ export function ClientRecords({ customers, initialPage: initialPageMeta, canCrea
   const [search, setSearch] = useState(initialSearch);
   const [debouncedSearch, setDebouncedSearch] = useState(normalizeSearch(initialSearch));
   const [page, setPage] = useState(initialPage);
-  const [serverDataValid, setServerDataValid] = useState(!normalizeSearch(initialSearch) && initialPage === 1);
+  const [serverDataValid, setServerDataValid] = useState(
+    normalizeSearch(initialQuery.q) === normalizeSearch(initialSearch) &&
+    initialQuery.page === initialPage,
+  );
   const isInitialRequest = page === 1 && !debouncedSearch;
   const useServerData = isInitialRequest && serverDataValid;
   const key = useServerData ? null : `/api/customers?q=${encodeURIComponent(debouncedSearch)}&page=${page}&pageSize=25`;
   const { data: apiResponse, error, isLoading, isValidating, mutate } = useSWR<{ data: CustomerRecord[]; page: PageMeta }>(key, {
     keepPreviousData: true,
     dedupingInterval: 5_000,
+    revalidateOnMount: restoringSnapshot ? false : undefined,
   });
 
   useEffect(() => {
@@ -79,7 +89,7 @@ export function ClientRecords({ customers, initialPage: initialPageMeta, canCrea
     {creating && (
       <AddClientDialog
         onClose={() => setCreating(false)}
-        onCreated={() => { setCreating(false); requestWorkspaceRefresh(); }}
+        onCreated={() => { setCreating(false); requestWorkspaceRefresh(["clients", "overview"]); }}
       />
     )}
     {selected && <ClientDrawer key={selected.id} customer={selected} onClose={() => setSelected(null)}/>}

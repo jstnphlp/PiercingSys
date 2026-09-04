@@ -1,5 +1,5 @@
-import { StaffViewSkeleton } from "../staff-skeletons";
+import { PageSnapshotLoading } from "../page-snapshots";
 
 export default function Loading() {
-  return <StaffViewSkeleton view="calendar" label="Loading calendar" />;
+  return <PageSnapshotLoading view="calendar" />;
 }

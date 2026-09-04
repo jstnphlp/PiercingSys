@@ -1,5 +1,5 @@
-import { StaffRouteLoading } from "./staff-shell-loading";
+import { PageSnapshotLoading } from "./page-snapshots";
 
 export default function Loading() {
-  return <StaffRouteLoading />;
+  return <PageSnapshotLoading view="overview" />;
 }

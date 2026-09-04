@@ -9,7 +9,7 @@ import type {
   StudioSettings,
 } from "@/lib/domain";
 import { manilaDayBounds } from "@/lib/domain";
-import { pageMeta, type PageMeta } from "@/lib/pagination";
+import { pageMeta, safeSearchTerm, type PageMeta } from "@/lib/pagination";
 import { seededStudio } from "@/lib/data/public";
 import type { ReportPeriod } from "@/lib/report-period";
 import { logServerTimingMarker, measureServerTiming } from "@/lib/server-timing";
@@ -486,15 +486,41 @@ export async function getCalendarAppointments({
   };
 }
 
-export async function getClientsPage(): Promise<DataResult<{ customers: CustomerRecord[]; page: PageMeta }>> {
+type StaffListPageInput = {
+  page?: number;
+  pageSize?: number;
+  q?: string;
+};
+
+function staffListPage(input: StaffListPageInput = {}) {
+  const page = Math.max(1, Math.trunc(input.page ?? 1));
+  const pageSize = Math.min(50, Math.max(1, Math.trunc(input.pageSize ?? 25)));
+  return {
+    from: (page - 1) * pageSize,
+    page,
+    pageSize,
+    search: safeSearchTerm(input.q ?? ""),
+    to: page * pageSize - 1,
+  };
+}
+
+export async function getClientsPage(input: StaffListPageInput = {}): Promise<DataResult<{ customers: CustomerRecord[]; page: PageMeta }>> {
+  const { from, page, pageSize, search, to } = staffListPage(input);
   const supabase = await createSupabaseServerClient();
-  if (!supabase) return { customers: [], page: pageMeta(1, 25, 0), error: "Supabase is not configured." };
-  const result = await measureServerTiming("staff.clients.page", () => supabase
+  if (!supabase) return { customers: [], page: pageMeta(page, pageSize, 0), error: "Supabase is not configured." };
+  let query = supabase
     .from("customer_directory")
     .select("id,first_name,last_name,email,phone,created_at,appointment_count,last_appointment_at", { count: "exact" })
     .order("created_at", { ascending: false })
-    .order("id", { ascending: false })
-    .range(0, 24));
+    .order("id", { ascending: false });
+  if (search) {
+    const term = `*${search}*`;
+    const nameTerms = search.split(" ")
+      .map((word) => `or(first_name.ilike.*${word}*,last_name.ilike.*${word}*)`)
+      .join(",");
+    query = query.or(`and(${nameTerms}),email.ilike.${term},phone.ilike.${term}`);
+  }
+  const result = await measureServerTiming("staff.clients.page", () => query.range(from, to));
   const customers: CustomerRecord[] = (result.data ?? []).map((row) => {
     const contact = customerDisplayContact(row.email, row.phone);
     return {
@@ -506,25 +532,42 @@ export async function getClientsPage(): Promise<DataResult<{ customers: Customer
       lastActivityAt: row.last_appointment_at ?? null,
     };
   });
-  return { customers, page: pageMeta(1, 25, result.count ?? 0), error: errors(result.error) };
+  return { customers, page: pageMeta(page, pageSize, result.count ?? 0), error: errors(result.error) };
 }
 
-export async function getSalesPage(): Promise<DataResult<{ sales: SaleRecord[]; services: Service[]; page: PageMeta }>> {
+export async function getSalesPage(input: StaffListPageInput = {}): Promise<DataResult<{ sales: SaleRecord[]; services: Service[]; page: PageMeta }>> {
+  const { from, page, pageSize, search, to } = staffListPage(input);
   const supabase = await createSupabaseServerClient();
-  if (!supabase) return { sales: [], services: [], page: pageMeta(1, 25, 0), error: "Supabase is not configured." };
-  const [reference, salesResult] = await Promise.all([
-    readStaffReferenceBundle(),
-    measureServerTiming("staff.sales.page", () => supabase
-      .from("sales")
+  if (!supabase) return { sales: [], services: [], page: pageMeta(page, pageSize, 0), error: "Supabase is not configured." };
+  async function readSalesPage() {
+    let customerIds: string[] = [];
+    if (search) {
+      const term = `*${search}*`;
+      const customers = await supabase!.from("customers").select("id")
+        .or(`first_name.ilike.${term},last_name.ilike.${term},email.ilike.${term}`)
+        .limit(100);
+      if (customers.error) return { data: null, error: customers.error, count: 0 };
+      customerIds = (customers.data ?? []).map((row) => row.id);
+    }
+    let query = supabase!.from("sales")
       .select(saleDetailSelect, { count: "exact" })
       .order("created_at", { ascending: false })
-      .order("id", { ascending: false })
-      .range(0, 24)),
+      .order("id", { ascending: false });
+    if (search) {
+      const filters = [`reference.ilike.*${search}*`];
+      if (customerIds.length) filters.push(`customer_id.in.(${customerIds.join(",")})`);
+      query = query.or(filters.join(","));
+    }
+    return query.range(from, to);
+  }
+  const [reference, salesResult] = await Promise.all([
+    readStaffReferenceBundle(),
+    measureServerTiming("staff.sales.page", readSalesPage),
   ]);
   return {
     services: reference.services,
     sales: (salesResult.data ?? []).map((row) => mapSaleRow(row as Record<string, unknown>)),
-    page: pageMeta(1, 25, salesResult.count ?? 0),
+    page: pageMeta(page, pageSize, salesResult.count ?? 0),
     error: errors(reference.error ?? "", salesResult.error),
   };
 }

@@ -53,6 +53,19 @@ describe("initial staff page data", () => {
     expect(data.page).toEqual({ number: 1, size: 25, total: 61, totalPages: 3 });
   });
 
+  it("server-renders a filtered client page without an initial API fetch", async () => {
+    const query = createQuery({ data: [], error: null, count: 2 });
+    createSupabaseServerClient.mockResolvedValue({ from: vi.fn(() => query) });
+
+    const data = await getClientsPage({ q: "Ana", page: 2, pageSize: 25 });
+
+    expect(query.or).toHaveBeenCalledWith(
+      "and(or(first_name.ilike.*Ana*,last_name.ilike.*Ana*)),email.ilike.*Ana*,phone.ilike.*Ana*",
+    );
+    expect(query.range).toHaveBeenCalledWith(25, 49);
+    expect(data.page).toEqual({ number: 2, size: 25, total: 2, totalPages: 1 });
+  });
+
   it("returns authoritative first-page metadata with sales", async () => {
     const referenceRpc = vi.fn().mockResolvedValue({
       data: {
@@ -93,6 +106,29 @@ describe("initial staff page data", () => {
       priceCents: 50_000,
     })]);
     expect(data.page).toEqual({ number: 1, size: 25, total: 27, totalPages: 2 });
+  });
+
+  it("server-renders a requested sales page without an initial API fetch", async () => {
+    const referenceRpc = vi.fn().mockResolvedValue({
+      data: {
+        studio: null,
+        services: [],
+        staff: [],
+        assignments: [],
+        stations: [],
+        availability: [],
+        closures: [],
+      },
+      error: null,
+    });
+    createSupabaseAdminClient.mockReturnValue({ rpc: referenceRpc });
+    const salesQuery = createQuery({ data: [], error: null, count: 75 });
+    createSupabaseServerClient.mockResolvedValue({ from: vi.fn(() => salesQuery) });
+
+    const data = await getSalesPage({ page: 3, pageSize: 25 });
+
+    expect(salesQuery.range).toHaveBeenCalledWith(50, 74);
+    expect(data.page).toEqual({ number: 3, size: 25, total: 75, totalPages: 3 });
   });
 
   it("does not request unused sales-list relation fields", () => {
