@@ -24,15 +24,20 @@ begin
     'public.reschedule_booking(uuid,timestamptz,uuid,uuid)'::regprocedure
   ] loop
     select pg_get_functiondef(procedure_name) into definition;
-    if position(hours_check in definition) = 0
-       or position(availability_check in definition) = 0 then
+    definition := replace(definition, E'\r\n', E'\n');
+    if (position(hours_check in definition) = 0
+       and position('or calculated_end > ((local_date + (hours ->> ''close'')::time) at time zone ''Asia/Manila'')' in definition) = 0)
+       or (position(availability_check in definition) = 0
+       and position('p_starts_at >= ((local_date + sa.starts_at) at time zone ''Asia/Manila'')' in definition) = 0) then
       raise exception '% no longer has the expected Manila end-boundary checks', procedure_name;
     end if;
-    execute replace(
-      replace(definition, hours_check, hours_replacement),
-      availability_check,
-      availability_replacement
-    );
+    if position(hours_check in definition) > 0 then
+      definition := replace(definition, hours_check, hours_replacement);
+    end if;
+    if position(availability_check in definition) > 0 then
+      definition := replace(definition, availability_check, availability_replacement);
+    end if;
+    execute definition;
   end loop;
 end;
 $$;

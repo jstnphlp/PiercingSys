@@ -31,23 +31,27 @@ export function SalesView({ initialSales, initialPage: initialPageMeta, services
   const [serverDataValid, setServerDataValid] = useState(!initialSearch.trim() && initialPage === 1);
   const [selected, setSelected] = useState<SaleRecord | null>(null);
   const query = search.trim();
+  const isInitialRequest = page === 1 && !query;
+  const useServerData = isInitialRequest && serverDataValid;
+  const key = useServerData ? null : `/api/sales?q=${encodeURIComponent(query)}&page=${page}&pageSize=25`;
+  const { data: apiResponse, error, isLoading, isValidating, mutate } = useSWR<SalesResponse>(key, {
+    keepPreviousData: true,
+    dedupingInterval: 5_000,
+  });
   useEffect(() => {
-    function invalidateServerData() { setServerDataValid(false); }
-    window.addEventListener(WORKSPACE_REFRESH_EVENT, invalidateServerData);
-    return () => window.removeEventListener(WORKSPACE_REFRESH_EVENT, invalidateServerData);
-  }, []);
+    function refreshSales() {
+      if (key) void mutate();
+      else if (isInitialRequest) setServerDataValid(false);
+    }
+    window.addEventListener(WORKSPACE_REFRESH_EVENT, refreshSales);
+    return () => window.removeEventListener(WORKSPACE_REFRESH_EVENT, refreshSales);
+  }, [isInitialRequest, key, mutate]);
   useEffect(() => {
     const url = new URL(window.location.href);
     if (query) url.searchParams.set("q", query); else url.searchParams.delete("q");
     if (page > 1) url.searchParams.set("page", String(page)); else url.searchParams.delete("page");
     window.history.replaceState(null, "", url);
   }, [page, query]);
-  const isInitialRequest = page === 1 && !query;
-  const useServerData = isInitialRequest && serverDataValid;
-  const key = useServerData ? null : `/api/sales?q=${encodeURIComponent(query)}&page=${page}&pageSize=25`;
-  const { data: apiResponse, error, isLoading, isValidating, mutate } = useSWR<SalesResponse>(key, {
-    keepPreviousData: true,
-  });
   const response = useServerData ? { data: initialSales, page: initialPageMeta } : apiResponse;
   const sales = response?.data ?? [];
   const total = sales.filter((item) => item.status === "completed").reduce((sum, item) => sum + item.totalCents - item.adjustmentCents, 0);

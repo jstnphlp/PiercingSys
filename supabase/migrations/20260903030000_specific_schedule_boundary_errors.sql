@@ -30,6 +30,7 @@ begin
     'public.reschedule_booking(uuid,timestamptz,uuid,uuid)'::regprocedure
   ] loop
     select pg_get_functiondef(procedure_name) into definition;
+    definition := replace(definition, E'\r\n', E'\n');
     if position(boundary_check_inline in definition) > 0 then
       execute replace(definition, boundary_check_inline, boundary_replacement);
     elsif position(boundary_check_split in definition) > 0 then

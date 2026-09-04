@@ -4,10 +4,12 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { philippineMobilePhone, validationError } from "@/lib/validation";
 import { pageMeta, parsePageQuery, safeSearchTerm } from "@/lib/pagination";
 import { customerDisplayContact, customerDisplayName } from "@/lib/walk-in-customer";
+import { measureServerTiming } from "@/lib/server-timing";
 
 const schema = z.object({ firstName: z.string().trim().min(1).max(80), lastName: z.string().trim().min(1).max(80), email: z.string().trim().email(), phone: philippineMobilePhone, notes: z.string().trim().max(2000).nullable().optional() });
 
 export async function GET(request: Request) {
+  return measureServerTiming("api.customers.total", async () => {
   const session = await getStaffSession();
   if (!session) return Response.json({ error: { code: "UNAUTHORIZED", message: "Sign in is required." } }, { status: 401 });
   const { q, page, pageSize, from, to } = parsePageQuery(new URL(request.url));
@@ -40,8 +42,10 @@ export async function GET(request: Request) {
     }),
     page: pageMeta(page, pageSize, count ?? 0),
   });
+  });
 }
 export async function POST(request: Request) {
+  return measureServerTiming("api.customers.total", async () => {
   const session = await getStaffSession();
   if (!session) return Response.json({ error: { code: "UNAUTHORIZED", message: "Sign in is required." } }, { status: 401 });
   if (!hasRole(session.role, ["owner", "manager"])) return Response.json({ error: { code: "FORBIDDEN", message: "Customer creation requires management access." } }, { status: 403 });
@@ -50,4 +54,5 @@ export async function POST(request: Request) {
   if (error?.code === "23505") return Response.json({ error: { code: "CUSTOMER_EXISTS", message: "A client with this email and phone already exists." } }, { status: 409 });
   if (error) return Response.json({ error: { code: "CREATE_FAILED", message: error.message } }, { status: 400 });
   return Response.json({ data }, { status: 201 });
+  });
 }

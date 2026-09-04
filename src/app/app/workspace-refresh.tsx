@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, type ReactNode } from "react";
-import { SWRConfig, useSWRConfig } from "swr";
+import { SWRConfig } from "swr";
 
 export const WORKSPACE_REFRESH_EVENT = "piercing-workspace-refresh";
 
@@ -34,21 +34,10 @@ export function WorkspaceRefreshProvider({ children }: { children: ReactNode }) 
 function RefreshCoordinator({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { mutate } = useSWRConfig();
   const view = pathname.split("/").filter(Boolean)[1] ?? "overview";
   const refresh = useCallback(() => {
-    const apiPrefix = view === "clients"
-      ? "/api/customers"
-      : view === "sales"
-        ? "/api/sales"
-        : view === "calendar"
-          ? "/api/appointments"
-          : null;
-    if (apiPrefix) {
-      void mutate((key) => typeof key === "string" && key.startsWith(apiPrefix));
-    }
     if (view === "overview" || view === "settings") router.refresh();
-  }, [mutate, router, view]);
+  }, [router, view]);
   const emitRefresh = useCallback(() => {
     window.dispatchEvent(new Event(WORKSPACE_REFRESH_EVENT));
   }, []);

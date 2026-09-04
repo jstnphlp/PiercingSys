@@ -7,6 +7,8 @@ export type ServerTimingLabel =
   | "auth.jwt.unknown"
   | "auth.session.total"
   | "auth.staffProfile"
+  | "api.customers.total"
+  | "api.sales.total"
   | "staff.calendar.appointments"
   | "staff.clients.page"
   | "staff.overview.bookings"

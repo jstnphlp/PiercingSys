@@ -5,6 +5,7 @@ import { validationError } from "@/lib/validation";
 import { mapSaleRow, saleDetailSelect } from "@/lib/data/staff";
 import { pageMeta, parsePageQuery, safeSearchTerm } from "@/lib/pagination";
 import { walkInCustomerFields } from "@/lib/walk-in-customer";
+import { measureServerTiming } from "@/lib/server-timing";
 
 const schema = z.object({
   customerId: z.string().uuid().nullable().optional(),
@@ -51,6 +52,7 @@ const schema = z.object({
 });
 
 export async function GET(request: Request) {
+  return measureServerTiming("api.sales.total", async () => {
   const session = await getStaffSession();
   if (!session) return Response.json({ error: { code: "UNAUTHORIZED", message: "Sign in is required." } }, { status: 401 });
   if (!hasRole(session.role, ["owner", "manager"])) return Response.json({ error: { code: "FORBIDDEN", message: "Sales are limited to management." } }, { status: 403 });
@@ -79,9 +81,11 @@ export async function GET(request: Request) {
     data: (data ?? []).map((row) => mapSaleRow(row as Record<string, unknown>)),
     page: pageMeta(page, pageSize, count ?? 0),
   });
+  });
 }
 
 export async function POST(request: Request) {
+  return measureServerTiming("api.sales.total", async () => {
   const session = await getStaffSession();
   if (!session) {
     return Response.json(
@@ -179,4 +183,5 @@ export async function POST(request: Request) {
     },
     { status: 201 },
   );
+  });
 }

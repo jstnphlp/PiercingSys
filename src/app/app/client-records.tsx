@@ -20,6 +20,13 @@ export function ClientRecords({ customers, initialPage: initialPageMeta, canCrea
   const [debouncedSearch, setDebouncedSearch] = useState(normalizeSearch(initialSearch));
   const [page, setPage] = useState(initialPage);
   const [serverDataValid, setServerDataValid] = useState(!normalizeSearch(initialSearch) && initialPage === 1);
+  const isInitialRequest = page === 1 && !debouncedSearch;
+  const useServerData = isInitialRequest && serverDataValid;
+  const key = useServerData ? null : `/api/customers?q=${encodeURIComponent(debouncedSearch)}&page=${page}&pageSize=25`;
+  const { data: apiResponse, error, isLoading, isValidating, mutate } = useSWR<{ data: CustomerRecord[]; page: PageMeta }>(key, {
+    keepPreviousData: true,
+    dedupingInterval: 5_000,
+  });
 
   useEffect(() => {
     const normalizedSearch = normalizeSearch(search);
@@ -32,10 +39,13 @@ export function ClientRecords({ customers, initialPage: initialPageMeta, canCrea
     return () => window.clearTimeout(timer);
   }, [debouncedSearch, search]);
   useEffect(() => {
-    function invalidateServerData() { setServerDataValid(false); }
-    window.addEventListener(WORKSPACE_REFRESH_EVENT, invalidateServerData);
-    return () => window.removeEventListener(WORKSPACE_REFRESH_EVENT, invalidateServerData);
-  }, []);
+    function refreshClients() {
+      if (key) void mutate();
+      else if (isInitialRequest) setServerDataValid(false);
+    }
+    window.addEventListener(WORKSPACE_REFRESH_EVENT, refreshClients);
+    return () => window.removeEventListener(WORKSPACE_REFRESH_EVENT, refreshClients);
+  }, [isInitialRequest, key, mutate]);
   useEffect(() => {
     const url = new URL(window.location.href);
     if (debouncedSearch) url.searchParams.set("q", debouncedSearch); else url.searchParams.delete("q");
@@ -43,12 +53,6 @@ export function ClientRecords({ customers, initialPage: initialPageMeta, canCrea
     window.history.replaceState(null, "", url);
   }, [debouncedSearch, page]);
 
-  const isInitialRequest = page === 1 && !debouncedSearch;
-  const useServerData = isInitialRequest && serverDataValid;
-  const key = useServerData ? null : `/api/customers?q=${encodeURIComponent(debouncedSearch)}&page=${page}&pageSize=25`;
-  const { data: apiResponse, error, isLoading, isValidating, mutate } = useSWR<{ data: CustomerRecord[]; page: PageMeta }>(key, {
-    keepPreviousData: true,
-  });
   const response = useServerData ? { data: customers, page: initialPageMeta } : apiResponse;
   const visibleCustomers = response?.data ?? [];
   const meta = response?.page;
