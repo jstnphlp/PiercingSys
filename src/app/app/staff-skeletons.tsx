@@ -108,11 +108,19 @@ export function StaffViewSkeleton({ view = "overview", label = "Loading workspac
   return <div className={featureView} aria-busy="true">
     <LoadingStatus label={label}/>
     {view === "overview" && <OverviewSkeleton/>}
-    {view === "calendar" && <><div className="flex gap-2 overflow-hidden rounded-[17px] border-2 border-hippy-ink bg-[#f1d39c] p-2.5">{Array.from({ length: 7 }, (_, index) => <Skeleton key={index} width={index > 2 ? 110 : 39} height={38}/>)}</div><section className={panel}><div className="overflow-x-auto"><CalendarGridSkeleton/></div></section></>}
+    {view === "calendar" && <><CalendarControlsSkeleton/><section className={panel}><div className="overflow-x-auto"><CalendarGridSkeleton/></div></section></>}
     {view === "clients" && <><div className="flex items-end gap-3 max-[640px]:flex-col"><span className="flex flex-1 flex-col gap-2 max-[640px]:w-full"><Skeleton width={78} height={9}/><Skeleton className="w-full" height={42}/></span><Skeleton className="max-[640px]:w-full" width={118} height={38}/></div><TableSkeleton/></>}
     {view === "sales" && <SalesSkeleton/>}
     {view === "reports" && <ReportsSkeleton/>}
     {view === "settings" && <SettingsSkeleton/>}
+  </div>;
+}
+
+function CalendarControlsSkeleton() {
+  return <div className="flex min-h-[58px] flex-wrap items-center gap-2 rounded-[17px] border-2 border-hippy-ink bg-[#f1d39c] p-2.5 max-[760px]:items-stretch">
+    <div className="flex gap-2 max-[760px]:w-full"><Skeleton width={39} height={38}/><Skeleton className="max-[760px]:flex-1" width={62} height={38}/><Skeleton width={39} height={38}/></div>
+    <div className="flex min-w-0 gap-2 max-[760px]:grid max-[760px]:w-full max-[760px]:grid-cols-2 max-[480px]:grid-cols-1"><Skeleton className="w-[145px] max-[760px]:w-full" height={38}/><Skeleton className="w-[145px] max-[760px]:w-full" height={38}/></div>
+    <div className="ml-auto flex gap-2 max-[760px]:ml-0 max-[760px]:w-full"><Skeleton width={110} height={38}/><Skeleton className="max-[760px]:flex-1" width={139} height={38}/></div>
   </div>;
 }
 

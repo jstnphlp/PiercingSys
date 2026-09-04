@@ -31,7 +31,7 @@ function DialogOverlay({
     <DialogPrimitive.Backdrop
       data-slot="dialog-overlay"
       className={cn(
-        "fixed inset-0 isolate z-50 bg-[#2d1812a6] duration-100 supports-backdrop-filter:backdrop-blur-[4px] data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
+        "fixed inset-0 isolate z-100 bg-[#2d181247] opacity-100 transition-opacity duration-200 ease-out supports-backdrop-filter:backdrop-blur-[1.5px] data-starting-style:opacity-0 data-ending-style:opacity-0 motion-reduce:transition-none",
         className
       )}
       {...props}
@@ -53,7 +53,7 @@ function DialogContent({
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          "fixed top-3 right-3 z-100 grid h-[min(740px,calc(100vh-24px))] w-[min(430px,calc(100vw-24px))] translate-x-0 gap-4 overflow-auto rounded-[22px_16px_22px_18px] border-2 border-hippy-ink bg-[#fff5df] text-sm text-hippy-ink opacity-100 shadow-[8px_8px_0_#3b2923] outline-none [scrollbar-color:#d5aa89_transparent] [scrollbar-width:thin] [transition:transform_250ms_cubic-bezier(.22,1,.36,1),opacity_180ms_ease-out] data-starting-style:translate-x-8 data-starting-style:opacity-0 data-ending-style:translate-x-8 data-ending-style:opacity-0 motion-reduce:transition-none max-[700px]:top-2.5 max-[700px]:right-2.5 max-[700px]:h-[calc(100vh-20px)] max-[700px]:w-[calc(100vw-20px)] max-[700px]:rounded-[18px]",
           className
         )}
         {...props}

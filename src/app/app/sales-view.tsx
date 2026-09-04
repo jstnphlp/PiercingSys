@@ -1,23 +1,17 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, CircleDollarSign, Clock3, LoaderCircle, ShoppingBag, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, CircleDollarSign, Clock3, LoaderCircle, ShoppingBag } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import useSWR from "swr";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { calculateBalance, formatPhp, type Service } from "@/lib/domain";
 import type { SaleRecord } from "@/lib/data/staff";
 import type { PageMeta } from "@/lib/pagination";
 import { formatPaymentMethods, formatSaleItems } from "@/lib/sales-display";
 import { DraftSaleActions, SaleAdjustment, SaleForm } from "./controls";
-import { dashButton, dashField, featureView, metricCard, metricGridThree, operationDialog, stateCard, statusClasses, tablePanel } from "./dashboard-styles";
+import { dashButton, dashField, featureView, metricCard, metricGridThree, stateCard, statusClasses, tablePanel } from "./dashboard-styles";
+import { SideDrawer } from "./side-drawer";
 
 type SalesResponse = { data: SaleRecord[]; page: PageMeta };
 
@@ -66,24 +60,22 @@ export function SalesView({ initialSales, services }: { initialSales: SaleRecord
 }
 
 function SaleDetailsDialog({ sale, onClose }: { sale: SaleRecord | null; onClose: () => void }) {
-  const netCents = sale ? sale.totalCents - sale.adjustmentCents : 0;
-  const balanceCents = sale ? calculateBalance(sale.totalCents, [sale.paidCents]) : 0;
-  return <Dialog open={Boolean(sale)} onOpenChange={(open) => { if (!open) onClose(); }}>
-    {sale && <DialogContent className={`${operationDialog} gap-0 p-0 ring-0 sm:max-w-[720px]`} showCloseButton={false}>
-      <header><div><DialogTitle>{sale.reference}</DialogTitle><DialogDescription>{formatDate(sale.createdAt)} · {sale.customerName}</DialogDescription></div><DialogClose aria-label="Close sale details"><X /></DialogClose></header>
+  if (!sale) return null;
+  const netCents = sale.totalCents - sale.adjustmentCents;
+  const balanceCents = calculateBalance(sale.totalCents, [sale.paidCents]);
+  return <SideDrawer title={sale.reference} detail={`${formatDate(sale.createdAt)} · ${sale.customerName}`} onClose={onClose}>{(close) =>
       <div className="flex flex-col gap-[15px] p-[21px] max-[700px]:p-4">
         <div className="flex items-center justify-between gap-3"><span className={statusClasses(sale.status)}>{sale.status.replace("_", " ")}</span><span className="text-[10px] font-extrabold text-studio-muted">{formatPaymentMethods(sale.methods)}</span></div>
         <dl className="m-0 grid grid-cols-4 gap-px overflow-hidden rounded-[14px] border-[1.5px] border-hippy-ink bg-hippy-ink max-[700px]:grid-cols-2 [&>div]:bg-[#fff9eb] [&>div]:p-3 [&_dt]:mb-[5px] [&_dt]:text-[8px] [&_dt]:font-black [&_dt]:tracking-[.8px] [&_dt]:text-[#a34d30] [&_dt]:uppercase [&_dd]:m-0 [&_dd]:text-[12px]/[1.55] [&_dd]:font-bold"><div><dt>Total</dt><dd>{formatPhp(sale.totalCents)}</dd></div><div><dt>Paid</dt><dd>{formatPhp(sale.paidCents)}</dd></div><div><dt>{sale.status === "draft" ? "Balance" : "Adjustments"}</dt><dd>{formatPhp(sale.status === "draft" ? balanceCents : sale.adjustmentCents)}</dd></div><div><dt>Net total</dt><dd>{formatPhp(netCents)}</dd></div></dl>
         <section><h3 className="mt-0 mb-2 font-display text-[17px] font-bold">Items</h3><ul className="m-0 flex list-none flex-col gap-2 p-0">{sale.items.map((item) => <li className="flex items-center justify-between gap-3 rounded-[10px] border border-dashed border-[#c88f6e] bg-[#fff9eb] px-3 py-2.5 text-[10px]" key={item.id}><strong>{item.description}</strong><span>{item.unitPriceCents === null ? "Pricing required" : formatPhp(item.unitPriceCents)}</span></li>)}</ul></section>
         <div className="border-t border-dashed border-[#c88f6e] pt-4">
           {sale.adjustmentCents > 0 && <p className="mt-0 text-[9px] text-studio-muted">{formatPhp(sale.adjustmentCents)} adjusted to date.</p>}
-          {sale.status === "completed" && <SaleAdjustment id={sale.id} remainingCents={sale.totalCents - sale.adjustmentCents} onSaved={onClose} />}
-          {sale.status === "draft" && <DraftSaleActions sale={sale} onSaved={onClose} />}
+          {sale.status === "completed" && <SaleAdjustment id={sale.id} remainingCents={sale.totalCents - sale.adjustmentCents} onSaved={close} />}
+          {sale.status === "draft" && <DraftSaleActions sale={sale} onSaved={close} />}
           {sale.status === "voided" && <p className="m-0 text-[10px] text-studio-muted">No further actions are available for a voided sale.</p>}
         </div>
       </div>
-    </DialogContent>}
-  </Dialog>;
+  }</SideDrawer>;
 }
 
 function Metric({ icon, label, value, note }: { icon: ReactNode; label: string; value: string; note: string }) {

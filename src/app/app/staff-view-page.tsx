@@ -21,12 +21,11 @@ import {
 } from "@/lib/data/staff";
 import { resolveReportPeriod, type ReportPeriod, type ReportPreset } from "@/lib/report-period";
 import {
-  InviteForm,
   ServiceAssignmentForm,
   ServiceForm,
   SettingsForm,
   StaffActions,
-  StationForm,
+  TeamStationForm,
 } from "./controls";
 import { CalendarWorkspace } from "./calendar-workspace";
 import { ClientRecords } from "./client-records";
@@ -301,8 +300,7 @@ function StudioSettings({
             detail="Owners manage invitations; managers configure operational availability."
           />
           <div className="flex flex-wrap items-center justify-start gap-2 px-[18px] py-3.5">
-            {role === "owner" && <InviteForm />}
-            <StationForm />
+            <TeamStationForm canInvite={role === "owner"} />
           </div>
           <div>
             {data.staff.map((person) => (

@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarDays, ChevronRight, Search, X } from "lucide-react";
+import { CalendarDays, Search } from "lucide-react";
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import type { BookingRecord } from "@/lib/data/staff";
@@ -12,6 +12,7 @@ import {
   statusClasses,
   statusNote,
 } from "./dashboard-styles";
+import { SideDrawer } from "./side-drawer";
 
 export function TodayAppointments({
   bookings,
@@ -104,11 +105,10 @@ function AppointmentList({
       <table className="w-full min-w-[640px] table-fixed border-collapse bg-[#fff9eb]">
         <colgroup>
           <col className="w-[11%]" />
-          <col className="w-[28%]" />
-          <col className="w-[21%]" />
-          <col className="w-[16%]" />
-          <col className="w-[16%]" />
-          <col className="w-[8%]" />
+          <col className="w-[31%]" />
+          <col className="w-[23%]" />
+          <col className="w-[17.5%]" />
+          <col className="w-[17.5%]" />
         </colgroup>
         <thead>
           <tr className="h-10 bg-[#f5ddba] text-left text-[8px] font-black tracking-[.6px] text-[#795346] uppercase">
@@ -117,7 +117,6 @@ function AppointmentList({
             <th className="px-2">Piercer</th>
             <th className="px-2">Appointment Status</th>
             <th className="px-2">Completion Status</th>
-            <th className="px-2 pr-3 text-right">Details</th>
           </tr>
         </thead>
         <tbody>
@@ -125,10 +124,19 @@ function AppointmentList({
             const statuses = displayStatuses(item.status);
             return (
               <tr
-                className={`min-h-[70px] border-b border-dashed border-[#dab08f] transition last:border-0 hover:bg-[#fff1cf] ${
+                className={`min-h-[70px] cursor-pointer border-b border-dashed border-[#dab08f] transition last:border-0 hover:bg-[#fff1cf] focus:bg-[#fff1cf] focus:outline-2 focus:-outline-offset-2 focus:outline-[#d66335] ${
                   selectedId === item.id ? "bg-[#fff1cf]" : ""
                 }`}
                 key={item.id}
+                tabIndex={0}
+                onClick={() => onSelect(item.id)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    onSelect(item.id);
+                  }
+                }}
+                aria-label={`Open appointment details for ${item.customer.name}`}
               >
                 <td className="px-3 py-[9px] pl-4 align-middle">
                   <span className="flex flex-col text-[10px] text-hippy-ink">
@@ -141,12 +149,7 @@ function AppointmentList({
                   </span>
                 </td>
                 <td className="px-2 py-[9px] align-middle">
-                  <button
-                    type="button"
-                    className="grid w-full cursor-pointer grid-cols-[33px_minmax(0,1fr)] items-center gap-2 border-0 bg-transparent p-0 text-left"
-                    onClick={() => onSelect(item.id)}
-                    aria-label={`Open appointment details for ${item.customer.name}`}
-                  >
+                  <span className="grid w-full grid-cols-[33px_minmax(0,1fr)] items-center gap-2 text-left">
                     <span className="grid size-[33px] place-items-center rounded-[50%_42%_50%_45%] border border-hippy-ink bg-[#e98956] text-[10px] font-extrabold text-[#522b1b]">
                       {initials(item.customer.name)}
                     </span>
@@ -159,7 +162,7 @@ function AppointmentList({
                         · {item.reference}
                       </small>
                     </span>
-                  </button>
+                  </span>
                 </td>
                 <td className="px-2 py-[9px] align-middle">
                   <span className="flex min-w-0 items-center gap-[7px] text-[9px] text-[#4a3730]">
@@ -191,16 +194,6 @@ function AppointmentList({
                     label={statuses.completionLabel}
                   />
                 </td>
-                <td className="px-2 py-[9px] pr-3 text-right align-middle">
-                  <button
-                    type="button"
-                    className="grid size-8 cursor-pointer place-items-center justify-self-end rounded-[9px] border border-hippy-ink bg-[#fff7e3] text-[#70402e] shadow-[1px_1px_0_#3b2923] transition hover:bg-[#f6d19c]"
-                    onClick={() => onSelect(item.id)}
-                    aria-label={`Open appointment details for ${item.customer.name}`}
-                  >
-                    <ChevronRight className="size-4" aria-hidden="true" />
-                  </button>
-                </td>
               </tr>
             );
           })}
@@ -223,42 +216,12 @@ function AppointmentDetails({
   const canManage = role !== "piercer";
 
   return (
-    <div
-      className="fixed inset-0 z-100 flex justify-end bg-[#2d181247] p-3 backdrop-blur-[1.5px]"
-      role="presentation"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
+    <SideDrawer
+      title={booking.customer.name}
+      detail={`${booking.reference} · ${booking.services.map((item) => item.name).join(" + ")}`}
+      onClose={onClose}
     >
-      <section
-        className="h-[min(740px,calc(100vh-24px))] w-[min(392px,calc(100vw-24px))] overflow-auto rounded-[22px_16px_22px_18px] border-2 border-hippy-ink bg-[#fff5df] shadow-[8px_8px_0_#3b2923] outline-none max-[700px]:h-[calc(100vh-20px)] max-[700px]:w-[calc(100vw-20px)] max-[700px]:rounded-[18px]"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="appointment-details-title"
-      >
-        <header className="sticky top-0 z-4 flex justify-between gap-4 border-b border-dashed border-[#c88f6e] bg-[#fff5df] px-[21px] py-[19px]">
-          <div className="min-w-0">
-            <h2
-              id="appointment-details-title"
-              className="m-0 truncate font-display text-[21px] leading-tight font-bold text-hippy-ink"
-            >
-              {booking.customer.name}
-            </h2>
-            <p className="mt-[5px] mb-0 truncate text-[11px] text-[#785d53]">
-              {booking.reference} ·{" "}
-              {booking.services.map((item) => item.name).join(" + ")}
-            </p>
-          </div>
-          <button
-            type="button"
-            className="grid size-[34px] shrink-0 cursor-pointer place-items-center rounded-[10px] border-[1.5px] border-hippy-ink bg-[#efc6a4]"
-            onClick={onClose}
-            aria-label="Close details"
-          >
-            <X className="size-4" />
-          </button>
-        </header>
-        <div className="flex flex-col gap-[15px] p-[21px] max-[700px]:p-4">
+      <div className="flex flex-col gap-[15px] p-[21px] max-[700px]:p-4">
           <dl className="m-0 grid grid-cols-2 gap-px overflow-hidden rounded-[14px] border-[1.5px] border-hippy-ink bg-hippy-ink max-[700px]:grid-cols-1 [&>div]:min-w-0 [&>div]:bg-[#fff9eb] [&>div]:p-3 [&_dt]:mb-[5px] [&_dt]:text-[8px] [&_dt]:font-black [&_dt]:tracking-[.8px] [&_dt]:text-[#a34d30] [&_dt]:uppercase [&_dd]:m-0 [&_dd]:text-[11px]/[1.55] [&_dd]:break-words">
             <Detail label="Contact">
               {booking.customer.email}
@@ -321,9 +284,8 @@ function AppointmentDetails({
               </p>
             )}
           </section>
-        </div>
-      </section>
-    </div>
+      </div>
+    </SideDrawer>
   );
 }
 

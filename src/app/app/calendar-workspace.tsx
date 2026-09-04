@@ -1,7 +1,7 @@
 "use client";
 
-import { Check, ChevronLeft, ChevronRight, Clock3, Plus, Search, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Check, ChevronLeft, ChevronRight, Clock3, Plus, Search } from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { combinedServiceDuration, manilaDate, manilaDateTime, manilaSchedulingEnd, shiftManilaDate, type BookingStatus, type Service, type StudioSettings } from "@/lib/domain";
 import type { AvailabilityRecord, StaffRecord } from "@/lib/data/staff";
 import { CustomerSelect } from "./customer-select";
@@ -9,10 +9,11 @@ import { appointmentDayBoundary } from "./appointment-time";
 import { WORKSPACE_REFRESH_EVENT } from "./workspace-refresh";
 import { calendarBodyHeight, calendarEndLabel, calendarEventStyle, calendarHeaderHeight, calendarHourLabels, calendarMinuteTop, isCalendarMinuteVisible } from "./calendar-geometry";
 import { layoutOverlappingAppointments } from "./calendar-layout";
-import { CalendarGridSkeleton, DayListSkeleton } from "./staff-skeletons";
+import { CalendarGridSkeleton, DayListSkeleton, StaffViewSkeleton } from "./staff-skeletons";
 import { cn } from "@/lib/utils";
 import { StudioSelect } from "@/components/ui/studio-select";
-import { dashButton, dashError, dashField, featureView, operationBackdrop, operationDialog, operationForm, operationGrid, panel, statusClasses } from "./dashboard-styles";
+import { dashButton, dashError, dashField, featureView, operationForm, operationGrid, panel, statusClasses } from "./dashboard-styles";
+import { SideDrawer } from "./side-drawer";
 
 type Station = { id: string; name: string };
 type RawAppointment = {
@@ -45,6 +46,7 @@ export function CalendarWorkspace(props: Props) {
   const [stationId, setStationId] = useState("");
   const [appointments, setAppointments] = useState<RawAppointment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [error, setError] = useState("");
   const [newOpen, setNewOpen] = useState(false);
   const [selected, setSelected] = useState<RawAppointment | null>(null);
@@ -63,7 +65,7 @@ export function CalendarWorkspace(props: Props) {
       if (!response.ok) throw new Error(body.error?.message ?? "Calendar could not be loaded.");
       setAppointments(body.data ?? []);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Calendar could not be loaded."); }
-    finally { setLoading(false); }
+    finally { setLoading(false); setHasLoaded(true); }
   }
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 0);
@@ -79,18 +81,26 @@ export function CalendarWorkspace(props: Props) {
     return () => window.clearInterval(timer);
   }, []);
 
+  if (!hasLoaded) return <StaffViewSkeleton view="calendar" label="Loading calendar" />;
+
   return <div className={`${featureView} relative`}>
-    <div className="mb-[15px] flex min-h-[58px] flex-wrap items-center gap-2 overflow-x-auto rounded-[17px_13px_18px_14px] border-2 border-hippy-ink bg-[#f1d39c] px-2.5 py-[9px] shadow-[3px_3px_0_#3b2923] max-[760px]:flex-nowrap" aria-label="Calendar controls">
-      <button type="button" className={`${dashButton({ variant: "secondary" })} min-h-[38px] w-[39px] p-0 text-[10px] shadow-[1px_2px_0_#3b2923]`} aria-label={`Previous ${mode}`} onClick={() => setAnchor(shiftManilaDate(anchor, mode === "week" ? -7 : -1))}><ChevronLeft className="size-[18px] shrink-0 stroke-[#3b2923] stroke-[2.75]" aria-hidden="true"/></button>
-      <button className={`${dashButton({ variant: "secondary" })} min-h-[38px] text-[10px] shadow-[1px_2px_0_#3b2923]`} onClick={() => setAnchor(manilaDate(new Date()))}>Today</button>
-      <button type="button" className={`${dashButton({ variant: "secondary" })} min-h-[38px] w-[39px] p-0 text-[10px] shadow-[1px_2px_0_#3b2923]`} aria-label={`Next ${mode}`} onClick={() => setAnchor(shiftManilaDate(anchor, mode === "week" ? 7 : 1))}><ChevronRight className="size-[18px] shrink-0 stroke-[#3b2923] stroke-[2.75]" aria-hidden="true"/></button>
-      <StudioSelect ariaLabel="Filter by piercer" value={piercerId} disabled={props.role === "piercer"} onValueChange={setPiercerId} triggerClassName="h-[38px] min-h-[38px] w-auto min-w-[145px] shadow-[1px_2px_0_#3b2923]" options={[{ value: "", label: "All piercers" }, ...props.staff.filter(isPiercer).map((person) => ({ value: person.id, label: person.displayName }))]} />
-      <StudioSelect ariaLabel="Filter by station" value={stationId} onValueChange={setStationId} triggerClassName="h-[38px] min-h-[38px] w-auto min-w-[145px] shadow-[1px_2px_0_#3b2923]" options={[{ value: "", label: "All stations" }, ...props.stations.map((station) => ({ value: station.id, label: station.name }))]} />
-      <div className="ml-auto flex shrink-0 rounded-[12px_9px_13px_10px] border-[1.5px] border-hippy-ink bg-[#d8aa82] p-[3px] shadow-[1px_2px_0_#3b2923] max-[760px]:ml-0" aria-label="Calendar view">
+    <div className="mb-[15px] flex min-h-[58px] flex-wrap items-center gap-2 rounded-[17px_13px_18px_14px] border-2 border-hippy-ink bg-[#f1d39c] px-2.5 py-[9px] shadow-[3px_3px_0_#3b2923] max-[760px]:items-stretch" aria-label="Calendar controls">
+      <div className="flex shrink-0 gap-2 max-[760px]:w-full">
+        <button type="button" className={`${dashButton({ variant: "secondary" })} min-h-[38px] w-[39px] p-0 text-[10px] shadow-[1px_2px_0_#3b2923]`} aria-label={`Previous ${mode}`} onClick={() => setAnchor(shiftManilaDate(anchor, mode === "week" ? -7 : -1))}><ChevronLeft className="size-[18px] shrink-0 stroke-[#3b2923] stroke-[2.75]" aria-hidden="true"/></button>
+        <button className={`${dashButton({ variant: "secondary" })} min-h-[38px] text-[10px] shadow-[1px_2px_0_#3b2923] max-[760px]:flex-1`} onClick={() => setAnchor(manilaDate(new Date()))}>Today</button>
+        <button type="button" className={`${dashButton({ variant: "secondary" })} min-h-[38px] w-[39px] p-0 text-[10px] shadow-[1px_2px_0_#3b2923]`} aria-label={`Next ${mode}`} onClick={() => setAnchor(shiftManilaDate(anchor, mode === "week" ? 7 : 1))}><ChevronRight className="size-[18px] shrink-0 stroke-[#3b2923] stroke-[2.75]" aria-hidden="true"/></button>
+      </div>
+      <div className="flex min-w-0 gap-2 max-[760px]:grid max-[760px]:w-full max-[760px]:grid-cols-2 max-[480px]:grid-cols-1">
+        <StudioSelect ariaLabel="Filter by piercer" value={piercerId} disabled={props.role === "piercer"} onValueChange={setPiercerId} triggerClassName="h-[38px] min-h-[38px] w-full min-w-[145px] shadow-[1px_2px_0_#3b2923] max-[480px]:min-w-0" options={[{ value: "", label: "All piercers" }, ...props.staff.filter(isPiercer).map((person) => ({ value: person.id, label: person.displayName }))]} />
+        <StudioSelect ariaLabel="Filter by station" value={stationId} onValueChange={setStationId} triggerClassName="h-[38px] min-h-[38px] w-full min-w-[145px] shadow-[1px_2px_0_#3b2923] max-[480px]:min-w-0" options={[{ value: "", label: "All stations" }, ...props.stations.map((station) => ({ value: station.id, label: station.name }))]} />
+      </div>
+      <div className="ml-auto flex shrink-0 gap-2 max-[760px]:ml-0 max-[760px]:w-full">
+      <div className="flex shrink-0 rounded-[12px_9px_13px_10px] border-[1.5px] border-hippy-ink bg-[#d8aa82] p-[3px] shadow-[1px_2px_0_#3b2923]" aria-label="Calendar view">
         <button className={cn("cursor-pointer rounded-lg border-0 bg-transparent px-[13px] py-[7px] font-extrabold text-[#654a41]", mode === "week" && "bg-[#fff3d0] text-[#b74827] shadow-[inset_0_0_0_1px_#3b2923]")} aria-pressed={mode === "week"} onClick={() => setMode("week")}>Week</button>
         <button className={cn("cursor-pointer rounded-lg border-0 bg-transparent px-[13px] py-[7px] font-extrabold text-[#654a41]", mode === "day" && "bg-[#fff3d0] text-[#b74827] shadow-[inset_0_0_0_1px_#3b2923]")} aria-pressed={mode === "day"} onClick={() => setMode("day")}>Day</button>
       </div>
-      <button className={`${dashButton({ variant: "primary" })} min-h-[38px] text-[10px]`} onClick={() => setNewOpen(true)}><Plus size={16}/> New appointment</button>
+      <button className={`${dashButton({ variant: "primary" })} min-h-[38px] text-[10px] max-[760px]:flex-1`} onClick={() => setNewOpen(true)}><Plus size={16}/> New appointment</button>
+      </div>
     </div>
     {error && <p className={dashError} role="alert">{error}</p>}
     <section className={`${panel} relative border-2 shadow-[5px_5px_0_#3b2923]`} aria-busy={loading}>
@@ -98,8 +108,12 @@ export function CalendarWorkspace(props: Props) {
         : mode === "week" ? <WeekCalendar days={days} anchor={anchor} appointments={visibleAppointments} now={now} onSelectDate={(date) => { setAnchor(date); setMode("day"); }} onSelectAppointment={setSelected}/>
           : <DayCalendar date={anchor} appointments={visibleAppointments} onSelectAppointment={setSelected}/>}
     </section>
-    {newOpen && <AppointmentFormDialog {...props} initialDate={anchor} onClose={() => setNewOpen(false)} onSaved={async () => { setNewOpen(false); await load(); }}/>} 
-    {selected && <AppointmentDialog appointment={selected} {...props} onClose={() => setSelected(null)} onSaved={async () => { setSelected(null); await load(); }}/>} 
+    {newOpen && (
+      <AppointmentFormDialog {...props} initialDate={anchor} onClose={() => setNewOpen(false)} onSaved={() => load()}/>
+    )}
+    {selected && (
+      <AppointmentDialog appointment={selected} {...props} onClose={() => setSelected(null)} onSaved={() => load()}/>
+    )}
   </div>;
 }
 
@@ -171,7 +185,7 @@ function DayCalendar({ date, appointments, onSelectAppointment }: { date: string
   </div>;
 }
 
-function AppointmentFormDialog(props: Props & { initialDate: string; onClose: () => void; onSaved: () => void }) {
+function AppointmentFormDialog(props: Props & { initialDate: string; onClose: () => void; onSaved: () => void | Promise<void> }) {
   const activeServices = props.services.filter((service) => service.isActive);
   const [serviceIds, setServiceIds] = useState<string[]>([]);
   const [serviceSearch, setServiceSearch] = useState("");
@@ -192,7 +206,7 @@ function AppointmentFormDialog(props: Props & { initialDate: string; onClose: ()
     serviceIds.every((serviceId) => props.assignments.some((item) => item.serviceId === serviceId && item.staffId === person.id)));
   const effectivePiercerId = eligible.some((person) => person.id === piercerId)
     ? piercerId : props.role === "piercer" ? props.userId : "";
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
+  async function submit(event: React.FormEvent<HTMLFormElement>, close: () => void) {
     event.preventDefault(); setBusy(true); setError(""); const form = new FormData(event.currentTarget);
     const payload = {
       serviceIds, startsAt: `${date}T${time}:00+08:00`, piercerId: effectivePiercerId,
@@ -203,7 +217,8 @@ function AppointmentFormDialog(props: Props & { initialDate: string; onClose: ()
     const response = await fetch("/api/appointments", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
     const body = await response.json(); setBusy(false);
     if (!response.ok) { setError(body.error?.message ?? "Appointment could not be created."); return; }
-    props.onSaved();
+    await props.onSaved();
+    close();
   }
   const chosenPiercer = props.staff.find((person) => person.id === effectivePiercerId);
   const chosenStation = props.stations.find((station) => station.id === stationId);
@@ -233,8 +248,8 @@ function AppointmentFormDialog(props: Props & { initialDate: string; onClose: ()
     piercerScheduleIssue,
   ].filter(Boolean) as string[];
   const readinessMissing = error ? [...missing, "Resolve the issue above"] : missing;
-  return <Dialog title="New appointment" detail="Studio-created bookings ignore public lead time and horizon limits." onClose={props.onClose}>
-    <form className="grid grid-cols-[minmax(0,1fr)_320px] max-[900px]:grid-cols-1" onSubmit={submit}>
+  return <Dialog title="New appointment" detail="Studio-created bookings ignore public lead time and horizon limits." onClose={props.onClose}>{(close) =>
+    <form className="grid grid-cols-1" onSubmit={(event) => void submit(event, close)}>
       <div className="flex flex-col gap-4 p-[21px] max-[700px]:p-4">
         <section className="flex flex-col gap-2.5">
           <SectionHead index="1" title="Services" meta={`${serviceIds.length} selected · ${duration} min`}/>
@@ -269,7 +284,7 @@ function AppointmentFormDialog(props: Props & { initialDate: string; onClose: ()
           {error && <p className={dashError} role="alert">{error}</p>}
         </section>
       </div>
-      <aside className="sticky top-[74px] m-0 flex h-full min-h-full self-stretch flex-col border-l border-dashed border-[#bb7f5d] bg-[#f6dcae] p-[17px] max-[900px]:static max-[900px]:border-t max-[900px]:border-l-0">
+      <aside className="m-0 flex min-h-[420px] flex-col border-t border-dashed border-[#bb7f5d] bg-[#f6dcae] p-[17px]">
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[18px_13px_19px_14px] border-2 border-hippy-ink bg-[#fff8e8] shadow-[4px_4px_0_#3b2923]">
           <header className="border-b border-dashed border-[#c98965] bg-[#fff1cf] p-[15px]"><strong className="block font-display text-[18px] font-[760] text-hippy-ink">Appointment Summary</strong><small className="mt-1 block text-[10px] text-[#765c52]">Live review before creation</small></header>
           <dl className="m-0 grid min-h-0 flex-1 content-start gap-3 overflow-auto p-[15px] text-[11px] [scrollbar-color:#d5aa89_transparent] [scrollbar-width:thin] [&_dt]:mb-1 [&_dt]:text-[8px] [&_dt]:font-black [&_dt]:tracking-[.8px] [&_dt]:text-[#a34d30] [&_dt]:uppercase [&_dd]:m-0 [&_dd]:leading-[1.45]">{summaryRow("Services", selectedServices.length ? <span className="flex flex-wrap gap-1.5">{selectedServices.map((service) => <span className="rounded-[10px_8px_11px_9px] border-[1.5px] border-hippy-ink bg-[#f0c66e] px-2 py-1.5 font-black shadow-[1px_1px_0_#3b2923]" key={service.id}>{service.name}</span>)}</span> : <span className="text-[#82675d] italic">Not selected</span>)}
@@ -281,11 +296,11 @@ function AppointmentFormDialog(props: Props & { initialDate: string; onClose: ()
             {summaryRow("Ends", endsAt ? <span>{formatShortDate(manilaDate(endsAt))} · {formatTime(endsAt.toISOString())}{boundary?.endsAtMidnight && <small className="mt-1 block font-bold text-[#315342]">Valid midnight endpoint</small>}{boundary?.endsPastMidnight && <small className="mt-1 block font-bold text-[#a33e30]">Crosses midnight — choose an earlier start</small>}</span> : <span className="text-[#82675d] italic">Select services and a start time</span>)}
             {summaryRow("Notes", notes.trim() || <span className="text-[#82675d] italic">No notes</span>)}</dl>
           <div className={cn("mx-[15px] mb-[14px] rounded-[14px_10px_15px_11px] border-[1.5px] border-hippy-ink bg-[#fff5df] p-3 text-[10px] leading-[1.55]", !readinessMissing.length && "bg-[#d8e5cf] text-[#315342]")}><strong className="block text-[12px]">{readinessMissing.length ? "Still needed:" : "Ready to create"}</strong>{readinessMissing.length ? <ul className="my-1.5 pl-5">{readinessMissing.map((item) => <li key={item}>{item}</li>)}</ul> : <p className="mt-1">Server validation still checks qualifications, hours, availability, and conflicts.</p>}</div>
-          <footer className="flex shrink-0 flex-wrap justify-end gap-[9px] border-t border-dashed border-[#c98965] bg-[#fff1cf] p-[15px]"><button type="button" className={dashButton({ variant: "secondary" })} onClick={props.onClose}>Cancel</button><button className={dashButton({ variant: "primary" })} disabled={busy || Boolean(readinessMissing.length)}>{busy ? "Creating…" : "Create appointment"}</button></footer>
+          <footer className="flex shrink-0 flex-wrap justify-end gap-[9px] border-t border-dashed border-[#c98965] bg-[#fff1cf] p-[15px]"><button type="button" className={dashButton({ variant: "secondary" })} onClick={close}>Cancel</button><button className={dashButton({ variant: "primary" })} disabled={busy || Boolean(readinessMissing.length)}>{busy ? "Creating…" : "Create appointment"}</button></footer>
         </div>
       </aside>
     </form>
-  </Dialog>;
+  }</Dialog>;
 }
 
 function SectionHead({ index, title, meta }: { index: string; title: string; meta?: string }) {
@@ -306,14 +321,14 @@ function cleanClientLabel(value: string) {
   return value.replace(/\s+·\s+.+$/, "");
 }
 
-function AppointmentDialog(props: Props & { appointment: RawAppointment; onClose: () => void; onSaved: () => void }) {
+function AppointmentDialog(props: Props & { appointment: RawAppointment; onClose: () => void; onSaved: () => void | Promise<void> }) {
   const item = props.appointment; const [reschedule, setReschedule] = useState(false); const [busy, setBusy] = useState(false); const [error, setError] = useState("");
   const services = item.booking_services.sort(byPosition); const customer = one(item.customers)!; const piercer = one(item.staff_profiles); const station = one(item.stations); const sale = one(item.sales);
   const eligible = props.staff.filter((person) => isPiercer(person) && person.active && services.every((service) => props.assignments.some((assignment) => assignment.serviceId === service.service_id && assignment.staffId === person.id)));
-  async function mutate(payload: Record<string, unknown>) { setBusy(true); setError(""); const response = await fetch(`/api/appointments/${item.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) }); const body = await response.json(); setBusy(false); if (!response.ok) { setError(body.error?.message ?? "Appointment could not be updated."); return; } props.onSaved(); }
-  async function submit(event: React.FormEvent<HTMLFormElement>) { event.preventDefault(); const form = new FormData(event.currentTarget); await mutate({ startsAt: `${form.get("date")}T${form.get("time")}:00+08:00`, piercerId: props.role === "piercer" ? item.assigned_piercer_id : form.get("piercerId"), stationId: form.get("stationId") || null }); }
-  return <Dialog title={reschedule ? "Reschedule appointment" : `${customer.first_name} ${customer.last_name}`} detail={`${item.reference} · ${item.status.replace("_", " ")}`} onClose={props.onClose}>
-    {reschedule ? <form className={operationForm} onSubmit={submit}>
+  async function mutate(payload: Record<string, unknown>) { setBusy(true); setError(""); const response = await fetch(`/api/appointments/${item.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) }); const body = await response.json(); setBusy(false); if (!response.ok) { setError(body.error?.message ?? "Appointment could not be updated."); return false; } await props.onSaved(); return true; }
+  async function submit(event: React.FormEvent<HTMLFormElement>, close: () => void) { event.preventDefault(); const form = new FormData(event.currentTarget); if (await mutate({ startsAt: `${form.get("date")}T${form.get("time")}:00+08:00`, piercerId: props.role === "piercer" ? item.assigned_piercer_id : form.get("piercerId"), stationId: form.get("stationId") || null })) close(); }
+  return <Dialog title={reschedule ? "Reschedule appointment" : `${customer.first_name} ${customer.last_name}`} detail={`${item.reference} · ${item.status.replace("_", " ")}`} onClose={props.onClose}>{(close) => (
+    reschedule ? <form className={operationForm} onSubmit={(event) => void submit(event, close)}>
       <p className="m-0 flex items-center gap-[7px] rounded-[11px] border border-dashed border-[#ba7652] bg-[#f8dcae] px-3 py-2.5 text-[11px] text-[#60463c]">The combined {services.reduce((sum, service) => sum + service.duration_minutes, 0)}-minute duration, studio hours, closures, qualifications, availability, and overlaps will be checked.</p>
       <div className={operationGrid}><label className={dashField}>Date<input name="date" type="date" defaultValue={manilaDate(item.starts_at)} required/></label><label className={dashField}>Manila time<input name="time" type="time" defaultValue={manilaTimeValue(item.starts_at)} required/></label>
         <label className={dashField}>Piercer<StudioSelect name="piercerId" defaultValue={item.assigned_piercer_id} disabled={props.role === "piercer"} ariaLabel="Piercer" options={eligible.map((person) => ({ value: person.id, label: person.displayName }))} /></label><label className={dashField}>Station<StudioSelect name="stationId" defaultValue={item.station_id ?? ""} ariaLabel="Station" options={[{ value: "", label: "No station" }, ...props.stations.map((entry) => ({ value: entry.id, label: entry.name }))]} /></label></div>
@@ -322,24 +337,13 @@ function AppointmentDialog(props: Props & { appointment: RawAppointment; onClose
       <div className="flex flex-wrap gap-[7px] [&>span]:rounded-xl [&>span]:border-[1.5px] [&>span]:border-hippy-ink [&>span]:bg-[#f0c66e] [&>span]:px-[11px] [&>span]:py-2 [&>span]:text-[11px] [&>span]:font-black [&_small]:mt-[3px] [&_small]:block [&_small]:font-medium">{services.map((service) => <span key={service.id}>{service.name}<small>{service.duration_minutes} minutes</small></span>)}</div>
       <dl className="m-0 grid grid-cols-2 gap-px overflow-hidden rounded-[14px] border-[1.5px] border-hippy-ink bg-hippy-ink max-[700px]:grid-cols-1 [&>div]:bg-[#fff9eb] [&>div]:p-3 [&_dt]:mb-[5px] [&_dt]:text-[8px] [&_dt]:font-black [&_dt]:tracking-[.8px] [&_dt]:text-[#a34d30] [&_dt]:uppercase [&_dd]:m-0 [&_dd]:text-[11px]/[1.55]"><div><dt>When</dt><dd>{formatLongDate(manilaDate(item.starts_at))}<br/>{formatTime(item.starts_at)}–{formatTime(item.ends_at)}</dd></div><div><dt>Piercer</dt><dd>{piercer?.display_name ?? "Unassigned"}</dd></div><div><dt>Station</dt><dd>{station?.name ?? "No station"}</dd></div><div><dt>Linked sale</dt><dd>{sale?.status ?? "Not created"}</dd></div><div><dt>Contact</dt><dd>{customer.email}<br/>{customer.phone}</dd></div><div><dt>Notes</dt><dd>{item.notes || "No notes"}</dd></div></dl>
       {error && <p className={dashError} role="alert">{error}</p>}
-      <footer><button className={dashButton({ variant: "secondary" })} onClick={() => setReschedule(true)}>Reschedule</button>{item.status === "confirmed" && <><button className={dashButton({ variant: "secondary" })} disabled={busy} onClick={() => void mutate({ status: "no_show" })}>No-show</button><button className={dashButton({ variant: "primary" })} disabled={busy} onClick={() => void mutate({ status: "completed" })}>Complete & create sale</button><button className={`${dashButton({ variant: "primary" })} bg-[#b94735]`} disabled={busy} onClick={() => void mutate({ status: "cancelled" })}>Cancel</button></>}</footer>
-    </div>}
-  </Dialog>;
+      <footer><button className={dashButton({ variant: "secondary" })} onClick={() => setReschedule(true)}>Reschedule</button>{item.status === "confirmed" && <><button className={dashButton({ variant: "secondary" })} disabled={busy} onClick={async () => { if (await mutate({ status: "no_show" })) close(); }}>No-show</button><button className={dashButton({ variant: "primary" })} disabled={busy} onClick={async () => { if (await mutate({ status: "completed" })) close(); }}>Complete & create sale</button><button className={`${dashButton({ variant: "primary" })} bg-[#b94735]`} disabled={busy} onClick={async () => { if (await mutate({ status: "cancelled" })) close(); }}>Cancel</button></>}</footer>
+    </div>
+  )}</Dialog>;
 }
 
-export function Dialog({ title, detail, onClose, children }: { title: string; detail: string; onClose: () => void; children: React.ReactNode }) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null; const dialog = ref.current; dialog?.focus();
-    function keydown(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
-      if (event.key === "Tab" && dialog) { const focusable = [...dialog.querySelectorAll<HTMLElement>('button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[href]')]; if (!focusable.length) return; const first = focusable[0], last = focusable.at(-1)!; if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); } else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); } }
-    }
-    document.addEventListener("keydown", keydown); return () => { document.removeEventListener("keydown", keydown); previous?.focus(); };
-  }, [onClose]);
-  return <div className={operationBackdrop} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><div className={operationDialog} role="dialog" aria-modal="true" aria-labelledby="operation-dialog-title" tabIndex={-1} ref={ref}>
-    <header><div><h2 id="operation-dialog-title">{title}</h2><p>{detail}</p></div><button aria-label="Close dialog" onClick={onClose}><X/></button></header>{children}
-  </div></div>;
+export function Dialog({ title, detail, onClose, children }: { title: string; detail: string; onClose: () => void; children: ReactNode | ((close: () => void) => ReactNode) }) {
+  return <SideDrawer title={title} detail={detail} onClose={onClose}>{children}</SideDrawer>;
 }
 
 function one<T>(value: T | T[] | null) { return Array.isArray(value) ? value[0] : value; }

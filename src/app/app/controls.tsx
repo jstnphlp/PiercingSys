@@ -1,7 +1,7 @@
 "use client";
 
-import { Check, LoaderCircle, Plus, UserPlus, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Check, LoaderCircle, Plus, X } from "lucide-react";
+import { useState } from "react";
 import {
   Dialog,
   DialogClose,
@@ -24,6 +24,7 @@ import type { SaleRecord, StaffRecord } from "@/lib/data/staff";
 import { CustomerSelect } from "./customer-select";
 import { requestWorkspaceRefresh } from "./workspace-refresh";
 import { dashButton, dashError, dashField, inlineForm, operationDialog, operationForm, operationGrid, panelHead, settingSection, settingsListRow } from "./dashboard-styles";
+import { SideDrawer } from "./side-drawer";
 
 function useMutation() {
   const [busy, setBusy] = useState(false);
@@ -68,11 +69,6 @@ export function BookingActions({
 }) {
   const mutation = useMutation();
   const [rescheduling, setRescheduling] = useState(false);
-  useEffect(() => {
-    if (!rescheduling) return;
-    function close(event: KeyboardEvent) { if (event.key === "Escape") setRescheduling(false); }
-    document.addEventListener("keydown", close); return () => document.removeEventListener("keydown", close);
-  }, [rescheduling]);
   async function change(next: BookingStatus) {
     if (
       await mutation.run(`/api/appointments/${id}`, {
@@ -83,7 +79,7 @@ export function BookingActions({
     )
       requestWorkspaceRefresh();
   }
-  async function reschedule(event: React.FormEvent<HTMLFormElement>) {
+  async function reschedule(event: React.FormEvent<HTMLFormElement>, close: () => void) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const startsAt = `${form.get("date")}T${form.get("time")}:00+08:00`;
@@ -93,8 +89,10 @@ export function BookingActions({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ startsAt }),
       })
-    )
+    ) {
       requestWorkspaceRefresh();
+      close();
+    }
   }
   return (
     <div className="relative flex flex-wrap gap-1 [&>button]:cursor-pointer [&>button]:rounded-[7px] [&>button]:border [&>button]:border-hippy-ink [&>button]:bg-[#fff7e3] [&>button]:px-[7px] [&>button]:py-[5px] [&>button]:text-[8px] [&>button]:font-extrabold [&>button]:text-[#70402e] [&>button]:shadow-[1px_1px_0_#3b2923] [&>button:hover]:bg-[#f6d19c] [&>small]:absolute [&>small]:top-full [&>small]:right-0 [&>small]:w-[150px] [&>small]:text-[7px] [&>small]:text-danger">
@@ -139,16 +137,16 @@ export function BookingActions({
         </>
       )}
       {rescheduling && (
-        <div className="fixed inset-0 z-90" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setRescheduling(false); }}>
-        <form className="absolute top-[calc(100%+6px)] right-0 z-91 grid w-[220px] grid-cols-2 gap-1.5 rounded-[10px] border-2 border-hippy-ink bg-[#fff4dc] p-2.5 shadow-[5px_5px_0_#3b2923] [&>strong]:col-span-2 [&>strong]:text-[9px] [&>input]:h-[31px] [&>input]:min-w-0 [&>input]:rounded-md [&>input]:border [&>input]:border-studio-line [&>input]:p-1 [&>input]:text-[8px]" role="dialog" aria-modal="true" aria-label="Reschedule appointment" onSubmit={reschedule}>
-          <strong>New Manila time</strong>
-          <input name="date" aria-label="New date" type="date" defaultValue={manilaDateValue(startsAt)} required />
-          <input name="time" aria-label="New time" type="time" defaultValue={manilaTimeValue(startsAt)} required />
-          <button>Save</button>
-          <button type="button" onClick={() => setRescheduling(false)}>
-            Close
-          </button>
-        </form></div>
+        <SideDrawer title="Reschedule appointment" detail="Choose a new date and Manila time." onClose={() => setRescheduling(false)} busy={mutation.busy}>{(close) =>
+          <form className={operationForm} onSubmit={(event) => void reschedule(event, close)}>
+            <div className={operationGrid}>
+              <label className={dashField}>New date<input name="date" type="date" defaultValue={manilaDateValue(startsAt)} required /></label>
+              <label className={dashField}>New Manila time<input name="time" type="time" defaultValue={manilaTimeValue(startsAt)} required /></label>
+            </div>
+            {mutation.error && <p className={dashError} role="alert">{mutation.error}</p>}
+            <footer><button type="button" className={dashButton({ variant: "secondary" })} onClick={close}>Cancel</button><button className={dashButton({ variant: "primary" })} disabled={mutation.busy}>{mutation.busy ? "Saving…" : "Save schedule"}</button></footer>
+          </form>
+        }</SideDrawer>
       )}
       {mutation.error && <small role="alert">{mutation.error}</small>}
     </div>
@@ -344,7 +342,7 @@ export function ServiceForm({ staff }: { staff: StaffRecord[] }) {
       <DialogTrigger className={`${dashButton({ variant: "secondary" })} min-h-[34px] text-[9px]`}>
         <Plus size={15} /> Add service
       </DialogTrigger>
-      <DialogContent className={`${operationDialog} gap-0 p-0 ring-0 sm:max-w-[720px]`} showCloseButton={false}>
+      <DialogContent className={`${operationDialog} gap-0 p-0 ring-0`} showCloseButton={false}>
         <header><div><DialogTitle>Add service</DialogTitle><DialogDescription>Create a service and assign qualified staff.</DialogDescription></div><DialogClose aria-label="Close add service form" disabled={mutation.busy}><X /></DialogClose></header>
         <form className={operationForm} onSubmit={submit}>
           <div className={operationGrid}>
@@ -447,7 +445,7 @@ export function ServiceAssignmentForm({
       >
         Manage service assignments
       </DialogTrigger>
-      <DialogContent className={`${operationDialog} gap-0 p-0 ring-0 sm:max-w-[620px]`} showCloseButton={false}>
+      <DialogContent className={`${operationDialog} gap-0 p-0 ring-0`} showCloseButton={false}>
         <header><div><DialogTitle>Manage service assignments</DialogTitle><DialogDescription>Choose which piercers can perform each service.</DialogDescription></div><DialogClose aria-label="Close service assignments" disabled={mutation.busy}><X /></DialogClose></header>
         <form className={operationForm} onSubmit={submit}>
           <div className={operationGrid}>
@@ -565,13 +563,15 @@ export function AvailabilityForm({ staff }: { staff: StaffRecord[] }) {
   );
 }
 
-export function StationForm() {
-  const mutation = useMutation();
+export function TeamStationForm({ canInvite }: { canInvite: boolean }) {
+  const stationMutation = useMutation();
+  const inviteMutation = useMutation();
   const [open, setOpen] = useState(false);
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
+  const busy = stationMutation.busy || inviteMutation.busy;
+  async function submitStation(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    const ok = await mutation.run("/api/stations", {
+    const ok = await stationMutation.run("/api/stations", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ name: String(form.get("name")) }),
@@ -581,43 +581,10 @@ export function StationForm() {
       requestWorkspaceRefresh();
     }
   }
-  return (
-    <Dialog open={open} onOpenChange={(nextOpen) => {
-      if (!mutation.busy || nextOpen) {
-        if (nextOpen) mutation.reset();
-        setOpen(nextOpen);
-      }
-    }} disablePointerDismissal={mutation.busy}>
-      <DialogTrigger className={`${dashButton({ variant: "secondary" })} min-h-[34px] text-[9px]`}>
-        <Plus size={15} /> Add station
-      </DialogTrigger>
-      <DialogContent className={`${operationDialog} gap-0 p-0 ring-0 sm:max-w-[480px]`} showCloseButton={false}>
-        <header><div><DialogTitle>Add station</DialogTitle><DialogDescription>Create another station for appointment scheduling.</DialogDescription></div><DialogClose aria-label="Close add station form" disabled={mutation.busy}><X /></DialogClose></header>
-        <form className={operationForm} onSubmit={submit}>
-          <div className={operationGrid}>
-            <label className={`${dashField} col-span-full`}>
-              Station name
-              <input name="name" required />
-            </label>
-          </div>
-          {mutation.error && <p className={dashError} role="alert">{mutation.error}</p>}
-          <footer>
-            <DialogClose className={dashButton({ variant: "secondary" })} disabled={mutation.busy}>Cancel</DialogClose>
-            <button className={dashButton({ variant: "primary" })} disabled={mutation.busy}>{mutation.busy ? "Adding…" : "Add station"}</button>
-          </footer>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-export function InviteForm() {
-  const mutation = useMutation();
-  const [open, setOpen] = useState(false);
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
+  async function submitInvite(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    const ok = await mutation.run("/api/staff/invitations", {
+    const ok = await inviteMutation.run("/api/staff/invitations", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -633,28 +600,46 @@ export function InviteForm() {
   }
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => {
-      if (!mutation.busy || nextOpen) {
-        if (nextOpen) mutation.reset();
+      if (!busy || nextOpen) {
+        if (nextOpen) {
+          stationMutation.reset();
+          inviteMutation.reset();
+        }
         setOpen(nextOpen);
       }
-    }} disablePointerDismissal={mutation.busy}>
+    }} disablePointerDismissal={busy}>
       <DialogTrigger className={`${dashButton({ variant: "secondary" })} min-h-[34px] text-[9px]`}>
-        <UserPlus size={15} /> Invite staff
+        <Plus size={15} /> {canInvite ? "Add team or station" : "Add station"}
       </DialogTrigger>
-      <DialogContent className={`${operationDialog} gap-0 p-0 ring-0 sm:max-w-[560px]`} showCloseButton={false}>
-        <header><div><DialogTitle>Invite staff</DialogTitle><DialogDescription>Send an invitation and choose the staff member&apos;s initial role.</DialogDescription></div><DialogClose aria-label="Close invite staff form" disabled={mutation.busy}><X /></DialogClose></header>
-        <form className={operationForm} onSubmit={submit}>
+      <DialogContent className={`${operationDialog} gap-0 p-0 ring-0`} showCloseButton={false}>
+        <header><div><DialogTitle>{canInvite ? "Add team or station" : "Add station"}</DialogTitle><DialogDescription>{canInvite ? "Invite a staff member or create a scheduling station." : "Create another station for appointment scheduling."}</DialogDescription></div><DialogClose aria-label="Close team and station form" disabled={busy}><X /></DialogClose></header>
+        <form className={operationForm} onSubmit={submitStation}>
+          <h3 className="m-0 font-display text-[16px] font-bold text-hippy-ink">New station</h3>
+          <div className={operationGrid}>
+            <label className={`${dashField} col-span-full`}>
+              Station name
+              <input name="name" required />
+            </label>
+          </div>
+          {stationMutation.error && <p className={dashError} role="alert">{stationMutation.error}</p>}
+          <footer>
+            {!canInvite && <DialogClose className={dashButton({ variant: "secondary" })} disabled={busy}>Cancel</DialogClose>}
+            <button className={dashButton({ variant: "primary" })} disabled={busy}>{stationMutation.busy ? "Adding…" : "Add station"}</button>
+          </footer>
+        </form>
+        {canInvite && <form className={`${operationForm} border-t border-dashed border-[#c88f6e]`} onSubmit={submitInvite}>
+          <h3 className="m-0 font-display text-[16px] font-bold text-hippy-ink">Invite staff</h3>
           <div className={operationGrid}>
             <label className={dashField}>Display name<input name="displayName" required /></label>
             <label className={dashField}>Email<input name="email" type="email" required /></label>
             <label className={`${dashField} col-span-full`}>Role<StudioSelect name="role" defaultValue="piercer" ariaLabel="Role" options={[{ value: "piercer", label: "Piercer" }, { value: "manager", label: "Manager" }]} /></label>
           </div>
-          {mutation.error && <p className={dashError} role="alert">{mutation.error}</p>}
+          {inviteMutation.error && <p className={dashError} role="alert">{inviteMutation.error}</p>}
           <footer>
-            <DialogClose className={dashButton({ variant: "secondary" })} disabled={mutation.busy}>Cancel</DialogClose>
-            <button className={dashButton({ variant: "primary" })} disabled={mutation.busy}>{mutation.busy ? "Sending…" : "Send invitation"}</button>
+            <DialogClose className={dashButton({ variant: "secondary" })} disabled={busy}>Cancel</DialogClose>
+            <button className={dashButton({ variant: "primary" })} disabled={busy}>{inviteMutation.busy ? "Sending…" : "Send invitation"}</button>
           </footer>
-        </form>
+        </form>}
       </DialogContent>
     </Dialog>
   );
@@ -718,7 +703,7 @@ export function StaffActions({
       >
         {summary}
       </DialogTrigger>
-      <DialogContent className={`${operationDialog} gap-0 p-0 ring-0 sm:max-w-[520px]`} showCloseButton={false}>
+      <DialogContent className={`${operationDialog} gap-0 p-0 ring-0`} showCloseButton={false}>
         <header><div><DialogTitle>Manage {person.displayName}</DialogTitle><DialogDescription>Update this staff member&apos;s role and account access.</DialogDescription></div><DialogClose aria-label={`Close management for ${person.displayName}`} disabled={mutation.busy}><X /></DialogClose></header>
         <form className={operationForm} onSubmit={submit}>
           <div className={operationGrid}>
@@ -794,7 +779,7 @@ export function SaleForm({
       >
         <Plus size={16} /> Record sale
       </DialogTrigger>
-      <DialogContent className={`${operationDialog} gap-0 p-0 ring-0 sm:max-w-[720px]`} showCloseButton={false}>
+      <DialogContent className={`${operationDialog} gap-0 p-0 ring-0`} showCloseButton={false}>
         <header>
           <div>
             <DialogTitle>Record sale</DialogTitle>
